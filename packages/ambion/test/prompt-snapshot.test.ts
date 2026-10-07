@@ -1,7 +1,8 @@
 /**
  * The rendered prompt of one respond and one summary activation, part by
  * part. The snapshots put the prompt text in the diff of every change to it.
- * The speaking policy of a definition replaces the default in the agent part.
+ * The respond and summary policies of a definition replace the defaults
+ * in the agent part and in the ask line.
  * The resolved reminders of the definition's bundles join the context of a
  * respond activation, before its ask line.
  */
@@ -9,7 +10,11 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
 import type { ReminderSeat } from '../src/bundle.ts';
 import { REMINDER_TIMEOUT_MS, resolveReminders } from '../src/execution/reminders.ts';
-import { DEFAULT_SPEAKING, renderActivation } from '../src/execution/render.ts';
+import {
+	DEFAULT_RESPOND_POLICY,
+	DEFAULT_SUMMARY_POLICY,
+	renderActivation,
+} from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
 import type { Message } from '../src/types.ts';
@@ -90,14 +95,13 @@ describe('the rendered prompt', () => {
 		expect(read).toMatchSnapshot('context');
 	});
 
-	it('tells a seat to seat a colleague first only when the room offers seat', () => {
+	it('renders the same hand-off whether or not the room offers seat', () => {
 		const handoff = (extra: object) =>
 			renderActivation({ ...respond, context: { ...respond.context, ...extra } }, worker).agent;
-		expect(handoff({})).toContain('Seat them first');
-		expect(handoff({ seating: false })).not.toContain('Seat them first');
-		expect(handoff({ reserved: undefined })).not.toContain('Seat them first');
-		expect(handoff({ seating: false })).toContain(
-			'A seated colleague with no mark reads the record',
+		expect(handoff({ seating: false })).toBe(handoff({}));
+		expect(handoff({ reserved: undefined })).toBe(handoff({}));
+		expect(handoff({})).toContain(
+			'"named only".\nA seated colleague with no mark reads the record',
 		);
 	});
 
@@ -107,21 +111,56 @@ describe('the rendered prompt', () => {
 		expect(read).toMatchSnapshot('context');
 	});
 
-	it('keeps the mechanism the same for every purpose and definition, and renders the speaking policy', () => {
+	it('keeps the mechanism the same for every purpose and definition, and lets the definition replace each policy', () => {
 		const other = defineAgent({
 			name: 'other',
 			identity: 'Other.',
-			executor: pi({ instructions: 'Other.', model: 'scripted/other', speaking: 'Be brief.' }),
+			executor: pi({
+				instructions: 'Other.',
+				model: 'scripted/other',
+				respondPolicy: 'Custom policy.',
+				summaryPolicy: 'Custom summary policy.',
+			}),
 		});
 		const { mechanism } = renderActivation(respond, worker);
 		expect(renderActivation(summarize, worker).mechanism).toBe(mechanism);
 		expect(renderActivation(respond, other).mechanism).toBe(mechanism);
+		expect(renderActivation(summarize, other).mechanism).toBe(mechanism);
 		for (const text of ['worker', 'site', 'Is the pour on?', 'Work carefully.'])
 			expect(mechanism).not.toContain(text);
-		expect(renderActivation(respond, worker).agent).toContain(DEFAULT_SPEAKING);
-		const policy = renderActivation(respond, other).agent;
-		expect(policy).toContain('Be brief.');
-		expect(policy).not.toContain(DEFAULT_SPEAKING);
+
+		const standard = renderActivation(respond, worker);
+		expect(standard.agent).toContain(DEFAULT_RESPOND_POLICY);
+		const policy = renderActivation(respond, other);
+		expect(policy.agent).toContain('Custom policy.');
+		for (const advice of [
+			DEFAULT_RESPOND_POLICY,
+			'Who is reading can change while you work',
+			'The record holds conversation',
+		])
+			expect(policy.agent).not.toContain(advice);
+		expect(policy.context.split('\n').at(-1)).toBe(
+			"priya's exchange opened by message 2 is active; the marked request is the current human direction. The opening message's URI is ambion://room/site/message/2. Begin your activation, other: this is a respond activation. A line marked [new] is a message that landed during your activation.",
+		);
+		for (const advice of [
+			'Follow your instructions',
+			'already answered',
+			'An explicit later request',
+			'These speech defaults',
+		])
+			expect(policy.context).not.toContain(advice);
+
+		const closing = renderActivation(summarize, worker);
+		expect(closing.agent).toContain(DEFAULT_SUMMARY_POLICY);
+		expect(closing.context).toContain('Check two cases first');
+		const custom = renderActivation(summarize, other);
+		expect(custom.agent).toContain('Custom summary policy.');
+		expect(custom.agent).not.toContain('The exchange is over. Write the one message');
+		expect(custom.agent).toContain('You are writing for priya.');
+		expect(custom.context.split('\n').at(-1)).toBe(
+			"priya's exchange is over: it holds the messages from seq 2 to seq 3. The opening message's URI is ambion://room/site/message/2. Write the message with say, or end your activation without calling say to leave the range whole.",
+		);
+		expect(custom.context).not.toContain('Check two cases first');
 	});
 
 	it('resolves the bundle reminders of a respond activation, drops a throw, a rejection, blank text, and a late one, and places them before the ask line', async () => {

@@ -133,7 +133,7 @@ export interface PassRecord {
 export type Pass = PassInput & {
 	/** How a room works. It depends on the kernel version alone. */
 	readonly mechanism: string;
-	/** The seat's part: the name, the speaking policy, the identity, and the instructions. */
+	/** The seat's part: the name, the respond policy, the identity, and the instructions. */
 	readonly agent: string;
 	/**
 	 * The record this pass reads. The first pass reads the whole view, with

@@ -195,10 +195,11 @@ export interface RenderedPrompt {
 }
 
 /**
- * The default speaking policy. An agent definition replaces it with the
- * `speaking` option of its executor.
+ * The default policy for a respond activation: when to speak, how to read an
+ * arrival, and how to hand work to a colleague. An agent definition replaces
+ * all of it with the `respondPolicy` option of its executor.
  */
-export const DEFAULT_SPEAKING = [
+export const DEFAULT_RESPOND_POLICY = [
 	`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
 	`your activation without saying anything, and no mark is left. Speak only when your reply`,
 	`adds something the record does not already hold — new information, a decision moved`,
@@ -213,6 +214,27 @@ export const DEFAULT_SPEAKING = [
 	`doing — and if a colleague has just made your point, let it stand. A say fails if`,
 	`the room moved while you were speaking: the failure lists what you missed. Read it,`,
 	`then call say again with your message unless the new messages already say it or make it unnecessary.`,
+	``,
+	`Who is reading can change while you work. An arrival or a departure reaches you as a`,
+	`[new] line during your activation, and wakes you outright if your seat watches for it. It is never a`,
+	`request — nobody asked you anything by opening the room —`,
+	`so it never means start something new, and you`,
+	`never greet, never say that you noticed, and never summarise the record back to the`,
+	`room. Use it to aim what you were already going to say: pitch it at whoever is`,
+	`actually reading now, say the part that needs them while they are still there, and`,
+	`drop what only mattered to somebody who has gone. If it changes nothing about your`,
+	`activation, ignore it. When nobody is in the room, keep to your speaking policy, and do not`,
+	`wait for an answer that nobody is there to give.`,
+	``,
+	`The record holds conversation. An artifact goes where your tools keep it: write a`,
+	`document, a generated result, or structured data there once, and a colleague reads it from`,
+	`there. A hand-off is still a message: say what you wrote and where, in a directed say to`,
+	`the agent that needs it. Do not leave an artifact and assume the reader finds it. Your`,
+	`identity on the roster names your work. When a task falls under a colleague's identity,`,
+	`hand it to them with a directed say if the roster marks their seat "named only".`,
+	`A seated colleague with no mark reads the record and needs no`,
+	`repeated request. Do not do their work, and do not copy what they already hold into the record. Put the URI of what`,
+	`you cite or changed in refs on the say, and keep the text for what the reader must know.`,
 ].join('\n');
 
 /**
@@ -252,6 +274,9 @@ export function renderDelta(view: ActivationView, after: Seq): string | undefine
 	return fresh.map(renderNew).join('\n');
 }
 
+/** What the `[new]` prefix means. The default policy states it, so a replaced policy reads this line. */
+const NEW_LINE = 'A line marked [new] is a message that landed during your activation.';
+
 /** How a room works. No definition and no pass shapes it. */
 const MECHANISM = [
 	`You are an agent seated in a room: a shared room with a record. The record shows what is`,
@@ -276,14 +301,9 @@ function renderAgent(view: ActivationView, def: AgentDefinition): string {
 
 /** What this seat is for, read off the activation purpose. */
 function duties(view: ActivationView, def: AgentDefinition): string[] {
-	if (view.spec.purpose.kind === 'summarize') return [...SUMMARY_DUTIES];
-	const lines = [
-		def.executor.speaking ?? DEFAULT_SPEAKING,
-		``,
-		...AUDIENCE_PARAGRAPH,
-		``,
-		...handoffParagraph(view.context),
-	];
+	if (view.spec.purpose.kind === 'summarize')
+		return [def.executor.summaryPolicy ?? DEFAULT_SUMMARY_POLICY];
+	const lines = [def.executor.respondPolicy ?? DEFAULT_RESPOND_POLICY];
 	if (def.executor.guidance) lines.push(``, def.executor.guidance);
 	return lines;
 }
@@ -387,22 +407,19 @@ function postOpening(opening: PostedMessage, from: Seq, seat: string): string {
 	return `Exchange ${from} is active: message ${opening.seq} is a say ${whose} scheduled, and the room returned it. `;
 }
 
-/** What this activation is for, in the last line the model reads. */
+/**
+ * What this activation is for, in the last line the model reads. The line
+ * keeps the mechanism of the activation. The advice after it belongs to the
+ * default policy, so a definition that replaces the policy replaces it too.
+ */
 function askOf(view: ActivationView, def: AgentDefinition): string {
-	const { context, spec } = view;
-	const purpose = spec.purpose;
-	if (purpose.kind === 'summarize') {
-		return (
-			`${purpose.person}'s exchange is over: it holds the messages from seq ` +
-			`${purpose.exchange} to seq ${purpose.through}. The opening message's URI is ` +
-			`${messageUri(context.name, purpose.exchange)}. These messages are your only source. ` +
-			`${action(purpose.kind)}`
-		);
-	}
+	const purpose = view.spec.purpose;
+	if (purpose.kind === 'summarize') return summarizeAsk(view, purpose, def);
 	// A seat seated during an exchange reads which question it was seated for.
-	const open = openingLine(view, def.name);
+	const mechanism = `${openingLine(view, def.name)}Begin your activation, ${def.name}: this is a respond activation. `;
+	if (def.executor.respondPolicy !== undefined) return `${mechanism}${NEW_LINE}`;
 	return (
-		`${open}Begin your activation, ${def.name}: this is a respond activation. ` +
+		`${mechanism}` +
 		`Follow your instructions, and speak only to add something the record lacks. ` +
 		`If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. ` +
 		`An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. ` +
@@ -410,19 +427,19 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 	);
 }
 
-/** What a seat does with a presence line that lands while it is working. */
-const AUDIENCE_PARAGRAPH = [
-	`Who is reading can change while you work. An arrival or a departure reaches you as a`,
-	`[new] line during your activation, and wakes you outright if your seat watches for it. It is never a`,
-	`request — nobody asked you anything by opening the room —`,
-	`so it never means start something new, and you`,
-	`never greet, never say that you noticed, and never summarise the record back to the`,
-	`room. Use it to aim what you were already going to say: pitch it at whoever is`,
-	`actually reading now, say the part that needs them while they are still there, and`,
-	`drop what only mattered to somebody who has gone. If it changes nothing about your`,
-	`activation, ignore it. When nobody is in the room, keep to your speaking policy, and do not`,
-	`wait for an answer that nobody is there to give.`,
-];
+function summarizeAsk(
+	view: ActivationView,
+	purpose: Extract<ActivationView['spec']['purpose'], { kind: 'summarize' }>,
+	def: AgentDefinition,
+): string {
+	const mechanism =
+		`${purpose.person}'s exchange is over: it holds the messages from seq ` +
+		`${purpose.exchange} to seq ${purpose.through}. The opening message's URI is ` +
+		`${messageUri(view.context.name, purpose.exchange)}.`;
+	if (def.executor.summaryPolicy !== undefined)
+		return `${mechanism} Write the message with say, or end your activation without calling say to leave the range whole.`;
+	return `${mechanism} These messages are your only source. ${action(purpose.kind)}`;
+}
 
 /**
  * Whether the room offers `seat` to every activation of the seat. The tool
@@ -433,24 +450,12 @@ export function offersSeat(context: ActivationView['context']): boolean {
 	return context.reserved === true && context.seating !== false;
 }
 
-/** How a seat hands an artifact to a colleague, and where its own work stops. */
-function handoffParagraph(context: ActivationView['context']): string[] {
-	const seat = offersSeat(context);
-	return [
-		`The record holds conversation. An artifact goes where your tools keep it: write a`,
-		`document, a generated result, or structured data there once, and a colleague reads it from`,
-		`there. A hand-off is still a message: say what you wrote and where, in a directed say to`,
-		`the agent that needs it. Do not leave an artifact and assume the reader finds it. Your`,
-		`identity on the roster names your work. When a task falls under a colleague's identity,`,
-		`hand it to them with a directed say if the roster marks their seat "named only".${seat ? ' Seat them first' : ''}`,
-		`${seat ? 'if they are in the reserve; a' : 'A'} seated colleague with no mark reads the record and needs no`,
-		`repeated request. Do not do their work, and do not copy what they already hold into the record. Put the URI of what`,
-		`you cite or changed in refs on the say, and keep the text for what the reader must know.`,
-	];
-}
-
-/** What the closing seat does: write the one message for a closed exchange. */
-const SUMMARY_DUTIES = [
+/**
+ * The default policy for a summarize activation: what the one message holds
+ * and where its facts come from. An agent definition replaces all of it with
+ * the `summaryPolicy` option of its executor.
+ */
+export const DEFAULT_SUMMARY_POLICY = [
 	`The exchange is over. Write the one message the assigned person reads instead of the working,`,
 	`using the say tool. Report what the exchange established, and keep only facts that change what`,
 	`they do next. Keep corrections, decisions, dates, owners, deadlines, quantities, and unknowns`,
@@ -469,7 +474,7 @@ const SUMMARY_DUTIES = [
 	`Put the URI of the message that opened the exchange, and of any result that the exchange`,
 	`made, in the refs of the say.`,
 	`If you end your activation without calling say, the person reads the exchange itself and no summary.`,
-];
+].join('\n');
 
 /** The description of the `say` tool that a closing seat holds. Every executor gives this one. */
 export function summaryToolDescription(

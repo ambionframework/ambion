@@ -400,14 +400,14 @@ result. The guidance names no count of calls.
 
 **`compose` adds guidance, as a bundle does.** `describeExecutor` joins
 the guidance of `compose` after the guidance of the bundles, in the
-`guidance` field of the executor. The prompt renders it after the speaking
+`guidance` field of the executor. The prompt renders it after the respond
 policy, as it renders the guidance of every bundle
 ([Executors](executors.md#the-prompt-the-driver-renders)). The description of
 `compose` holds its uses, the limits, and the list of bindings.
 
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
 entry exports it. `ComposeOptions.guidance` replaces it and the process
-paragraph, as the `speaking` option replaces `DEFAULT_SPEAKING`. The text tells the model to plan
+paragraph, as the `respondPolicy` option replaces `DEFAULT_RESPOND_POLICY`. The text tells the model to plan
 first, to compose when a result feeds a later call or the model needs a
 part of a large result, and to call `describe` for a tool whose result has
 fields that the code reads. The text follows:

@@ -105,7 +105,7 @@ properties:
 | Property        | What it is                                                                                     |
 | --------------- | ---------------------------------------------------------------------------------------------- |
 | `mechanism`     | How a room works. It depends on the kernel version alone.                                      |
-| `agent`         | The seat's part: the name, the speaking policy, the identity, and the instructions.            |
+| `agent`         | The seat's part: the name, the respond policy, the identity, and the instructions.             |
 | `record(after)` | The record the pass reads, rendered, with the range it holds. `undefined` when nothing is new. |
 | `resumeId`      | The id of the vendor session to resume, when `spec.resume` names the executor kind.            |
 | `tools`         | The room tools that the purpose grants, then the tools of the definition.                      |
@@ -201,7 +201,7 @@ an adapter places it where it caches best.
 - `mechanism` depends on the kernel version only. It states how a room
   works.
 - `agent` depends on the definition and the purpose. It holds the name, the
-  speaking policy, the identity, and the instructions. A closing seat reads
+  respond policy, the identity, and the instructions. A closing seat reads
   its summary duties here.
 - `record()` depends on the activation. On the first pass it holds the
   clock, the room, the roster, the record, the reminders of the tool
@@ -219,9 +219,15 @@ of a respond activation then reads the reminders, the scheduled says, and
 the messages beyond `after`. Pi passes it; Claude and Codex read the whole
 view.
 
-**A definition can replace the speaking policy.** The main entry exports
-`DEFAULT_SPEAKING`. An executor takes a `speaking` option that replaces it.
-Tool bundle guidance stays in the `guidance` field and follows the policy.
+**A definition can replace each policy.** The main entry exports
+`DEFAULT_RESPOND_POLICY` and `DEFAULT_SUMMARY_POLICY`. An executor takes a `respondPolicy`
+option and a `summaryPolicy` option. `respondPolicy` replaces the whole respond
+policy: when to speak, how to read an arrival, how to hand work to a
+colleague, and the closing reminder of the ask line. `summaryPolicy` replaces
+the summary duties and the advice of the summary ask line. The kernel keeps
+the mechanism: the room, the roster, the record, the opening message, the
+range of a summary, and the tools. Tool bundle guidance stays in the
+`guidance` field and follows the respond policy.
 The driver resolves the `reminders` of the bundles once for each respond
 activation, when `record()` has something to send. Each reminder has 5
 seconds to answer, and at that bound the driver aborts the signal that it
