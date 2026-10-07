@@ -61,6 +61,8 @@ export type FileExpect = 'file' | 'directory' | 'any';
 export interface FileOperations {
 	readText(path: string): Promise<string>;
 	readBinary(path: string): Promise<Uint8Array>;
+	/** At most `length` bytes from the byte `start`. Fewer at the end of the file, and none past it. */
+	readRange(path: string, start: number, length: number): Promise<Uint8Array>;
 	write(path: string, content: string | Uint8Array): Promise<void>;
 	append(path: string, content: string | Uint8Array): Promise<void>;
 	rename(source: string, destination: string): Promise<void>;
@@ -144,6 +146,18 @@ export abstract class HomeEnv {
 	readBinaryFile(path: string, signal?: AbortSignal): FileResult<Uint8Array> {
 		const resolved = this.resolve(path);
 		return this.attempt(resolved, 'file', signal, () => this.files.readBinary(resolved));
+	}
+
+	readRange(
+		path: string,
+		start: number,
+		length: number,
+		signal?: AbortSignal,
+	): FileResult<Uint8Array> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'file', signal, () =>
+			this.files.readRange(resolved, start, length),
+		);
 	}
 
 	writeFile(path: string, content: string | Uint8Array, signal?: AbortSignal): FileResult<void> {

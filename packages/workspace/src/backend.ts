@@ -26,6 +26,18 @@ export interface WorkspaceEnv extends ResourceEnv {
 	absolutePath(path: string, signal?: AbortSignal): FileResult<string>;
 	readTextFile(path: string, signal?: AbortSignal): FileResult<string>;
 	readBinaryFile(path: string, signal?: AbortSignal): FileResult<Uint8Array>;
+	/**
+	 * At most `length` bytes of a file from the byte `start`. The result is
+	 * shorter at the end of the file, and empty at or past the end. The read
+	 * has no size cap, so a file of any size gives its range. A directory
+	 * answers `is_directory`.
+	 */
+	readRange(
+		path: string,
+		start: number,
+		length: number,
+		signal?: AbortSignal,
+	): FileResult<Uint8Array>;
 	/** Create or replace a file. Missing parent directories are created. */
 	writeFile(path: string, content: string | Uint8Array, signal?: AbortSignal): FileResult<void>;
 	/** Create a file or append to it. Missing parent directories are created. */

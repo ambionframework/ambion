@@ -228,17 +228,18 @@ entry's helpers supply the rest:
 - `Deadline`, which tells an abort apart from a timeout
 - `boundedView` for the output view
 
-**SFTP needs six adjustments.** `workspaceConformance` checks most rows,
+**SFTP needs seven adjustments.** `workspaceConformance` checks most rows,
 and the package's own tests check the rest.
 
-| Method                    | SFTP gap                                                                                          | `SshEnv` does                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Every file method         | OpenSSH answers `ENOTDIR` as `NO_SUCH_FILE`, and `EISDIR`, `EEXIST`, and `ENOTEMPTY` as `FAILURE` | On either status, one `lstat` picks the code of the port, as the next paragraph states |
-| `renameFile`              | SFTP v3 refuses to rename onto a file                                                             | Calls `posix-rename@openssh.com`; a server without it gets a plain `RENAME`            |
-| `createDir`               | SFTP makes one directory per request, and an existing one answers `FAILURE`                       | Makes each missing component in order; `lstat` finds a directory that exists           |
-| `writeFile`, `appendFile` | SFTP creates no parent folder                                                                     | Makes each missing parent first                                                        |
-| `remove`                  | SFTP removes one entry per request                                                                | Runs `rm -rf --` through `exec` for a recursive call                                   |
-| `fileInfo`, `listDir`     | SFTP gives `mtime` in seconds                                                                     | Multiplies it by 1000 for `mtimeMs`; `readdir` gives each entry's attributes           |
+| Method                                        | SFTP gap                                                                                          | `SshEnv` does                                                                                                                                                                                             |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every file method                             | OpenSSH answers `ENOTDIR` as `NO_SUCH_FILE`, and `EISDIR`, `EEXIST`, and `ENOTEMPTY` as `FAILURE` | On either status, one `lstat` picks the code of the port, as the next paragraph states                                                                                                                    |
+| `readTextFile`, `readBinaryFile`, `readRange` | An open of a FIFO blocks the SFTP server, and a file can grow while it is read                    | One `stat` runs first: a directory gives `is_directory`, and a file that is not regular gives `invalid`. A whole-file read stops at 10 MiB. A range read asks for 256 KiB at a time and has no size limit |
+| `renameFile`                                  | SFTP v3 refuses to rename onto a file                                                             | Calls `posix-rename@openssh.com`; a server without it gets a plain `RENAME`                                                                                                                               |
+| `createDir`                                   | SFTP makes one directory per request, and an existing one answers `FAILURE`                       | Makes each missing component in order; `lstat` finds a directory that exists                                                                                                                              |
+| `writeFile`, `appendFile`                     | SFTP creates no parent folder                                                                     | Makes each missing parent first                                                                                                                                                                           |
+| `remove`                                      | SFTP removes one entry per request                                                                | Runs `rm -rf --` through `exec` for a recursive call                                                                                                                                                      |
+| `fileInfo`, `listDir`                         | SFTP gives `mtime` in seconds                                                                     | Multiplies it by 1000 for `mtimeMs`; `readdir` gives each entry's attributes                                                                                                                              |
 
 **One `lstat` classifies a coarse status by the operation.** A file
 operation on a directory gives `is_directory`. A directory operation on a
