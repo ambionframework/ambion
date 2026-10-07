@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+**A traced step names its exchange.** `TracedStep` has a new optional field,
+`exchange`. It holds the seq of the message that opened the exchange that the
+activation works on. A summary activation names the exchange that it
+summarizes. The field is absent when the activation works outside an
+exchange, or ends before its first pass. `TraceSink.startPass` takes the exchange as a third argument, and
+the sink stamps it on every step of the activation.
+
+**The trace can record the input of the model.** A new `input` step holds
+the text that the driver renders for the pass. The `part` field says
+`system` or `record`. The driver records one `record` step for each pass
+that reads a record, and one `system` step in the first pass. The new trace policy field
+`input: 'omit' | 'full'` turns it on. An absent field reads as `omit`.
+`limits.trace.inputBytes` cuts the text and defaults to 1 MiB.
+
 **The Claude trace has one `usage` step for each model request.** The step
 comes from the `usage` of the `message_start` event, the `message_delta`
 events, and the assistant messages of a top-level request. It comes

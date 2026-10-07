@@ -26,6 +26,7 @@ import type {
 	ActivationEvent,
 	AgentDefinition,
 	CreateRuntimeOptions,
+	Message,
 	TraceLogger,
 	TraceStep,
 } from '../src/index.ts';
@@ -40,7 +41,7 @@ import {
 import { roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
-import { quiet, say, scriptedStream } from './support/scripted.ts';
+import { byAgent, type PiScript, quiet, say, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { collectSteps } from './support/trace.ts';
 
@@ -75,7 +76,16 @@ async function traced(
 	const started = events.find((event) => event.type === 'activation_start');
 	if (started?.type !== 'activation_start') throw new Error('No activation started.');
 	const id = started.activation;
-	return { runtime, room, name, id, steps: log.of(id), records: log.records };
+	const opened = events.find((event) => event.type === 'exchange_opened');
+	return {
+		runtime,
+		room,
+		name,
+		id,
+		exchange: opened?.type === 'exchange_opened' ? opened.exchange.from : undefined,
+		steps: log.of(id),
+		records: log.records,
+	};
 }
 
 /** A stream that thinks, then calls `tool`, then stops. */
@@ -90,7 +100,7 @@ const thinksThenCalls = (thinking: string, tool: string, input: JsonObject = {})
 
 describe('the trace of a room activation', () => {
 	it('gives each step to the logger, stamped, in order, with the room and the seat', async () => {
-		const { runtime, room, name, id, steps, records } = await traced(
+		const { runtime, room, name, id, exchange, steps, records } = await traced(
 			thinksThenCalls('weighing it', 'say', { text: 'Yes.' }),
 		);
 		expect(sorted(steps)).toEqual([
@@ -109,6 +119,8 @@ describe('the trace of a room activation', () => {
 		expect(steps.every((step) => step.activation === id && step.pass === 1)).toBe(true);
 		expect(steps.every((step) => !Number.isNaN(Date.parse(step.at)))).toBe(true);
 		expect(records.every((record) => record.room === name && record.seat === 'product')).toBe(true);
+		expect(exchange).toBeDefined();
+		expect(records.every((record) => record.exchange === exchange)).toBe(true);
 		expect(steps.find((step) => step.type === 'room')).toMatchObject({
 			result: 'committed',
 			intent: { kind: 'said', text: 'Yes.' },
@@ -134,6 +146,83 @@ describe('the trace of a room activation', () => {
 		const { steps } = await traced(deltaStream(['al', 'pha', ' beta']));
 		const texts = steps.filter((step) => step.type === 'text');
 		expect(texts).toEqual([expect.objectContaining({ text: 'alpha beta', final: true })]);
+	});
+});
+
+describe('the exchange of a traced step', () => {
+	const assistant = defineAgent({
+		name: 'assistant',
+		identity: 'Writes the one message a person reads.',
+		executor: pi({ instructions: 'Summarise.', model: 'scripted/assistant' }),
+	});
+	const greeter = defineAgent({
+		name: 'greeter',
+		identity: 'Meets people at the door.',
+		executor: pi({ instructions: 'Greet.', model: 'scripted/greeter' }),
+	});
+
+	/** A room with a presence seat and a summary writer, and the steps that its seats log. */
+	async function open(script: PiScript) {
+		const log = collectSteps();
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('exchange-stamp'),
+				agents: [product, greeter, assistant],
+				seats: { product: 'broadcast', greeter: 'presence', assistant: 'none' },
+				summaryWriter: assistant.name,
+				runtime: createRuntime({ storage: memoryJournals(), logger: log.logger }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
+			}),
+		);
+		return { room, records: log.records, events: collect(room) };
+	}
+
+	const script: PiScript = byAgent({
+		product: (_context, _name, request) => (request === 1 ? say('Yes.') : quiet()),
+		assistant: (_context, _name, request) => (request === 1 ? say('Ready, yes.') : quiet()),
+	});
+
+	it('stamps the opening message of the exchange on a response and on its summary', async () => {
+		const { room, records, events } = await open(script);
+		await (await room.visit(andrei)).send({ text: 'Ready?' });
+		await waitForRoom(room, 'quiet', 2_000);
+		const opened = events.find((event) => event.type === 'exchange_opened');
+		if (opened?.type !== 'exchange_opened') throw new Error('No exchange opened.');
+		const stepsOf = (seat: string) => records.filter((record) => record.seat === seat);
+		for (const seat of ['product', 'assistant']) {
+			expect(stepsOf(seat).map((record) => record.step.type)).toContain('end');
+			expect(stepsOf(seat).every((record) => record.exchange === opened.exchange.from)).toBe(true);
+		}
+	});
+
+	it('stamps none on an activation outside an exchange', async () => {
+		const { room, records, events } = await open(script);
+		await room.visit(andrei);
+		await waitForRoom(room, 'quiet', 2_000);
+		expect(events.some((event) => event.type === 'exchange_opened')).toBe(false);
+		expect(records.length).toBeGreaterThan(0);
+		for (const record of records) expect(record).not.toHaveProperty('exchange');
+		expect(records.map((record) => record.seat)).toContain('greeter');
+	});
+
+	it('fixes the exchange at the first pass and keeps it to the end', async () => {
+		const log = collectSteps();
+		const sink = openTrace({
+			room: 'fixed',
+			seat: 'product',
+			activation: 'message:2:product:1',
+			limits: { toolOutputBytes: 100, inputBytes: 100, stepsPerPass: 10 },
+			policy: { thinking: 'omit', toolOutput: 'omit' },
+			now: () => 0,
+			logger: log.logger,
+		});
+		sink.record({ type: 'notice', level: 'info', text: 'Before any pass.' });
+		sink.startPass('view', 5, 2);
+		sink.startPass('delta', 6, 4);
+		sink.record({ type: 'end', stop: 'stopped' });
+		await sink.close();
+		expect(log.records.map((record) => record.exchange)).toEqual([undefined, 2, 2, 2]);
+		expect(log.records[0]).not.toHaveProperty('exchange');
 	});
 });
 
@@ -230,6 +319,14 @@ describe('the trace limits and policy', () => {
 		expect(JSON.stringify(ran.output)).toContain(output);
 	});
 
+	it.each([
+		['an absent input field', undefined],
+		['input: omit', { thinking: 'start', toolOutput: 'full', input: 'omit' } as const],
+	])('logs no input step for %s', async (_name, policy) => {
+		const ran = await run(asker(policy));
+		expect(sorted(ran.steps)).not.toContain('input');
+	});
+
 	it('omits what the policy omits', async () => {
 		const ran = await run(asker({ thinking: 'omit', toolOutput: 'omit' }));
 		expect(sorted(ran.steps)).not.toContain('thinking');
@@ -239,6 +336,26 @@ describe('the trace limits and policy', () => {
 	it('cuts tool output to limits.trace.toolOutputBytes', async () => {
 		const { output } = await run(asker(), { limits: { trace: { toolOutputBytes: 10 } } });
 		expect(String(output)).toMatch(/^.{10}\n\[truncated: \d+ bytes\]$/s);
+	});
+
+	it('cuts an input step to limits.trace.inputBytes', async () => {
+		const log = collectSteps();
+		const sink = openTrace({
+			room: 'input',
+			seat: 'product',
+			activation: 'message:2:product:1',
+			limits: { toolOutputBytes: 100, inputBytes: 10, stepsPerPass: 10 },
+			policy: { thinking: 'omit', toolOutput: 'omit', input: 'full' },
+			now: () => 0,
+			logger: log.logger,
+		});
+		sink.startPass('view', 1);
+		sink.record({ type: 'input', part: 'record', text: 'a'.repeat(50) });
+		await sink.close();
+		expect(log.records[1]?.step).toMatchObject({
+			type: 'input',
+			text: `${'a'.repeat(10)}\n[truncated: 50 bytes]`,
+		});
 	});
 
 	it('drops steps past limits.trace.stepsPerPass and keeps the end', async () => {
@@ -263,7 +380,7 @@ describe('the trace limits and policy', () => {
 			room: 'usage-sum',
 			seat: 'product',
 			activation: 'message:2:product:1',
-			limits: { toolOutputBytes: 100, stepsPerPass: 1 },
+			limits: { toolOutputBytes: 100, inputBytes: 100, stepsPerPass: 1 },
 			policy: { thinking: 'full', toolOutput: 'full' } as const,
 			now: () => 0,
 		};
@@ -296,7 +413,7 @@ describe('the trace limits and policy', () => {
 			room: 'nested',
 			seat: 'product',
 			activation: 'message:2:product:1',
-			limits: { toolOutputBytes: 100, stepsPerPass: 10 },
+			limits: { toolOutputBytes: 100, inputBytes: 100, stepsPerPass: 10 },
 			policy: { thinking: 'full', toolOutput: 'full' },
 			now: () => 0,
 			logger: log.logger,
@@ -322,7 +439,7 @@ describe('the trace limits and policy', () => {
 			room: 'notice',
 			seat: 'product',
 			activation: 'message:2:product:1',
-			limits: { toolOutputBytes: 100, stepsPerPass: 10 },
+			limits: { toolOutputBytes: 100, inputBytes: 100, stepsPerPass: 10 },
 			policy: { thinking: 'omit', toolOutput: 'omit' },
 			now: () => 0,
 			logger: log.logger,
@@ -353,6 +470,14 @@ describe('the trace limits and policy', () => {
 				trace: { thinking: 'all' as never, toolOutput: 'full' },
 			}),
 		).toThrow(/trace.thinking/);
+		expect(() =>
+			defineAgent({
+				name: 'x',
+				identity: 'x',
+				executor: pi({ instructions: '', model: 'scripted/x' }),
+				trace: { thinking: 'start', toolOutput: 'full', input: 'all' as never },
+			}),
+		).toThrow('trace.input must be omit or full.');
 	});
 });
 
@@ -380,6 +505,7 @@ class PlayedRoom implements RoomProtocol {
 	constructor(private readonly now: () => number) {}
 	readonly leases: LeaseRequest[] = [];
 	lastSeq = 1;
+	messages: Message[] = [];
 	answer: CommitResult = { refused: 'not here' };
 	async view(activation: string): Promise<ViewResponse> {
 		return {
@@ -391,7 +517,13 @@ class PlayedRoom implements RoomProtocol {
 					purpose: { kind: 'respond', message: 1 },
 				},
 				through: this.lastSeq,
-				context: { name: 'played', now: 0, participants: [], messages: [], reserve: [] },
+				context: {
+					name: 'played',
+					now: 0,
+					participants: [],
+					messages: this.messages,
+					reserve: [],
+				},
 			},
 		};
 	}
@@ -407,11 +539,21 @@ class PlayedRoom implements RoomProtocol {
 	}
 }
 
+interface PlayOptions {
+	readonly logger?: TraceLogger;
+	readonly wrap?: (opener: TraceOpener) => TraceOpener;
+	readonly stub?: ActivationOpener;
+	readonly policy?: TracePolicy;
+}
+
 function play(
 	stream: StreamFn,
-	logger: TraceLogger = collectSteps().logger,
-	wrap: (opener: TraceOpener) => TraceOpener = (opener) => opener,
-	stub?: ActivationOpener,
+	{
+		logger = collectSteps().logger,
+		wrap = (opener) => opener,
+		stub,
+		policy = { thinking: 'full', toolOutput: 'full' },
+	}: PlayOptions = {},
 ) {
 	const clock = fakeClock();
 	const runtime = createRuntime({
@@ -439,7 +581,7 @@ function play(
 				seat: 'product',
 				logger,
 				limits: hosting.limits.trace,
-				policy: { thinking: 'full', toolOutput: 'full' },
+				policy,
 				now: () => 0,
 			}),
 		),
@@ -459,7 +601,7 @@ describe('the steps the driver owns', () => {
 		const log = collectSteps();
 		const { room, actor } = play(
 			scriptedStream((_c, _a, request) => (request === 1 ? say('Hi.') : quiet())),
-			log.logger,
+			{ logger: log.logger },
 		);
 		room.answer = answer;
 		await actor.run(id);
@@ -482,7 +624,10 @@ describe('the steps the driver owns', () => {
 			return quiet();
 		});
 		const log = collectSteps();
-		const { room, actor } = play(stream, log.logger);
+		const { room, actor } = play(stream, {
+			logger: log.logger,
+			policy: { thinking: 'full', toolOutput: 'full', input: 'full' },
+		});
 		const done = actor.run(id);
 		// Before the first pass, the core holds a steer. The first prompt carries it.
 		await actor.steer({
@@ -501,6 +646,7 @@ describe('the steps the driver owns', () => {
 			message: said(3),
 		});
 		room.lastSeq = 4;
+		room.messages = [said(2), said(3)];
 		release.resolve();
 		await done;
 		const steps = log.of(id);
@@ -509,6 +655,16 @@ describe('the steps the driver owns', () => {
 			expect.objectContaining({ input: 'view', pass: 1 }),
 			expect.objectContaining({ input: 'delta', pass: 2, through: 4 }),
 		]);
+		// The system part comes once, right after the first `pass` step. Each pass records its record.
+		const inputs = steps.filter((step) => step.type === 'input');
+		expect(inputs.map((step) => [step.pass, step.type === 'input' && step.part])).toEqual([
+			[1, 'system'],
+			[1, 'record'],
+			[2, 'record'],
+		]);
+		expect(steps.indexOf(inputs[0] as TraceStep)).toBe(steps.indexOf(passes[0] as TraceStep) + 1);
+		expect(inputs[0]).toMatchObject({ text: expect.stringContaining('Answer.') });
+		expect(inputs[2]).toMatchObject({ text: expect.stringContaining('[new]') });
 		const steers = steps.filter((step) => step.type === 'steer');
 		expect(steers).toEqual([
 			expect.objectContaining({ seq: 2, consumed: true, pass: 1 }),
@@ -522,7 +678,7 @@ describe('the steps the driver owns', () => {
 		const log = collectSteps();
 		const { room, actor } = play(
 			scriptedStream(() => quiet()),
-			log.logger,
+			{ logger: log.logger },
 		);
 		room.lease = async () => ({ stale: 'gone' });
 		const done = actor.run(id);
@@ -555,7 +711,7 @@ describe('the steps the driver owns', () => {
 		const log = collectSteps();
 		const { actor } = play(
 			scriptedStream(() => message),
-			log.logger,
+			{ logger: log.logger },
 		);
 		await actor.run(id);
 		const last = log.of(id).at(-1);
@@ -570,9 +726,7 @@ describe('the steps the driver owns', () => {
 		});
 		const { actor, events } = play(
 			scriptedStream(() => quiet()),
-			log.logger,
-			undefined,
-			failing,
+			{ logger: log.logger, stub: failing },
 		);
 		await actor.run(id);
 		const message = 'The activation failed.';
@@ -595,7 +749,7 @@ describe('the steps the driver owns', () => {
 	])('never fails the activation when the logger %s', async (_name, logger) => {
 		const { room, actor, events } = play(
 			scriptedStream(() => quiet()),
-			logger,
+			{ logger },
 		);
 		await actor.run(id);
 		await tick();
@@ -615,22 +769,23 @@ describe('a sink that closes late', () => {
 		const closed = deferred();
 		const { room, actor } = play(
 			scriptedStream(() => quiet()),
-			undefined,
-			(opener) => ({
-				open: (activation) => {
-					const sink = opener.open(activation);
-					if (activation !== first) return sink;
-					return {
-						startPass: (input, through) => sink.startPass(input, through),
-						record: (step) => sink.record(step),
-						usage: () => sink.usage(),
-						close: async () => {
-							closing.resolve();
-							await closed.promise;
-						},
-					};
-				},
-			}),
+			{
+				wrap: (opener) => ({
+					open: (activation) => {
+						const sink = opener.open(activation);
+						if (activation !== first) return sink;
+						return {
+							startPass: (input, through, exchange) => sink.startPass(input, through, exchange),
+							record: (step) => sink.record(step),
+							usage: () => sink.usage(),
+							close: async () => {
+								closing.resolve();
+								await closed.promise;
+							},
+						};
+					},
+				}),
+			},
 		);
 		const running = actor.run(first);
 		await closing.promise;

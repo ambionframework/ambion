@@ -465,13 +465,23 @@ the cap applies. The sum holds when the host passes no logger.
 each activation, and passes the executor its `record` with the activation,
 as a `StepSink`. The driver keeps the passes, the usage, and the close. The
 sink gives each step to the `logger` that the host passes to
-`createRuntime`, as one `TracedStep`: `room`, `seat`, and the stamped step.
-With no logger, the sink drops the steps. The record and the trace never share an entry.
+`createRuntime`, as one `TracedStep`: `room`, `seat`, `exchange`, and the
+stamped step. With no logger, the sink drops the steps. The record and the trace never share an entry.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-activation-trace-dark.svg">
   <img alt="Agent B activates on entry 1 of the room journal. Each thing the activation does is one step in its trace, which goes to the host's logger: a pass, thinking, tool calls and results, and the room answers. The first say comes back missed with entry 2, and the second say commits as entry 3. A usage step holds tokens and cost, and an end step stops the activation. The driver records the pass, room, and end steps. The release entry in the record carries the usage sum." src="assets/ambion-activation-trace.svg">
 </picture>
+
+**The `exchange` field names the exchange of the activation.** It holds the
+seq of the message that opened the exchange that the activation works on. A
+response works on the open exchange, and a summary works on the exchange
+that it closes. The driver passes the exchange of the first view to the
+sink, and the sink stamps it on every step of the activation, the `end`
+step included. The field is absent when the activation works outside an
+exchange, such as an arrival in a `presence` seat while no exchange is open.
+It is also absent when the activation ends before its first pass.
+A host groups the activations of one question by this seq.
 
 **The trace never gates the activation.** The room does not read the trace.
 A logger that throws or rejects does not change the activation outcome or
@@ -482,13 +492,32 @@ trace is not part of the record or of the durability promise.
 a `thinking` or `text` block into one step. `limits.trace.stepsPerPass`
 caps the steps of one pass, and an `end` step is always kept.
 `limits.trace.toolOutputBytes` cuts a tool output that is larger, and the
-step keeps the start of it with a note of the size. Every execution that
-`localExecution` builds applies the limits of the host.
+step keeps the start of it with a note of the size.
+`limits.trace.inputBytes` cuts the text of an `input` step in the same way.
+Every execution that `localExecution` builds applies the limits of the host.
 
 **A definition sets its trace policy.** `defineAgent({ trace })` takes
-`thinking` (`omit`, `start`, or `full`) and `toolOutput` (`omit` or
-`full`). The default is `{ thinking: 'start', toolOutput: 'full' }`.
-`start` keeps the first 280 characters of each thinking block.
+`thinking` (`omit`, `start`, or `full`), `toolOutput` (`omit` or `full`),
+and `input` (`omit` or `full`). The default is
+`{ thinking: 'start', toolOutput: 'full' }`. An absent `input` reads as
+`omit`. `start` keeps the first 280 characters of each thinking block.
+
+**The `input` step shows the text that the driver renders.** The driver
+records it, and the executor records nothing for it. Each pass that reads a
+record records one step with `part: 'record'` and the text of that record.
+The first pass of an activation also records one step with `part: 'system'`,
+right after the `pass` step. Its text is the mechanism and the agent part
+of the prompt, joined by a blank line.
+
+**An executor can send more than the step holds.** The Codex executor puts
+its seat note before the system part. A resumed Claude query sends a
+resumed note and the agent part before the record. The `input` step holds
+none of that text. A host can show the system part as a system message and
+the record as a user message.
+
+**The policy `input: 'full'` copies the record to the logger.** The copy
+holds whatever the record holds, secrets included. Use it only where the
+logger is as private as the room.
 
 **The logger receives the steps in order.** The sink calls the logger once
 for each step, in the order of `pass` and `index`, before the release. The
