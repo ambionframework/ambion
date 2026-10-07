@@ -269,7 +269,7 @@ describe('the session step', () => {
 		expect(
 			sessionStep(
 				{
-					thread: { id: 't', path: '/home/rollout.jsonl', cliVersion: '0.159.2' },
+					thread: { id: 't', path: '/home/rollout.jsonl', cliVersion: '0.160.1' },
 					model: 'gpt-5.6-luna',
 					cwd: '/work',
 					approvalPolicy: 'never',
@@ -280,7 +280,7 @@ describe('the session step', () => {
 		).toEqual({
 			type: 'session',
 			name: 'codex',
-			version: '0.159.2',
+			version: '0.160.1',
 			model: 'gpt-5.6-luna',
 			cwd: '/work',
 			session: 't',

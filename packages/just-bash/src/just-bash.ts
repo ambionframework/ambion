@@ -37,8 +37,15 @@ import {
 	type WorkspaceLayout,
 } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
-import { Bash, DefenseInDepthBox, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
-import { createGit } from 'just-git';
+import {
+	Bash,
+	type CustomCommand,
+	DefenseInDepthBox,
+	type IFileSystem,
+	InMemoryFs,
+	ReadWriteFs,
+} from 'just-bash';
+import { createGit, type Git } from 'just-git';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
 // Type imports alone: the git module loads `node:sqlite`, and the root entry does not.
@@ -76,6 +83,16 @@ function gitFor(agent: WorkspaceAgent, access: JustGitAccess | undefined) {
 	});
 }
 
+/**
+ * The `git` command as a command of just-bash. just-git types `FileStat.dev`
+ * as a number, and just-bash types it as a number or a bigint. just-git
+ * reads `dev` as a finite number and reads any other value as 0, so a
+ * bigint `dev` is safe.
+ */
+function asCommand(git: Git): CustomCommand {
+	return git as unknown as CustomCommand;
+}
+
 /** Build one agent's environment over the workspace's filesystem. */
 async function connectOver(
 	fs: IFileSystem,
@@ -92,7 +109,7 @@ async function connectOver(
 			env: { HOME: home },
 			javascript: true,
 			python: true,
-			customCommands: [git],
+			customCommands: [asCommand(git)],
 		}),
 		home,
 	);
@@ -249,7 +266,7 @@ function trusted(change: () => Promise<void>): Promise<void> {
 }
 
 /**
- * The filesystem of `directoryBackend`. `ReadWriteFs` 3.4.2 makes one
+ * The filesystem of `directoryBackend`. `ReadWriteFs` 3.6.0 makes one
  * change at a time on a root. The change that ends starts the next change
  * in its own async context. When a script made the change that ends, the
  * next change runs in the context of that script, also when a host or
@@ -261,7 +278,7 @@ function trusted(change: () => Promise<void>): Promise<void> {
  */
 class DirectoryFs extends ReadWriteFs {
 	override async lstat(path: string) {
-		// ReadWriteFs 3.4.2 validates the parent of / outside its own root.
+		// ReadWriteFs 3.6.0 validates the parent of / outside its own root.
 		// The virtual root is a directory, never a traversable symlink;
 		// stat keeps the backend's root validation without inspecting its parent.
 		return posix.normalize(path) === '/' ? this.stat('/') : super.lstat(path);
@@ -295,6 +312,9 @@ class DirectoryFs extends ReadWriteFs {
 	}
 	override utimes(...args: Parameters<ReadWriteFs['utimes']>): Promise<void> {
 		return trusted(() => super.utimes(...args));
+	}
+	override createExclusive(...args: Parameters<ReadWriteFs['createExclusive']>): Promise<void> {
+		return trusted(() => super.createExclusive(...args));
 	}
 }
 

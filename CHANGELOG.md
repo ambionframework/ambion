@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**The dependencies are at their latest versions.** The release moves
+`vitest` and `@vitest/coverage-v8` to 5.0, `diff` to 9.0, `just-bash` to
+3.6, `just-git` to 1.9, `@openai/codex` to 0.160.1, `@anthropic-ai/claude-agent-sdk`
+to 0.3.291, and the Pi packages to 1.0.4. `@ambionframework/cloudflare` stays
+on `vitest` 4, the range that `@cloudflare/vitest-pool-workers` accepts.
+The directory backend runs `createExclusive` as trusted code of just-bash.
+
 **A macro can name a room tool.** The check of a macro reads the compose
 catalog that `compose` binds, so a macro that uses `say`, `recall`, or any
 other room tool passes. The room tool list has one owner in `define.ts`.

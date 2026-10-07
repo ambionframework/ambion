@@ -64,7 +64,7 @@ const THOUGHT = 'Check the pour schedule against the weather before the answer. 
 /** A key that Codex does not know. It warns, and the warning names the key. */
 const UNKNOWN_KEY = 'ambion_unknown_setting';
 
-/** The names of the system skills that Codex 0.159.2 lists in its skills block. */
+/** The names of the system skills that Codex 0.160.1 lists in its skills block. */
 const SKILL_NAMES = /imagegen|skill-creator|plugin-creator|openai-docs/;
 
 /**
@@ -473,7 +473,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					for (const native of NATIVE) expect(named).not.toContain(`"name":"${native}"`);
 					expect(on.responses.others).toEqual([]);
 					expect(on.outbound).toEqual([]);
-					// Codex 0.159.2 knows every key of the recipe, so a default seat gets no warning.
+					// Codex 0.160.1 knows every key of the recipe, so a default seat gets no warning.
 					expect(warningsOf(steps)).toEqual([]);
 				} finally {
 					await on.close();

@@ -15,7 +15,7 @@ the host.
 | File                   | What it holds                                            |
 | ---------------------- | -------------------------------------------------------- |
 | `plain-answer.jsonl`   | One answer with a reasoning summary and no tool          |
-| `catalog-0.159.2.json` | The entries of `gpt-5.6-luna` and `gpt-5.5` from 0.159.2 |
+| `catalog-0.160.1.json` | The entries of `gpt-5.6-luna` and `gpt-5.5` from 0.160.1 |
 
 To regenerate the catalog, run `codex debug models` on the bundled binary
 with a temporary `CODEX_HOME`, and keep the entries that the tests use.
