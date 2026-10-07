@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**The trace can record the input of the model.** A new `input` step holds
+the text that the driver renders for the pass. The `part` field says
+`system` or `record`. The driver records one `record` step for each pass
+that reads a record, and one `system` step in the first pass. The new trace policy field
+`input: 'omit' | 'full'` turns it on. An absent field reads as `omit`.
+`limits.trace.inputBytes` cuts the text and defaults to 1 MiB.
+
 **One agent definition works in a root room and in a breakout room.** The
 composition of the room decides how an agent behaves: who is present, and
 whether the room has an opener in a parent. `Canvas.workerTools()` and

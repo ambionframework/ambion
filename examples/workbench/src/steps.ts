@@ -82,6 +82,11 @@ function lineOf(step: TraceStep): StepLine {
 	switch (step.type) {
 		case 'pass':
 			return { kind: 'pass', text: `pass ${step.pass}` };
+		case 'input':
+			return {
+				kind: 'notice',
+				text: `input ${step.part} ${new TextEncoder().encode(step.text).length} bytes`,
+			};
 		case 'thinking':
 			return { kind: 'thinking', text: brief(step.text) };
 		case 'text':

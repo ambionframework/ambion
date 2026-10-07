@@ -169,6 +169,8 @@ class ScriptedActivation implements RunningActivation {
 		const after = pass.kind === 'delta' ? pass.after : 0;
 		this.activation.read({ after, through: pass.view.through });
 		try {
+			// The script ignores the text. The driver records it as the input of the pass.
+			await pass.record();
 			while (!this.over) {
 				const step: ScriptStep = { view: pass.view, results: this.results };
 				const reply = await this.script(step, this.definition.name, this.next());

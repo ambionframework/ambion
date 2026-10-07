@@ -52,6 +52,7 @@ export const DEFAULT_TRACE_POLICY: TracePolicy = Object.freeze({
 
 const THINKING = new Set(['omit', 'start', 'full']);
 const TOOL_OUTPUT = new Set(['omit', 'full']);
+const INPUT = new Set(['omit', 'full']);
 
 /** A policy checked and copied. Absent gives the default. */
 function capturePolicy(agent: string, policy: TracePolicy | undefined): TracePolicy {
@@ -60,7 +61,13 @@ function capturePolicy(agent: string, policy: TracePolicy | undefined): TracePol
 		throw new Error(`Agent '${agent}' trace.thinking must be omit, start, or full.`);
 	if (!TOOL_OUTPUT.has(policy.toolOutput))
 		throw new Error(`Agent '${agent}' trace.toolOutput must be omit or full.`);
-	return Object.freeze({ thinking: policy.thinking, toolOutput: policy.toolOutput });
+	if (policy.input !== undefined && !INPUT.has(policy.input))
+		throw new Error(`Agent '${agent}' trace.input must be omit or full.`);
+	return Object.freeze({
+		thinking: policy.thinking,
+		toolOutput: policy.toolOutput,
+		...(policy.input === undefined ? {} : { input: policy.input }),
+	});
 }
 
 /** The neutral half of an executor, as an executor kind's own options declare it. */
