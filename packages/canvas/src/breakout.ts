@@ -9,13 +9,17 @@ import { refuse } from './cast.ts';
 import { type BasePort, NAME_LIMIT } from './port.ts';
 import type { BreakoutStart, CanvasClose, CanvasRoom } from './store.ts';
 
+/** The most definition names that a refusal lists. */
+const NAMES_SHOWN = 10;
+
 /** The default for `perOpener`. */
 export const DEFAULT_PER_OPENER = 3;
 
 /** What the breakout tools read and write on a canvas. */
 export interface BreakoutPort extends BasePort {
 	readonly perOpener: number;
-	readonly team: ReadonlySet<string>;
+	/** The names of the definitions that `resume` took. */
+	definitionNames(): readonly string[];
 	/** Runs the operation in the chain of the bridge posts for one parent. */
 	ordered<T>(parent: string, operation: () => Promise<T>): Promise<T>;
 	rows(): readonly CanvasRoom[];
@@ -104,12 +108,20 @@ function assertName(parent: string, name: string): string {
 	return full;
 }
 
+/** The names as a list, at most `NAMES_SHOWN`, then the count of the rest. */
+function listed(names: readonly string[]): string {
+	const shown = names.slice(0, NAMES_SHOWN).join(', ');
+	return names.length > NAMES_SHOWN ? `${shown}, and ${names.length - NAMES_SHOWN} more` : shown;
+}
+
 function assertAgents(port: BreakoutPort, agents: readonly string[]): void {
 	if (agents.length === 0) throw refuse('agents names no worker. Name one or more.');
-	const team = [...port.team].join(', ');
+	const known = port.definitionNames();
 	for (const [index, name] of agents.entries()) {
-		if (!port.team.has(name))
-			throw refuse(`"${name}" is not in the worker team. The team is: ${team}.`);
+		if (!known.includes(name))
+			throw refuse(
+				`No definition resolves the agent "${name}". The definitions are: ${listed(known)}.`,
+			);
 		if (agents.indexOf(name) !== index) throw refuse(`agents names "${name}" twice.`);
 	}
 }

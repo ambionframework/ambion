@@ -71,10 +71,9 @@ tools. [Roster](roster.md) owns the rules and the attention scale.
 
 **Every executor kind reaches the world through the same tools.** The workbench team runs
 one seat on Pi, one on the Claude Agent SDK, and one on Codex. One
-list of `bundles` serves every specialist, so each one holds the room tools,
-the workspace tools, and the instrument tools. The assistant adds the opener
-bundle of the canvas. A worker holds the room tools, the workspace tools,
-and `report`. No seat holds another tool.
+list of `bundles` serves every seat, so each one holds the room tools, the
+workspace tools, the instrument tools, and the one bundle of the canvas. No
+seat holds another tool.
 
 | Kind   | On                             | Off                                    | How the package enforces it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Test that guards it                                                                                                                                                                      |
 | ------ | ------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
