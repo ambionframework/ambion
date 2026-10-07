@@ -311,7 +311,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		session.cut();
 		ready.resolve();
 		expect(await running).toEqual({ failed: false });
-		expect(steps.filter((step) => step.type === 'steer')).toEqual([
+		expect(steps.filter((step) => step.type !== 'input')).toEqual([
 			{ type: 'steer', seq: 2, consumed: false },
 		]);
 		expect(session.session).toBeUndefined();

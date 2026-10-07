@@ -3,8 +3,8 @@
 ## Unreleased
 
 **The trace can record the input of the model.** A new `input` step holds
-the text the model received. The `part` field says `system` or `record`.
-The driver records one `record` step for each pass that reads a record, and
+the text that the driver renders for the pass. The `part` field says
+`system` or `record`. The driver records one `record` step for each pass that reads a record, and
 one `system` step in the first pass. The new trace policy field
 `input: 'omit' | 'full'` turns it on. An absent field reads as `omit`.
 `limits.trace.inputBytes` cuts the text and defaults to 1 MiB.

@@ -37,7 +37,7 @@ import {
 	scriptedOpener,
 	settled,
 } from '../src/testing.ts';
-import type { ActivationEvent, Executor, Step } from '../src/types.ts';
+import type { ActivationEvent, Executor, Step, TracePolicy } from '../src/types.ts';
 import { andrei, collect, roomName } from './support/room.ts';
 import { stopAtEnd } from './support/stop.ts';
 
@@ -48,11 +48,12 @@ const echo = defineTool({
 	execute: () => 'echoed',
 });
 
-const agent = (name: string, tools: Executor['tools'] = []) =>
+const agent = (name: string, tools: Executor['tools'] = [], trace?: TracePolicy) =>
 	defineAgent({
 		name,
 		identity: `The ${name} seat.`,
 		executor: { kind: 'scripted', instructions: 'answer what is asked', tools },
+		...(trace === undefined ? {} : { trace }),
 	});
 
 const open = async (options: Parameters<typeof startRoom>[0]) =>
@@ -188,12 +189,35 @@ describe('scripted', () => {
 		await settled(room);
 		// The prepared arguments pass. The arguments that break the schema never reach invoke.
 		expect(reached).toEqual([{ text: 'prepared' }]);
+		// The default policy logs no input step.
+		expect(logged.map((step) => step.type)).not.toContain('input');
 		expect(logged).toContainEqual(
 			expect.objectContaining({
 				type: 'tool_result',
 				error: "Invalid arguments for tool 'lax': text must be string.",
 			}),
 		);
+	});
+
+	it('logs the input of each pass under input: full', async () => {
+		const logged: Step[] = [];
+		const room = await open({
+			name: roomName('testing-input'),
+			agents: [agent('a', [], { thinking: 'omit', toolOutput: 'omit', input: 'full' })],
+			runtime: createRuntime({
+				storage: memoryJournals(),
+				logger: (traced) => void logged.push(traced.step),
+			}),
+			execution: scripted(() => quiet()),
+		});
+		await (await room.visit(andrei)).send({ text: 'Hello?' });
+		await settled(room);
+		expect(
+			logged.flatMap((step) => (step.type === 'input' ? [[step.part, step.text]] : [])),
+		).toEqual([
+			['system', expect.stringContaining('answer what is asked')],
+			['record', expect.stringContaining('Hello?')],
+		]);
 	});
 
 	it('turns a script that throws into a transient error and writes no message', async () => {
@@ -500,7 +524,8 @@ describe('scriptedOpener', () => {
 				room: { view: async () => ({ stale: 'unused' }), commit: async () => said(4) },
 				definition: agent('a', tools),
 				emit: (event) => events.push(event),
-				// The steer tests read the steer steps: the driver's `input` steps stay out.
+				// The steer tests read the steer steps. The state records its own `input`
+				// steps with no policy, so they stay out.
 				trace: { record: (step) => void (step.type !== 'input' && steps.push(step)) },
 			},
 		);

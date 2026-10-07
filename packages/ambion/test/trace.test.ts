@@ -450,12 +450,21 @@ class PlayedRoom implements RoomProtocol {
 	}
 }
 
+interface PlayOptions {
+	readonly logger?: TraceLogger;
+	readonly wrap?: (opener: TraceOpener) => TraceOpener;
+	readonly stub?: ActivationOpener;
+	readonly policy?: TracePolicy;
+}
+
 function play(
 	stream: StreamFn,
-	logger: TraceLogger = collectSteps().logger,
-	wrap: (opener: TraceOpener) => TraceOpener = (opener) => opener,
-	stub?: ActivationOpener,
-	policy: TracePolicy = { thinking: 'full', toolOutput: 'full' },
+	{
+		logger = collectSteps().logger,
+		wrap = (opener) => opener,
+		stub,
+		policy = { thinking: 'full', toolOutput: 'full' },
+	}: PlayOptions = {},
 ) {
 	const clock = fakeClock();
 	const runtime = createRuntime({
@@ -503,7 +512,7 @@ describe('the steps the driver owns', () => {
 		const log = collectSteps();
 		const { room, actor } = play(
 			scriptedStream((_c, _a, request) => (request === 1 ? say('Hi.') : quiet())),
-			log.logger,
+			{ logger: log.logger },
 		);
 		room.answer = answer;
 		await actor.run(id);
@@ -526,10 +535,9 @@ describe('the steps the driver owns', () => {
 			return quiet();
 		});
 		const log = collectSteps();
-		const { room, actor } = play(stream, log.logger, undefined, undefined, {
-			thinking: 'full',
-			toolOutput: 'full',
-			input: 'full',
+		const { room, actor } = play(stream, {
+			logger: log.logger,
+			policy: { thinking: 'full', toolOutput: 'full', input: 'full' },
 		});
 		const done = actor.run(id);
 		// Before the first pass, the core holds a steer. The first prompt carries it.
@@ -581,7 +589,7 @@ describe('the steps the driver owns', () => {
 		const log = collectSteps();
 		const { room, actor } = play(
 			scriptedStream(() => quiet()),
-			log.logger,
+			{ logger: log.logger },
 		);
 		room.lease = async () => ({ stale: 'gone' });
 		const done = actor.run(id);
@@ -614,7 +622,7 @@ describe('the steps the driver owns', () => {
 		const log = collectSteps();
 		const { actor } = play(
 			scriptedStream(() => message),
-			log.logger,
+			{ logger: log.logger },
 		);
 		await actor.run(id);
 		const last = log.of(id).at(-1);
@@ -629,9 +637,7 @@ describe('the steps the driver owns', () => {
 		});
 		const { actor, events } = play(
 			scriptedStream(() => quiet()),
-			log.logger,
-			undefined,
-			failing,
+			{ logger: log.logger, stub: failing },
 		);
 		await actor.run(id);
 		const message = 'The activation failed.';
@@ -654,7 +660,7 @@ describe('the steps the driver owns', () => {
 	])('never fails the activation when the logger %s', async (_name, logger) => {
 		const { room, actor, events } = play(
 			scriptedStream(() => quiet()),
-			logger,
+			{ logger },
 		);
 		await actor.run(id);
 		await tick();
@@ -674,22 +680,23 @@ describe('a sink that closes late', () => {
 		const closed = deferred();
 		const { room, actor } = play(
 			scriptedStream(() => quiet()),
-			undefined,
-			(opener) => ({
-				open: (activation) => {
-					const sink = opener.open(activation);
-					if (activation !== first) return sink;
-					return {
-						startPass: (input, through) => sink.startPass(input, through),
-						record: (step) => sink.record(step),
-						usage: () => sink.usage(),
-						close: async () => {
-							closing.resolve();
-							await closed.promise;
-						},
-					};
-				},
-			}),
+			{
+				wrap: (opener) => ({
+					open: (activation) => {
+						const sink = opener.open(activation);
+						if (activation !== first) return sink;
+						return {
+							startPass: (input, through) => sink.startPass(input, through),
+							record: (step) => sink.record(step),
+							usage: () => sink.usage(),
+							close: async () => {
+								closing.resolve();
+								await closed.promise;
+							},
+						};
+					},
+				}),
+			},
 		);
 		const running = actor.run(first);
 		await closing.promise;

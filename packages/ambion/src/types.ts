@@ -438,10 +438,13 @@ export type Step =
 	/** A pass begins. `view` reads the whole record; `delta` follows a record that moved. */
 	| { type: 'pass'; pass: number; input: 'view' | 'delta'; through: Seq }
 	/**
-	 * The text the model received. `system` is the system part of the seat: the
-	 * mechanism and the agent, joined by a blank line. `record` is the record
-	 * that one pass reads. A host puts the system part in a system message and
-	 * the record in a user message.
+	 * The text that the driver renders for the pass. `system` is the system
+	 * part of the seat: the mechanism and the agent, joined by a blank line.
+	 * `record` is the record that one pass reads. An executor can add text of
+	 * its own, and the step does not hold it: the seat note of Codex, and the
+	 * resumed note and the agent part in a resumed query of Claude. A host
+	 * puts the system part in a system message and the record in a user
+	 * message.
 	 */
 	| { type: 'input'; part: 'system' | 'record'; text: string }
 	/** A block of the model's reasoning. `final` closes the block. */

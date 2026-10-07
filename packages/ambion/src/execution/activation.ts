@@ -46,7 +46,7 @@ export interface ActivationInput {
 	readonly trace: StepSink;
 }
 
-/** The system part of the prompt: the mechanism and the agent, as the executors join them. */
+/** The system part that the driver renders: the mechanism and the agent, joined by a blank line. */
 const systemText = ({ mechanism, agent }: { mechanism: string; agent: string }): string =>
 	`${mechanism}\n\n${agent}`;
 

@@ -492,15 +492,22 @@ and `input` (`omit` or `full`). The default is
 `{ thinking: 'start', toolOutput: 'full' }`. An absent `input` reads as
 `omit`. `start` keeps the first 280 characters of each thinking block.
 
-**The `input` step shows what the model received.** The driver records it,
-and the executor records nothing for it. Each pass that reads a record
-records one step with `part: 'record'` and the text of that record. The
-first pass of an activation also records one step with `part: 'system'`,
+**The `input` step shows the text that the driver renders.** The driver
+records it, and the executor records nothing for it. Each pass that reads a
+record records one step with `part: 'record'` and the text of that record.
+The first pass of an activation also records one step with `part: 'system'`,
 right after the `pass` step. Its text is the mechanism and the agent part
-of the prompt, joined by a blank line. A host can show the system part as a
-system message and the record as a user message. The policy `input: 'full'`
-copies whatever the record holds to the logger, secrets included. Use it
-only where the logger is as private as the room.
+of the prompt, joined by a blank line.
+
+**An executor can send more than the step holds.** The Codex executor puts
+its seat note before the system part. A resumed Claude query sends a
+resumed note and the agent part before the record. The `input` step holds
+none of that text. A host can show the system part as a system message and
+the record as a user message.
+
+**The policy `input: 'full'` copies the record to the logger.** The copy
+holds whatever the record holds, secrets included. Use it only where the
+logger is as private as the room.
 
 **The logger receives the steps in order.** The sink calls the logger once
 for each step, in the order of `pass` and `index`, before the release. The
