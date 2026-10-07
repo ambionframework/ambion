@@ -1187,7 +1187,7 @@ inside them.
 | `snapshot` | `SnapshotResult` | `refs`: one ref for each path, in order.                                                                             |
 | `restore`  | `RestoreResult`  | `ref`, `path` of the file, and `bytes`.                                                                              |
 | `read`     | `ReadResult`     | `path`, `text`, and the lines `from`, `to`, `lines`, and `next` and `truncation` when they apply.                    |
-| `bash`     | `ProcessResult`  | `process`, `text`, `read`, and `truncation` when the result cut the output.                                          |
+| `bash`     | `ProcessResult`  | `process`, `text`, `read`, and `truncation` and `omitted` when the result cut the output.                            |
 | `cancel`   | `ProcessResult`  | The same facts as `bash`.                                                                                            |
 | `ps`       | `PsResult`       | `processes`: the facts of each process of the caller.                                                                |
 | `wait`     | `WaitResult`     | On one handle, the facts of `bash`. On several, `processes` and `ended`.                                             |

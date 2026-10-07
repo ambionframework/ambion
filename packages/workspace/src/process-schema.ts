@@ -98,6 +98,23 @@ export const ProcessOutput = Type.Object(
 			{ description: 'The bytes of the output file that this result covers.' },
 		),
 		truncation: Type.Optional(TruncationFacts),
+		omitted: Type.Optional(
+			Type.Object(
+				{
+					offset: Type.Integer({
+						description:
+							'The first line that the view leaves out, counted from 1, as `read` takes it.',
+					}),
+					limit: Type.Integer({
+						description: 'The lines that the view leaves out, as the `limit` of `read`.',
+					}),
+				},
+				{
+					description:
+						'The lines of the output file between the start and the end that a cut view shows. Absent when the view is whole.',
+				},
+			),
+		),
 	},
 	{ $id: 'ProcessResult', description: 'One process, and the new output of its result.' },
 );

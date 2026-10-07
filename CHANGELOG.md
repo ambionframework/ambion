@@ -85,6 +85,13 @@ unified diff. The text work derives from `applyDiff` of the OpenAI Agents SDK
 (MIT License). Every seat that has the workspace bundle gets `apply_patch`
 beside `edit`, and the note on the file tools names it.
 
+**A process view keeps the start and the end of a long output.** A new part
+of more than 2000 lines or 50 KB shows its first and its last 1000 lines or
+25 KB, with a marker line between them. The marker names the lines that the
+view leaves out in the terms of `read`: `offset` and `limit`. The result
+`details` hold the same range in `omitted`. A cut view reads the first 50
+KB and the last 50 KB of the new part, and the 200 KB read is gone.
+
 **A macro can name a room tool.** The check of a macro reads the compose
 catalog that `compose` binds, so a macro that uses `say`, `recall`, or any
 other room tool passes. The room tool list has one owner in `define.ts`.
