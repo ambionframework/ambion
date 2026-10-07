@@ -26,7 +26,7 @@ import {
 import { type Execution, visitOf } from '@ambionframework/ambion/hosting';
 import { byAgent, quiet, type Script, say, scripted } from '@ambionframework/ambion/testing';
 import { memoryJournals } from '@ambionframework/journal';
-import { type PiOptions, pi, piExecution } from '@ambionframework/pi';
+import { pi, piExecution, type ThinkingLevel } from '@ambionframework/pi';
 import type { Simulation, SimulationExchange, Verdict } from '@ambionframework/simulator';
 import { describe, onTestFailed, onTestFinished } from 'vitest';
 import { defineAssistant } from '../../src/index.ts';
@@ -34,7 +34,7 @@ import { defineAssistant } from '../../src/index.ts';
 export const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
 export const JUDGE_MODEL = process.env.JUDGE_MODEL || MODEL;
 
-type Thinking = NonNullable<PiOptions['thinking']>;
+type Thinking = ThinkingLevel;
 export const THINKING = (process.env.AMBION_THINKING || 'off') as Thinking;
 export const JUDGE_THINKING = (process.env.JUDGE_THINKING || 'off') as Thinking;
 

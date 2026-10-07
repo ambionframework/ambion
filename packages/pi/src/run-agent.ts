@@ -117,7 +117,7 @@ export async function runAgent(
 		tools: definition.executor.tools.map((tool) => run.tool(tool)),
 		systemPrompt: () => systemOf(definition),
 		compaction: {},
-		thinking: thinkingOf(definition.executor),
+		thinking: thinkingOf(definition.executor, definition.name),
 		resume: false,
 		beforeRequest: noop,
 	});

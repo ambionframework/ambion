@@ -54,7 +54,7 @@ import { failedPass } from '@ambionframework/ambion/hosting';
 import { BACKGROUND_CONTEXT as CONTEXT } from '@earendil-works/chord/context';
 import type { Api, Message, Model } from '@earendil-works/pi-ai';
 import type { AgentEvent, Storage, Submission } from '@earendil-works/pi-durable';
-import { compactionOf, modelOf, thinkingOf } from './define.ts';
+import { chosenBy, compactionOf, type ThinkingLevel } from './define.ts';
 import { passOutcome } from './failure.ts';
 import { type Range, recordDraft, steerDraft } from './freshness.ts';
 import { type OpenHarness, openHarness, shutdown } from './harness.ts';
@@ -103,6 +103,14 @@ interface Steered {
 interface Part {
 	readonly range: Range;
 	readonly text: string;
+}
+
+/** What an activation resolves in its first pass: the model, and the thinking level. */
+interface Choice {
+	/** The identifier the definition gave, for the `session` step. */
+	readonly id: string;
+	readonly model: Model<Api>;
+	readonly thinking: ThinkingLevel;
 }
 
 /** The harness of an activation, its session id, its tool names, and the steps of its events. */
@@ -241,29 +249,33 @@ class Activation implements RunningActivation {
 	}
 
 	/**
-	 * The harness of this activation. The first pass resolves the definition's
-	 * model, opens the session, and holds the tools of the pass. Later passes
-	 * keep it.
+	 * The harness of this activation. The first pass calls the functions of
+	 * the definition for the model and the thinking level, opens the session,
+	 * and holds the tools of the pass. Later passes keep all of it, so a
+	 * change of the host reaches the next activation.
 	 */
 	private async prepare(pass: Pass): Promise<Opened | undefined> {
 		if (this.opened !== undefined) return this.opened;
-		const model = await this.options.model(modelOf(this.definition.executor), this.definition.name);
+		const { name, executor } = this.definition;
+		const chosen = chosenBy(executor, name);
+		const model = await this.options.model(chosen.model, name);
 		if (this.stopped) return undefined;
-		return this.hold(await this.openSession(pass, model));
+		const choice: Choice = { id: chosen.model, model, thinking: chosen.thinking };
+		return this.hold(await this.openSession(pass, choice), choice);
 	}
 
 	/**
 	 * Take the harness as this activation's, unless the activation closed while
 	 * it opened. The `session` step comes before any event of the harness.
 	 */
-	private hold(opened: Opened): Opened | undefined {
+	private hold(opened: Opened, choice: Choice): Opened | undefined {
 		this.sessionId = opened.id;
 		this.opened = opened;
 		if (this.closed) {
 			this.release();
 			return undefined;
 		}
-		this.trace.record(sessionStep(modelOf(this.definition.executor), opened.id, opened.tools));
+		this.trace.record(sessionStep(choice.id, opened.id, opened.tools));
 		if (opened.base !== undefined) {
 			this.base = opened.base;
 			this.activation.read({ after: 0, through: opened.base });
@@ -276,12 +288,12 @@ class Activation implements RunningActivation {
 	 * under this activation's id. A session that does not open, or that the
 	 * harness cannot attach to, closes, and a fresh session takes its place.
 	 */
-	private async openSession(pass: Pass, model: Model<Api>): Promise<Opened> {
+	private async openSession(pass: Pass, choice: Choice): Promise<Opened> {
 		const scope = scopeOf(pass.view, this.definition);
 		const storage = await this.resumed(scope, pass.resumeId);
 		const { resumeId } = pass;
 		if (storage !== undefined && resumeId !== undefined) {
-			const opened = await this.attach(storage, resumeId, pass, model, true).catch(
+			const opened = await this.attach(storage, resumeId, pass, choice, true).catch(
 				(error: unknown) => this.fellBack('Pi session not resumed', resumeId, error),
 			);
 			if (opened !== undefined) return opened;
@@ -290,7 +302,7 @@ class Activation implements RunningActivation {
 		if (created.fallback !== undefined) {
 			this.fellBack('Pi session kept in memory', created.id, created.fallback);
 		}
-		return this.attach(created.storage, created.id, pass, model, false);
+		return this.attach(created.storage, created.id, pass, choice, false);
 	}
 
 	/** The session `spec.resume` names, once the activation that held it closed it. */
@@ -319,7 +331,7 @@ class Activation implements RunningActivation {
 		storage: Storage,
 		id: string,
 		pass: Pass,
-		model: Model<Api>,
+		choice: Choice,
 		resume: boolean,
 	): Promise<Opened> {
 		const def = this.definition;
@@ -328,12 +340,12 @@ class Activation implements RunningActivation {
 			const tools = toolsFor(view, def, pass.tools, this.trace, () => this.view ?? view);
 			const open = await openHarness({
 				storage,
-				models: streamModels(model, this.options.stream),
-				model,
+				models: streamModels(choice.model, this.options.stream),
+				model: choice.model,
 				tools,
 				systemPrompt: () => this.systemPrompt,
 				compaction: compactionOf(def.executor),
-				thinking: thinkingOf(def.executor),
+				thinking: choice.thinking,
 				now: this.options.now,
 				resume,
 				beforeRequest: (messages) => this.provide(messages),

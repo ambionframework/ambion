@@ -10,6 +10,7 @@ export {
 	type CompactionOptions,
 	fromPiTool,
 	type NativePiTool,
+	type PiChoice,
 	type PiExecutor,
 	type PiOptions,
 	pi,

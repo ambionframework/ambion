@@ -4,7 +4,7 @@
  * queued behind it runs next. The runner stays live when a room call hangs,
  * fails, or answers late, and when the model resolves late or fails.
  */
-import { createRuntime, type Message } from '@ambionframework/ambion';
+import { createRuntime, defineAgent, type Message } from '@ambionframework/ambion';
 import {
 	type CommitResult,
 	hostingOf,
@@ -25,6 +25,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { deferred, tick } from '../../ambion/test/support/room.ts';
 import { contextText, quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
+import { pi } from '../src/define.ts';
 import type { StreamFn } from '../src/models.ts';
 import { stubModel } from '../src/services.ts';
 import { deaf, ok, playSeat, until, worker } from './support/runner.ts';
@@ -535,6 +536,42 @@ describe('async seat model resolution', () => {
 			expect(room.of('release')).toEqual([expect.objectContaining({ reason: 'failed', cause })]);
 		},
 	);
+
+	it('ends the lease as permanent when the model function throws, and runs the next activation', async () => {
+		let broken = true;
+		const models: string[] = [];
+		const definition = defineAgent({
+			name: worker.name,
+			identity: 'Works.',
+			executor: pi({
+				instructions: 'Work.',
+				model: () => {
+					if (broken) throw new Error('pump offline');
+					return 'scripted/repaired';
+				},
+			}),
+		});
+		const base = scriptedStream(() => quiet());
+		const { room, actor } = playSeat({
+			definition,
+			stream: (resolved, context, options) => {
+				models.push(resolved.id);
+				return base(resolved, context, options);
+			},
+		});
+		await actor.run(first);
+		expect(room.of('release')).toEqual([
+			expect.objectContaining({
+				reason: 'failed',
+				cause: 'permanent',
+			}),
+		]);
+		expect(models).toEqual([]);
+		broken = false;
+		await actor.run(second);
+		expect(room.of('release', second)).toEqual([expect.objectContaining({ reason: 'released' })]);
+		expect(models).toEqual(['scripted/repaired']);
+	});
 
 	it('keeps a steer held during model resolution and acknowledges it at provider input', async () => {
 		const ready = pending<Model<Api>>();

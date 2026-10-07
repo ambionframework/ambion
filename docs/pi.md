@@ -127,7 +127,7 @@ validates the shared fields. Pi adds `model` and `compaction`.
 | Option                 | Required | Default                  | Meaning                                                                                                |
 | ---------------------- | -------- | ------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `instructions`         | Yes      | None                     | The private guidance of the agent.                                                                     |
-| `model`                | Yes      | None                     | A Pi model id, `provider/model-id`.                                                                    |
+| `model`                | Yes      | None                     | A Pi model id, `provider/model-id`, or a function that returns one.                                    |
 | `tools`                | No       | None                     | The tools of the agent, from `defineTool` or `fromPiTool`.                                             |
 | `bundles`              | No       | None                     | Tool bundles. Their guidance joins the prompt after the respond policy.                                |
 | `compose`              | No       | `quickjsRuntime()`       | The `compose` and `describe` tools of the seat: a runtime and optional limits ([Compose](compose.md)). |
@@ -136,7 +136,19 @@ validates the shared fields. Pi adds `model` and `compaction`.
 | `activationTokenLimit` | No       | The whole record         | The token limit of the record one activation reads. A positive integer.                                |
 | `estimateTokens`       | No       | `'length'`               | The name of the estimator in the runtime that counts tokens. It needs the limit.                       |
 | `compaction`           | No       | The harness default      | When the harness compacts the session. A partial Pi `CompactionPolicy`.                                |
-| `thinking`             | No       | `'off'`                  | How much the model reasons before it answers. A Pi thinking level.                                     |
+| `thinking`             | No       | `'off'`                  | How much the model reasons before it answers. A Pi thinking level, or a function that returns one.     |
+
+**A host can change the model and the thinking level between
+activations.** Give `model` or `thinking` as a function. The executor calls
+each function once, in the first pass of an activation, and the activation
+keeps both values for all its passes. A change lands in the next
+activation, and a session that the next activation resumes takes the new
+values. A function that throws, a `model` that returns no non-empty string,
+or a `thinking` that returns a level Pi does not name fails the activation
+as permanent. The message names the agent and the value. The seat and the
+room keep running, and the next activation calls the functions again.
+`pi()` checks a plain `thinking` level when it defines the agent, and checks
+no function.
 
 **Compaction is on by default.** The harness holds the default policy. The
 executor passes `compaction` to the harness as it is, and a field that the
@@ -233,12 +245,12 @@ of the person who owns the account.
 [How an activation runs](executors.md#how-an-activation-runs) states the
 read position and the record window. Pi adds these facts.
 
-**One harness serves one activation.** The first pass resolves the model,
-opens or creates the session storage, binds the tools, and opens one
+**One harness serves one activation.** The first pass resolves the model
+and the thinking level, opens or creates the session storage, binds the tools, and opens one
 pi-durable `Harness` over the storage. The harness holds one root
 conversation. Every pass of the activation submits one input to that
 conversation, and resolves when the submission settles. The harness runs
-with the `thinking` level of the definition.
+with the `thinking` level of the activation.
 
 **The system prompt is the mechanism and the agent part.** A prompt section
 of the harness renders `pass.mechanism` and `pass.agent` before each
@@ -472,16 +484,16 @@ model did.
 the trace policy. The table below gives the harness event behind each step. The
 driver writes `pass`, `room`, and `end`.
 
-| Step          | Source in Pi                                                                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `thinking`    | `message_update` thinking deltas, then `message_end`. A block the stream did not send arrives whole.                                              |
-| `text`        | `message_update` text deltas, then `message_end`. A block the stream did not send arrives whole.                                                  |
-| `tool_call`   | `tool_execution_start`, with the call id, the tool name, and the arguments.                                                                       |
-| `tool_result` | `tool_execution_end`, with the result. A failed call adds `error` with the text of the result.                                                    |
-| `steer`       | Never. The core records it. The executor calls `read` when a provider request holds the line.                                                     |
-| `approval`    | Never. The `compose` tool records it through the step sink of the activation.                                                                     |
-| `session`     | No harness event. The executor records one at the start of each activation: `pi`, the model string of the options, the session id, and the tools. |
-| `usage`       | The `usage_changed` event, one for each answer. The compaction spend joins the last one.                                                          |
+| Step          | Source in Pi                                                                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `thinking`    | `message_update` thinking deltas, then `message_end`. A block the stream did not send arrives whole.                                                 |
+| `text`        | `message_update` text deltas, then `message_end`. A block the stream did not send arrives whole.                                                     |
+| `tool_call`   | `tool_execution_start`, with the call id, the tool name, and the arguments.                                                                          |
+| `tool_result` | `tool_execution_end`, with the result. A failed call adds `error` with the text of the result.                                                       |
+| `steer`       | Never. The core records it. The executor calls `read` when a provider request holds the line.                                                        |
+| `approval`    | Never. The `compose` tool records it through the step sink of the activation.                                                                        |
+| `session`     | No harness event. The executor records one at the start of each activation: `pi`, the model string of the activation, the session id, and the tools. |
+| `usage`       | The `usage_changed` event, one for each answer. The compaction spend joins the last one.                                                             |
 
 A redacted thinking block adds no step. The trace policy of the definition
 sets how much of `thinking` and tool output the journal keeps.

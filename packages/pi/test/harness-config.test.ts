@@ -11,7 +11,7 @@ import { callTool, quiet } from '@ambionframework/ambion/testing';
 import type { AssistantMessage, Context, SimpleStreamOptions } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { renderActivation } from '../../ambion/src/execution/render.ts';
 import { deferred } from '../../ambion/test/support/room.ts';
@@ -361,6 +361,146 @@ describe('the harness of an activation', () => {
 		expect(() => workerWith(undefined, 'huge' as ThinkingLevel)).toThrow(
 			'Thinking must be one of off, minimal, low, medium, high, xhigh, max.',
 		);
+	});
+
+	describe('a model and a thinking level that functions give', () => {
+		/** What the host holds now. A test changes it between activations. */
+		const held: { model: unknown; thinking: unknown; throws?: 'model' | 'thinking' } = {
+			model: 'scripted/first',
+			thinking: 'low',
+		};
+		const calls = { model: 0, thinking: 0 };
+
+		const choosing = (stream: StreamFn, sessions: PiSessions = memorySessions()) => {
+			const definition = defineAgent({
+				name: 'worker',
+				identity: 'Works.',
+				executor: pi({
+					instructions: 'Work.',
+					model: () => {
+						calls.model += 1;
+						if (held.throws === 'model') throw new Error('pump offline');
+						return held.model as string;
+					},
+					thinking: () => {
+						calls.thinking += 1;
+						if (held.throws === 'thinking') throw new Error('pump offline');
+						return held.thinking as ThinkingLevel;
+					},
+				}),
+			});
+			const opener = createPiOpener({
+				definition,
+				model: stubModel,
+				stream,
+				now: () => 0,
+				sessions,
+			});
+			return (id: string, trace: (step: Step) => void = () => {}) =>
+				stateOf(opener, definition, { id, trace: { record: trace } });
+		};
+
+		const resumed = (messages: Message[], through: number): ActivationView => {
+			const view = respond(messages, through);
+			return {
+				...view,
+				spec: { ...view.spec, resume: { kind: 'pi', id: 'message:1:worker:1' } },
+			};
+		};
+
+		beforeEach(() => {
+			held.model = 'scripted/first';
+			held.thinking = 'low';
+			held.throws = undefined;
+			calls.model = 0;
+			calls.thinking = 0;
+		});
+
+		it('reads both once for each activation, and the next activation sees the change', async () => {
+			const { requests, stream } = recording(() => quiet());
+			const open = choosing(stream);
+			const steps: Step[] = [];
+			const first = open('message:1:worker:1', (step) => steps.push(step));
+			await first.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
+			// A change during the activation reaches no later pass of it.
+			held.model = 'scripted/second';
+			held.thinking = 'high';
+			const both = [said(1, 'Go.'), said(2, 'Again.')];
+			await first.pass({ kind: 'delta', after: 1, view: respond(both, 2) });
+			expect(calls).toEqual({ model: 1, thinking: 1 });
+			first.close?.();
+
+			const second = open('message:2:worker:1', (step) => steps.push(step));
+			await second.pass({ kind: 'view', view: resumed([...both, said(3, 'Once more.')], 3) });
+			expect(calls).toEqual({ model: 2, thinking: 2 });
+			expect(requests.map((request) => request.model)).toEqual([
+				'scripted/first',
+				'scripted/first',
+				'scripted/second',
+			]);
+			// The resumed session takes the level of the new activation.
+			expect(requests.map((request) => request.options?.reasoning)).toEqual(['low', 'low', 'high']);
+			expect(steps.flatMap((step) => (step.type === 'session' ? [step.model] : []))).toEqual([
+				'scripted/first',
+				'scripted/second',
+			]);
+		});
+
+		const LEVELS = 'off, minimal, low, medium, high, xhigh, max';
+
+		it.each([
+			[
+				'a model that is not a string',
+				{ model: 7 },
+				"The `model` function of agent 'worker' returned 7: expected a non-empty string.",
+			],
+			[
+				'an empty model',
+				{ model: '' },
+				'The `model` function of agent \'worker\' returned "": expected a non-empty string.',
+			],
+			[
+				'a thinking level that Pi does not name',
+				{ thinking: 'huge' },
+				`The \`thinking\` function of agent 'worker' returned "huge": expected one of ${LEVELS}.`,
+			],
+			[
+				'a model function that throws',
+				{ throws: 'model' },
+				"The `model` function of agent 'worker' threw: pump offline",
+			],
+			[
+				'a thinking function that throws',
+				{ throws: 'thinking' },
+				"The `thinking` function of agent 'worker' threw: pump offline",
+			],
+		] as const)(
+			'fails the activation as permanent for %s, and the next one runs',
+			async (_name, bad, message) => {
+				const { requests, stream } = recording(() => quiet());
+				const open = choosing(stream);
+				Object.assign(held, bad);
+				const view = respond([said(1, 'Go.')], 1);
+				expect(await open('message:1:worker:1').pass({ kind: 'view', view })).toMatchObject({
+					failed: true,
+					cause: 'permanent',
+					message,
+				});
+				expect(requests).toHaveLength(0);
+
+				// The host repairs the choice, and the seat runs the next activation.
+				Object.assign(held, { model: 'scripted/first', thinking: 'low', throws: undefined });
+				expect(await open('message:2:worker:1').pass({ kind: 'view', view })).toEqual({
+					failed: false,
+				});
+				expect(requests).toHaveLength(1);
+			},
+		);
+
+		it('checks no function when the agent is defined', () => {
+			held.thinking = 'huge';
+			expect(() => choosing(scriptedStream(() => quiet()))).not.toThrow();
+		});
 	});
 
 	it('writes compaction on the executor only when the definition gives it', () => {

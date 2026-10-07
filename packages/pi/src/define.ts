@@ -6,7 +6,11 @@
  */
 import type { AmbionTool, Executor, ToolContent } from '@ambionframework/ambion';
 import { defineTool } from '@ambionframework/ambion';
-import { describeExecutor, type ExecutorBaseOptions } from '@ambionframework/ambion/hosting';
+import {
+	describeExecutor,
+	type ExecutorBaseOptions,
+	PermanentError,
+} from '@ambionframework/ambion/hosting';
 import { quickjsRuntime } from '@ambionframework/compose/runtime';
 import type { ModelThinkingLevel, Static, TSchema } from '@earendil-works/pi-ai';
 import type { CompactionPolicy } from '@earendil-works/pi-durable';
@@ -17,9 +21,19 @@ export type ThinkingLevel = ModelThinkingLevel;
 /** When the harness compacts a session. A field that is absent keeps the default of pi-durable. */
 export type CompactionOptions = Partial<CompactionPolicy>;
 
+/**
+ * A value, or a function that gives it. The executor calls the function once
+ * for each activation, so a host can change the value between activations.
+ */
+export type PiChoice<T> = T | (() => T);
+
 export interface PiOptions extends ExecutorBaseOptions {
-	/** A Pi model identifier, `provider/model-id`. */
-	model: string;
+	/**
+	 * A Pi model identifier, `provider/model-id`, or a function that gives
+	 * one. The function runs once at the start of each activation. A running
+	 * activation keeps the model it started with.
+	 */
+	model: PiChoice<string>;
 	/**
 	 * When the harness compacts the session: `enabled`, `reserveTokens`,
 	 * `keepRecentTokens`, and `backgroundTokens`. A field that is absent
@@ -29,11 +43,12 @@ export interface PiOptions extends ExecutorBaseOptions {
 	 */
 	compaction?: CompactionOptions;
 	/**
-	 * How much the model reasons before it answers. Absent, `off`. The
-	 * provider maps each level to its own setting, and a model with no
-	 * reasoning ignores it.
+	 * How much the model reasons before it answers, or a function that gives
+	 * the level. Absent, `off`. The provider maps each level to its own
+	 * setting, and a model with no reasoning ignores it. The function runs
+	 * once at the start of each activation, with the function of `model`.
 	 */
-	thinking?: ThinkingLevel;
+	thinking?: PiChoice<ThinkingLevel>;
 }
 
 /**
@@ -43,9 +58,9 @@ export interface PiOptions extends ExecutorBaseOptions {
  */
 export interface PiExecutor extends Executor {
 	readonly kind: 'pi';
-	readonly model: string;
+	readonly model: PiChoice<string>;
 	readonly compaction?: CompactionOptions;
-	readonly thinking?: ThinkingLevel;
+	readonly thinking?: PiChoice<ThinkingLevel>;
 }
 
 /** Every level of `thinking`, from none to the most. */
@@ -86,7 +101,7 @@ function checkCompaction(options: CompactionOptions): void {
 export function pi(options: PiOptions): PiExecutor {
 	const { compaction, thinking, ...rest } = options;
 	if (compaction !== undefined) checkCompaction(compaction);
-	checkThinking(thinking);
+	if (typeof thinking !== 'function') checkThinking(thinking);
 	return Object.freeze({
 		...describeExecutor({
 			...rest,
@@ -144,10 +159,39 @@ export function fromPiTool<TParameters extends TSchema, TDetails>(
 	});
 }
 
-/** The model identifier `pi()` gave the executor. An executor of another kind has none. */
-export function modelOf(executor: Executor): string {
-	if ('model' in executor && typeof executor.model === 'string') return executor.model;
-	throw new Error(`The Pi executor cannot run an executor of kind '${executor.kind}'.`);
+/** The model and the thinking level of one activation. */
+export interface Chosen {
+	readonly model: string;
+	readonly thinking: ThinkingLevel;
+}
+
+/** Call a function of the executor. A function that throws fails the activation for good. */
+function callChoice(choice: () => unknown, agent: string, field: string): unknown {
+	try {
+		return choice();
+	} catch (error) {
+		const reason = error instanceof Error ? error.message : String(error);
+		throw new PermanentError(`The \`${field}\` function of agent '${agent}' threw: ${reason}`, {
+			cause: error,
+		});
+	}
+}
+
+/**
+ * The model identifier of the executor. A function runs now, and the value
+ * it returns must be a non-empty string.
+ */
+function modelOf(executor: Executor, agent: string): string {
+	const choice: unknown = 'model' in executor ? executor.model : undefined;
+	if (typeof choice === 'string') return choice;
+	if (typeof choice !== 'function') {
+		throw new Error(`The Pi executor cannot run an executor of kind '${executor.kind}'.`);
+	}
+	const model = callChoice(choice as () => unknown, agent, 'model');
+	if (typeof model === 'string' && model !== '') return model;
+	throw new PermanentError(
+		`The \`model\` function of agent '${agent}' returned ${JSON.stringify(model)}: expected a non-empty string.`,
+	);
 }
 
 /** The compaction options `pi()` gave the executor, or none: the defaults of pi-durable. */
@@ -156,9 +200,24 @@ export function compactionOf(executor: Executor): CompactionOptions {
 	return {};
 }
 
-/** The thinking level `pi()` gave the executor, or `off`. */
-export function thinkingOf(executor: Executor): ThinkingLevel {
-	return 'thinking' in executor && isThinking(executor.thinking) ? executor.thinking : 'off';
+/**
+ * The thinking level of the executor, or `off`. A function runs now, and the
+ * level it returns must be one that Pi names.
+ */
+export function thinkingOf(executor: Executor, agent: string): ThinkingLevel {
+	const choice: unknown = 'thinking' in executor ? executor.thinking : undefined;
+	const level =
+		typeof choice === 'function' ? callChoice(choice as () => unknown, agent, 'thinking') : choice;
+	if (isThinking(level)) return level;
+	if (typeof choice !== 'function') return 'off';
+	throw new PermanentError(
+		`The \`thinking\` function of agent '${agent}' returned ${JSON.stringify(level)}: expected one of ${THINKING.join(', ')}.`,
+	);
+}
+
+/** The model and the thinking level for one activation, each function called once. */
+export function chosenBy(executor: Executor, agent: string): Chosen {
+	return { model: modelOf(executor, agent), thinking: thinkingOf(executor, agent) };
 }
 
 function isCompaction(value: unknown): value is CompactionOptions {
