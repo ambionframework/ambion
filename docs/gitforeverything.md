@@ -8,7 +8,8 @@ exists today and what must be added.
 
 **The harness is everything that shapes how an agent works.** It is the
 instructions and identity text, the skills, the macros of each skill, and
-their scripts and references. A git repository holds it. Before each
+their scripts and references. One git repository for each agent holds
+it, `<agent>/config`. The name is provisional. Before each
 activation, the host loads the definition of the seat from the tip of
 that repository.
 
@@ -52,20 +53,22 @@ order.
 **Two kinds of repository use the git backend as it is
 ([Git](git.md)).**
 
-| Repository          | Holds                                    | Who writes                |
-| ------------------- | ---------------------------------------- | ------------------------- |
-| `templates/harness` | The current release of the harness       | The host, by registration |
-| `<agent>/harness`   | The harness of one agent, with its edits | That agent alone          |
+| Repository         | Holds                                    | Who writes                |
+| ------------------ | ---------------------------------------- | ------------------------- |
+| `templates/config` | The current release of the harness       | The host, by registration |
+| `<agent>/config`   | The harness of one agent, with its edits | That agent alone          |
 
-**`templates/harness` is the release channel.** The host registers it
+**`templates/config` is the release channel.** The host registers it
 from the harness folder of the release. A changed folder fast-forwards
 the template to a new commit, and an equal folder writes nothing
 ([Templates](git.md#templates)). No agent can push to it.
 
-**`<agent>/harness` is a fork of the template.** The host prepares it
-before the first activation with `git.use(agent, (env) =>
-env.fork('templates/harness', 'harness'))`. A fork shares the history of
-the template, so a later merge of a new release has a common base.
+**`<agent>/config` is a fork of the template, seeded at startup.** At
+the first start, the host forks the template for each agent with
+`git.use(agent, (env) => env.fork('templates/config', 'config'))`. At
+each later start, the release lands in the template, and the agent merges
+it into its fork. The fork keeps the whole history: each edit, each merge,
+and each resolved conflict.
 
 **Each agent loads its definition from its own fork.** An edit to a
 shared skill changes the copy of one agent. Text that one agent writes
@@ -102,7 +105,7 @@ once per run.
 sequenceDiagram
   participant R as Room
   participant H as Host
-  participant F as agent/harness
+  participant F as agent/config
   participant E as Executor
   R->>H: definitionFor(seat, current)
   H->>F: resolve the tip
@@ -170,8 +173,8 @@ next activation.
 ```mermaid
 sequenceDiagram
   participant H as Host
-  participant T as templates/harness
-  participant F as agent/harness
+  participant T as templates/config
+  participant F as agent/config
   participant R as Startup room
   participant A as Agent
   H->>T: register the release folder
@@ -195,12 +198,12 @@ tip with `show` to find it, and compares it with the tip of the
 template.
 
 **The agents merge in a startup room.** The host opens a second canvas,
-`harness`, on the same canvas store. Its one root room seats each agent
+`config`, on the same canvas store. Its one root room seats each agent
 whose fork lags. Each agent runs on its last good harness, so the agent
 that resolves a conflict has the instructions under which it made the
 edit.
 
-**Each agent merges its own fork.** It fetches `templates/harness`,
+**Each agent merges its own fork.** It fetches `templates/config`,
 merges it, and resolves each conflict with its commit messages and the
 exchanges they cite. It checks that each skill still loads, then pushes
 with the trailer. Agents that edited the same shared skill can talk in
@@ -246,13 +249,13 @@ decided.
 ## Fold the edits back into the source
 
 **The fold is a three-way apply onto the release tag.** The commits of
-`templates/harness` come from registration, so the source repository does
+`templates/config` come from registration, so the source repository does
 not hold them. The tree of the template commit equals the release folder
 byte for byte, so it is an exact base:
 
 ```sh
 git checkout -b harvest/<agent> v<release>
-git diff <template commit> <agent tip> | git apply -3 --directory=harness
+git diff <template commit> <agent tip> | git apply -3 --directory=config
 ```
 
 **The developer folds one agent at a time.** Two agents that edited the
@@ -269,7 +272,7 @@ so a host script clones each fork and writes a git bundle.
 | --------------------------------------------- | --------------------------------------------- |
 | Edit its own instructions, skills, or macros  | Allowed; takes effect at the next activation  |
 | Push to another agent's harness               | Refused: no write credential                  |
-| Push to `templates/harness`                   | Refused: read-only                            |
+| Push to `templates/config`                    | Refused: read-only                            |
 | Change a tool or a credential                 | Not possible: host code                       |
 | Delete every file of its harness              | Refused at load; the current definition stays |
 | Write text that enters another agent's prompt | Not possible: each agent loads its own fork   |
@@ -282,17 +285,17 @@ folder alone ([Trust](trust.md)).
 
 ## What must be added
 
-| Piece                                           | State                               |
-| ----------------------------------------------- | ----------------------------------- |
-| Register `templates/harness`, fork it per agent | Works today                         |
-| Load a definition from a checkout of a fork     | Works today: clone, `fromDirectory` |
-| Read the files of a commit from the host        | Missing: `GitEnv` has no file read  |
-| `definitionFor` in the room and the canvas      | Missing: a kernel change            |
-| A new thread on a changed agent part (Codex)    | Missing: executor code              |
-| The trailer check, the startup room, the rungs  | Missing: host code                  |
-| The load cache, the refusal reminder, the pin   | Missing: host code                  |
-| The trace stamp and the load log                | Missing: host code                  |
-| The export of each fork for the developer       | Missing: a host script              |
+| Piece                                          | State                               |
+| ---------------------------------------------- | ----------------------------------- |
+| Register `templates/config`, fork it per agent | Works today                         |
+| Load a definition from a checkout of a fork    | Works today: clone, `fromDirectory` |
+| Read the files of a commit from the host       | Missing: `GitEnv` has no file read  |
+| `definitionFor` in the room and the canvas     | Missing: a kernel change            |
+| A new thread on a changed agent part (Codex)   | Missing: executor code              |
+| The trailer check, the startup room, the rungs | Missing: host code                  |
+| The load cache, the refusal reminder, the pin  | Missing: host code                  |
+| The trace stamp and the load log               | Missing: host code                  |
+| The export of each fork for the developer      | Missing: a host script              |
 
 **One kernel change is needed: `definitionFor`.** It reverses the
 decision in `planning/backlog.md` that the definition set is fixed for
