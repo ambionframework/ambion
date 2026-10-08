@@ -46,8 +46,8 @@ stored field.
 2. Quiescence closes the current exchange. The room derives “live” from leases
    and due wakes, then appends a close with the observed `through` boundary.
    Work that reaches a terminal state is handled the same way.
-3. Ordinary messages landing while it is open steer eligible active seats and
-   do not change its opening message or range. A later human question is
+3. Ordinary messages landing while it is open steer the active seats that
+   hear them ([Roster](roster.md#attention)) and do not change its opening message or range. A later human question is
    therefore part of the current work, not a second exchange. The first
    person who speaks becomes its `person` when it had none
    ([§4](#4-who-directs-one-and-who-receives-its-result)).
@@ -223,7 +223,7 @@ workspace.processes.subscribe((event) => {
   idle seat at `broadcast` or wider. The room refuses a system message to a
   `none` seat and to a name it does not know.
 - **A system message with `to` steers its target alone.** One with no `to`
-  steers each seat at work. The record shows every system message to each
+  steers each seat at work at `broadcast` or wider. The record shows every system message to each
   seat at its next activation.
 - **The key of `room.post` has a key space of its own.** A repeated `key`
   lands once and returns the same handle. The same key names a different
