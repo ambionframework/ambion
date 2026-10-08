@@ -53,7 +53,7 @@ function reachOf(message: RoutedMessage): Attention {
  * nobody else at all. Routing wakes a named seat, the attention scale decides who stays silent, and a
  * presence message is routed like any other.
  */
-function wakes(
+export function hears(
 	seat: { name: string; attention: Attention },
 	target: string | undefined,
 	message: RoutedMessage,
@@ -67,7 +67,7 @@ function wakes(
 }
 
 /** The seat a message names: a directed say names who it addresses, a seating names who it seats. */
-function targetOf(message: RoutedMessage): string | undefined {
+export function targetOf(message: RoutedMessage): string | undefined {
 	if (isText(message)) return message.to;
 	return message.kind === 'seated' ? message.subject : undefined;
 }
@@ -95,7 +95,7 @@ export function routes(
 			: state.roster;
 	const woken = roster
 		.filter((seat) => seat.name !== author && !holdsOrdinary(state, live.get(seat.name)))
-		.filter((seat) => wakes(seat, target, message))
+		.filter((seat) => hears(seat, target, message))
 		.map((seat) => seat.name);
 	return [...new Set(woken)];
 }

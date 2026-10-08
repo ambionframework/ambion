@@ -35,6 +35,6 @@ const baseOf = (state: RoomState): BaseFacts => ({
 /** The state after one more entry, by the rules that fold a whole journal. */
 export function evolve(state: RoomState, entry: RoomEntry, options: FoldOptions): RoomState {
 	const base = baseOf(state);
-	applyEntry(base, entry, state.exchange);
+	applyEntry(base, entry, state.exchange, state.roster);
 	return project(base, options);
 }

@@ -5,11 +5,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
-import type { Lease } from '../src/journal/entries.ts';
+import type { Lease, Seating } from '../src/journal/entries.ts';
 import type { Body, RoomEntry } from '../src/journal/journal.ts';
 import { messageDelivery } from '../src/room/delivery.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
-import type { EndReason, Message } from '../src/types.ts';
+import type { Attention, EndReason, Message } from '../src/types.ts';
 import { freeze } from './support/core-failure.ts';
 import { evolve } from './support/evolve.ts';
 import { activationOf, foldRoom, pendingOf, replayState } from './support/fold.ts';
@@ -66,6 +66,7 @@ describe('message delivery rule', () => {
 					running('message:3:priya:1', 3),
 					running('message:3:gamma:1', 3),
 				),
+				[],
 			),
 		).toEqual({
 			wakes: ['beta', 'author'],
@@ -84,6 +85,7 @@ describe('message delivery rule', () => {
 					running('message:3:running:1', 3, 0),
 					running('closed:10:closed:1', 3),
 				),
+				[],
 			),
 		).toEqual({
 			wakes: [],
@@ -96,9 +98,56 @@ describe('message delivery rule', () => {
 	});
 
 	it('leaves explicit recorded wakes intact when no historical lease can steer', () => {
-		expect(messageDelivery(said(10, ['removed', 'unknown']), leases())).toEqual({
+		expect(messageDelivery(said(10, ['removed', 'unknown']), leases(), [])).toEqual({
 			wakes: ['removed', 'unknown'],
 			steers: [],
+		});
+	});
+
+	describe('attention decides who a message steers', () => {
+		const seat = (name: string, attention: Attention): Seating => ({
+			name,
+			identity: `${name}.`,
+			attention,
+		});
+		const roster = [seat('lead', 'broadcast'), seat('builder', 'named'), seat('reviewer', 'named')];
+		const busy = leases(
+			running('message:3:lead:1', 3),
+			running('message:3:builder:1', 3),
+			running('message:3:reviewer:1', 3),
+		);
+		const seats = (message: Message): string[] =>
+			messageDelivery(message, busy, roster).steers.map((steer) => steer.seat);
+
+		const say = (from: string, to?: string): Message => ({
+			kind: 'said',
+			seq: 10,
+			at,
+			from,
+			text: 'Text.',
+			...(to === undefined ? {} : { to }),
+		});
+		const system = (to?: string): Message => ({
+			kind: 'system',
+			seq: 10,
+			at,
+			text: 'Note.',
+			...(to === undefined ? {} : { to }),
+		});
+		const cases: [string, Message, string[]][] = [
+			['an undirected say of a person steers only a seat at broadcast', say('priya'), ['lead']],
+			['an undirected say of a seat steers only a seat at broadcast', say('builder'), ['lead']],
+			['a directed say steers the seat it names and no other', say('lead', 'builder'), ['builder']],
+			[
+				'a directed say of a person steers the seat it names and no other',
+				say('priya', 'reviewer'),
+				['reviewer'],
+			],
+			['a system message with no to steers only a seat at broadcast', system(), ['lead']],
+			['a system message with to steers its target alone', system('builder'), ['builder']],
+		];
+		it.each(cases)('%s', (_name, message, expected) => {
+			expect(seats(message)).toEqual(expected);
 		});
 	});
 });

@@ -48,7 +48,12 @@ export function activationOf(id: string): ActivationId {
 export function foldRoom(entries: readonly RoomEntry[], options: FoldOptions): RoomState {
 	const read = noFacts();
 	for (const entry of entries)
-		applyEntry(read, entry, entry.kind === 'cancel' ? open(read) : undefined);
+		applyEntry(
+			read,
+			entry,
+			entry.kind === 'cancel' ? open(read) : undefined,
+			foldRoster(read.composition, read.messages),
+		);
 	return project(read, options);
 }
 

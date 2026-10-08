@@ -75,13 +75,19 @@ export const noFacts = (): BaseFacts => ({
 
 /**
  * Applies one committed entry to the room facts. `open` is the exchange
- * open before the entry, which the base facts do not hold. Only a
- * cancellation reads it: it closes that exchange.
+ * open before the entry, and `roster` the roster before it. The base facts
+ * hold neither. A cancellation reads the exchange: it closes it. A message
+ * reads the roster: its attention decides who the message steers.
  */
-export function applyEntry(read: BaseFacts, entry: RoomEntry, open: ExchangeRef | undefined): void {
+export function applyEntry(
+	read: BaseFacts,
+	entry: RoomEntry,
+	open: ExchangeRef | undefined,
+	roster: readonly Readonly<Seating>[],
+): void {
 	if (entry.kind === 'message') {
 		const message = placed(entry);
-		read.deliveries.set(message.seq, messageDelivery(message, read.leases));
+		read.deliveries.set(message.seq, messageDelivery(message, read.leases, roster));
 		read.messages.push(message);
 		return;
 	}

@@ -125,8 +125,8 @@ describe.each(storages)('steering on $name', (storage) => {
 			await visit.send({ to: alpha.name, text: 'Start analysis.' });
 			await observed.ending.promise;
 			// The caller sends an ordinary message while the executor releases.
-			// Its active recipient is recorded even though idle attention excludes it.
-			await visit.send({ to: priya.name, text: 'Keep this final correction.' });
+			// It names the seat at work, so the seat is steered and no seat wakes.
+			await visit.send({ to: alpha.name, text: 'Keep this final correction.' });
 			const update = (await messagesOf(room)).at(-1);
 			expect(update?.wakes ?? []).toEqual([]);
 			expect(observed.steers).toHaveLength(1);
@@ -153,7 +153,7 @@ describe.each(storages)('steering on $name', (storage) => {
 		},
 	);
 
-	it('steers a message to an active agent with narrow idle attention, and consumes reordered and repeated steers in one activation', async () => {
+	it('steers a message that names an active agent, and consumes reordered and repeated steers in one activation', async () => {
 		const opened = await openFor(storage);
 		const observed = observe({ deferSteers: true });
 		const first = holdingAlpha(1);
@@ -170,7 +170,7 @@ describe.each(storages)('steering on $name', (storage) => {
 		const visit = await room.visit(priya);
 		await visit.send({ to: alpha.name, text: 'Start analysis.' });
 		await first.started.promise;
-		await visit.send({ to: priya.name, text: 'First correction.' });
+		await visit.send({ to: alpha.name, text: 'First correction.' });
 		const update = (await messagesOf(room)).at(-1);
 		expect(update?.wakes ?? []).toEqual([]);
 		expect(observed.steers.map((steer) => [steer.seat, steer.message.seq])).toEqual([
@@ -179,7 +179,7 @@ describe.each(storages)('steering on $name', (storage) => {
 		expect(observed.steers[0]?.activation).toBe(
 			[...stateOf(room).leases.values()].find((lease) => lease.phase === 'running')?.id,
 		);
-		await visit.send({ to: priya.name, text: 'Second correction.' });
+		await visit.send({ to: alpha.name, text: 'Second correction.' });
 		expect(observed.steers).toHaveLength(2);
 		await observed.deliver[1]?.();
 		await observed.deliver[1]?.();
@@ -198,6 +198,31 @@ describe.each(storages)('steering on $name', (storage) => {
 		expect(pendingOf(stateOf(room))).toEqual([]);
 		const last = observed.steers.at(-1);
 		expect(stateOf(room).leases.get(last?.activation ?? '')?.readThrough).toBe(last?.message.seq);
+	});
+
+	it('leaves an agent at work alone when an undirected message does not reach its attention', async () => {
+		const opened = await openFor(storage);
+		const observed = observe();
+		const first = holdingAlpha(1);
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('steering-attention'),
+				agents: [alpha, assistant],
+				seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
+				runtime: createRuntime({ storage: opened.storage }),
+				execution: observed.wrap(first.execution),
+			}),
+		);
+		const visit = await room.visit(priya);
+		await visit.send({ to: alpha.name, text: 'Start analysis.' });
+		await first.started.promise;
+		await visit.send({ text: 'Say this to the room.' });
+		expect(observed.steers).toEqual([]);
+		await visit.send({ to: alpha.name, text: 'Say this to alpha.' });
+		expect(observed.steers.map((steer) => steer.seat)).toEqual(['alpha']);
+		first.release.resolve();
+		await waitForRoom(room);
+		expect(first.contexts.at(-1)).toContain('Say this to alpha.');
 	});
 
 	it('recovers unconsumed steering from the journal after its activation expires', async () => {
@@ -223,7 +248,7 @@ describe.each(storages)('steering on $name', (storage) => {
 		const visit = await room.visit(priya);
 		await visit.send({ to: alpha.name, text: 'Begin analysis.' });
 		await first.started.promise;
-		await visit.send({ to: priya.name, text: 'Recover this unconsumed context.' });
+		await visit.send({ to: alpha.name, text: 'Recover this unconsumed context.' });
 		const update = (await messagesOf(room)).at(-1);
 		expect(update?.wakes ?? []).toEqual([]);
 		crash(firstRuntime, room);

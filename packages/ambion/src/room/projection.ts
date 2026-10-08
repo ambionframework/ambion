@@ -159,7 +159,7 @@ const factsOf = (projection: RoomProjection): OwedFacts => ({
 // -- messages ---------------------------------------------------------------
 
 function onMessage(prev: RoomProjection, message: Message, step: FoldStep): RoomProjection {
-	const delivery = messageDelivery(message, prev.running);
+	const delivery = messageDelivery(message, prev.running, prev.roster);
 	const deliveries = step.own ? prev.base.deliveries : new Map(prev.base.deliveries);
 	deliveries.set(message.seq, delivery);
 	const base = {
@@ -318,7 +318,7 @@ function onCancel(prev: RoomProjection, entry: CancelEntry, step: FoldStep): Roo
 		leases: new Map(prev.base.leases),
 		closes: [...prev.base.closes],
 	};
-	applyEntry(base, entry, prev.exchange);
+	applyEntry(base, entry, prev.exchange, prev.roster);
 	const marked = {
 		...prev,
 		base,
