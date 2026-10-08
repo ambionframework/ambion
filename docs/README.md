@@ -21,22 +21,23 @@ Read these pages in order. Each one builds on the page before it.
 
 ## Build an agent
 
-| Page                                  | Use it for                                                                              |
-| ------------------------------------- | --------------------------------------------------------------------------------------- |
-| [Executors](executors.md)             | The executor contract, steps, the trace, and how to write an adapter                    |
-| [Pi](pi.md)                           | The Pi package: options, exchange continuity, testing                                   |
-| [Claude](claude.md)                   | The Claude Agent SDK package: policy, trust, sessions, testing                          |
-| [Codex](codex.md)                     | The Codex package: install, options, trust, and testing                                 |
-| [Resources](resources.md)             | The resource contract, tool bundles, references, and provenance                         |
-| [Workspace](workspace.md)             | The workspace interface, its backends, and its tools                                    |
-| [Snapshots](snapshots.md)             | `snapshot`, `restore`, and the object backend                                           |
-| [SQL](sql.md)                         | The `sql` tool and the SQLite backend                                                   |
-| [Processes](processes.md)             | Background processes: `bash`, `ps`, handles, the host's view, and reminders             |
-| [Skills and macros](skills.md)        | Instructions that an agent reads from the workspace, and the macros that a skill stores |
-| [Compose](compose.md)                 | The `compose` tool: join tools in one call through short code                           |
-| [Git](git.md)                         | A git backend: read-only templates, forks, clones, and pushes                           |
-| [Workstation](workstation.md)         | A remote server as a workspace over SSH, one account for each agent                     |
-| [Workstation git](workstation-git.md) | The git backend on the workstation: one account, git over SSH, agent keys               |
+| Page                                      | Use it for                                                                              |
+| ----------------------------------------- | --------------------------------------------------------------------------------------- |
+| [Executors](executors.md)                 | The executor contract, steps, the trace, and how to write an adapter                    |
+| [Pi](pi.md)                               | The Pi package: options, exchange continuity, testing                                   |
+| [Claude](claude.md)                       | The Claude Agent SDK package: policy, trust, sessions, testing                          |
+| [Codex](codex.md)                         | The Codex package: install, options, trust, and testing                                 |
+| [Resources](resources.md)                 | The resource contract, tool bundles, references, and provenance                         |
+| [Workspace](workspace.md)                 | The workspace interface, its backends, and its tools                                    |
+| [Snapshots](snapshots.md)                 | `snapshot`, `restore`, and the object backend                                           |
+| [SQL](sql.md)                             | The `sql` tool and the SQLite backend                                                   |
+| [Processes](processes.md)                 | Background processes: `bash`, `ps`, handles, the host's view, and reminders             |
+| [Skills and macros](skills.md)            | Instructions that an agent reads from the workspace, and the macros that a skill stores |
+| [Compose](compose.md)                     | The `compose` tool: join tools in one call through short code                           |
+| [Git](git.md)                             | A git backend: read-only templates, forks, clones, and pushes                           |
+| [Workstation](workstation.md)             | A remote server as a workspace over SSH, one account for each agent                     |
+| [Workstation git](workstation-git.md)     | The git backend on the workstation: one account, git over SSH, agent keys               |
+| [Git for everything](gitforeverything.md) | A design: a private config repository for each agent, merged at startup                 |
 
 ## Show work to people
 
