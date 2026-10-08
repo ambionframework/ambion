@@ -1,96 +1,110 @@
 # Git for everything
 
 **This page is a design. No package implements it yet.** It describes how
-an application keeps the harness of its agents in git, how each agent
-edits its own harness, how an edit takes effect at the next activation,
-and how the agents merge a new release at startup. Each section names what
-exists today and what must be added.
+each agent keeps its own configuration in a private git repository, how
+an edit takes effect at the next activation, and how a new release
+reaches each agent at startup. Each section names what exists today and
+what must be added.
 
-**The harness is everything that shapes how an agent works.** It is the
-instructions and identity text, the skills, the macros of each skill, and
-their scripts and references. One git repository for each agent holds
-it, `<agent>/config`. The name is provisional. Before each
-activation, the host loads the definition of the seat from the tip of
-that repository.
+**The configuration of an agent is everything that shapes how it works.**
+It is the instructions and identity text, the skills, the macros of each
+skill, and their scripts and references. One private repository for each
+agent holds it, `config/<agent>`. The name is provisional.
 
 ## Decisions
 
-- **Each agent can edit every part of its own harness.** Its prompts,
-  instructions, skills, and macros are files in a repository that the
-  agent owns. The agent changes them with ordinary git.
+- **Each agent sees only its own configuration, and can edit all of
+  it.** No agent can read or write the configuration of another agent.
+- **Two branches separate what ships from what runs.** `release` holds
+  what ships with the code. `live` holds the version that the agent
+  customized, and the host loads it.
 - **Tools and credentials stay in host code.** No agent edits them. An
   edit can change how an agent works, and never what it can touch.
 - **An edit takes effect at the next activation of the agent.** The room
   asks the host for the definition of a seat before each activation. An
   activation in progress never changes.
-- **The agents merge a new release at startup.** When the source of the
-  harness is newer than an agent's harness, that agent merges the release
-  into its own repository and resolves the conflicts.
-- **The source repository stays the one truth.** A developer recovers the
-  edits of each agent and folds them into the source for the next release.
+- **The agent merges a new release at startup.** When `release` moves and
+  `live` holds edits, the agent merges `release` into `live` and resolves
+  the conflicts.
+- **The source repository stays the one truth.** A developer reads the
+  difference between `release` and `live` of each agent, and folds it into
+  the source for the next release.
 
-## What the harness holds
+## What the repository holds
 
-| In the harness repository                         | In host code, not editable |
-| ------------------------------------------------- | -------------------------- |
-| `agents/<name>/instructions.md`, the instructions | Tools and tool bundles     |
-| `agents/<name>/identity.md`, the identity         | Credentials                |
-| `skills/<skill>/SKILL.md`, the skill text         | Models and executors       |
-| `skills/<skill>/macros/<name>.js`, the macros     | Limits and the roster      |
-| `skills/<skill>/` scripts and references          | The canvas and its rooms   |
+| In `config/<agent>`                        | In host code, not editable |
+| ------------------------------------------ | -------------------------- |
+| `instructions.md`, the instructions        | Tools and tool bundles     |
+| `identity.md`, the identity                | Credentials                |
+| `skills/<skill>/SKILL.md`, the skill text  | Models and executors       |
+| `skills/<skill>/macros/<name>.js`, a macro | Limits and the roster      |
+| `skills/<skill>/` scripts and references   | The canvas and its rooms   |
 
-**The folder layout is a convention of the host.** `defineAgent` takes
-strings and a skill set. The host reads the files and builds each
-definition, so the layout adds no stored format.
+**The layout is a convention of the host.** `defineAgent` takes strings
+and a skill set. The host reads the files and builds the definition, so
+the layout adds no stored format.
+
+**The source holds one folder for each agent and one for the shared
+skills.** The host builds the release of an agent from its folder and the
+shared skills that it uses. In the repository of the agent, a shared skill
+is an ordinary folder that the agent can edit.
 
 **A macro cannot widen what an agent can touch.** A macro binds only the
 tools in its `uses`, and each must be a tool of the seat
 ([Macros](macros.md)). An edited macro chains the same tools in another
 order.
 
-## The repositories
+## The branches
 
-**Two kinds of repository use the git backend as it is
-([Git](git.md)).**
+```mermaid
+gitGraph
+  commit id: "release 1"
+  branch live
+  commit id: "edit"
+  commit id: "edit "
+  checkout main
+  commit id: "release 2"
+  checkout live
+  merge main id: "merge release 2"
+  commit id: "edit  "
+```
 
-| Repository         | Holds                                    | Who writes                |
-| ------------------ | ---------------------------------------- | ------------------------- |
-| `templates/config` | The current release of the harness       | The host, by registration |
-| `<agent>/config`   | The harness of one agent, with its edits | That agent alone          |
+The diagram draws `release` as the first branch.
 
-**`templates/config` is the release channel.** The host registers it
-from the harness folder of the release. A changed folder fast-forwards
-the template to a new commit, and an equal folder writes nothing
-([Templates](git.md#templates)). No agent can push to it.
+| Branch    | Holds                                                 | Who writes                           |
+| --------- | ----------------------------------------------------- | ------------------------------------ |
+| `release` | What ships with the code, one commit for each release | The host, at startup                 |
+| `live`    | The customized version that runs                      | The agent; the host fast-forwards it |
 
-**`<agent>/config` is a fork of the template, seeded at startup.** At
-the first start, the host forks the template for each agent with
-`git.use(agent, (env) => env.fork('templates/config', 'config'))`. At
-each later start, the release lands in the template, and the agent merges
-it into its fork. The fork keeps the whole history: each edit, each merge,
-and each resolved conflict.
+**`release` is a line of release commits.** At each start, the host
+compares the release folder of the agent with the tip of `release`. A
+changed folder gets a new commit on the tip, and an equal folder writes
+nothing. Template registration already follows this rule
+([Templates](git.md#templates)). The message of each commit names the
+source commit, as `Source: <hash>`.
 
-**Each agent loads its definition from its own fork.** An edit to a
-shared skill changes the copy of one agent. Text that one agent writes
-never enters the prompt of another agent. A macro that one agent writes
-runs only under the tools of that agent.
+**`live` starts at the first release.** At the first start, the host
+creates the repository with one commit on `release` and points `live` at
+the same commit.
 
-## Edit the harness
+**The history keeps everything.** Each edit, each merge of a release, and
+each resolved conflict is a commit on `live`.
 
-**An agent edits its harness like any other repository.** It clones its
-fork, edits a file, commits, and pushes. The guidance of the agent states
-three rules:
+## Edit the configuration
+
+**An agent edits its configuration like any other repository.** It clones
+`config/<agent>`, works on `live`, commits, and pushes. The guidance of
+the agent states three rules:
 
 1. Push each edit. On `memoryBackend`, a commit that is not pushed is
    lost at a restart ([Persistence](git.md#persistence)).
 2. Give the reason in the commit message, and cite the exchange that
-   showed the need with a commit ref or a message ref.
+   showed the need with a message ref.
 3. Expect the edit to take effect at the next activation.
 
-**The copy in `~/.skills` is not the harness.** An edit of that copy
+**The copy in `~/.skills` is not the configuration.** An edit of that copy
 changes nothing that runs, and the copy step can restore it
-([Skills](skills.md#the-copy-in-the-home)). The fork is the place for an
-edit that must last.
+([Skills](skills.md#the-copy-in-the-home)).
 
 ## Load at each activation
 
@@ -105,22 +119,22 @@ once per run.
 sequenceDiagram
   participant R as Room
   participant H as Host
-  participant F as agent/config
+  participant C as config/agent
   participant E as Executor
   R->>H: definitionFor(seat, current)
-  H->>F: resolve the tip
-  alt the tip is the loaded commit
+  H->>C: resolve live
+  alt live is the loaded commit
     H-->>R: current
   else a new commit
-    H->>F: read the files of the commit
+    H->>C: read the files of the commit
     H->>H: loadSkills, then defineAgent
     H-->>R: the new definition, or current with a refusal reminder
   end
   R->>E: the activation, on the returned definition
 ```
 
-**An unchanged tip costs one resolve.** The host caches the definition by
-commit. It reads the files and builds a definition only when the tip
+**An unchanged `live` costs one resolve.** The host caches the definition
+by commit. It reads the files and builds a definition only when `live`
 moves.
 
 **The runner asks for the definition when it takes an activation.** The
@@ -139,7 +153,7 @@ keeps the current definition. The room reads those fields outside the
 port, and the journal records the name and the identity in the cast. An
 edit of `identity.md` therefore takes effect at the next start.
 
-**A tip that does not load leaves the current definition.** The host
+**A commit that does not load leaves the current definition.** The host
 returns the current definition with a reminder that names the refused
 commit and the error of `loadSkills` or `defineAgent`. The agent reads the
 error at that activation and can push a fix.
@@ -160,84 +174,87 @@ body, and the cast keeps the name and the identity. A new optional field
 of the room options is additive.
 
 **The host can pin a seat to one commit.** A pin makes `definitionFor`
-return that commit whatever the tip is. A person uses it to stop a bad
+return that commit whatever `live` holds. A person uses it to stop a bad
 edit until the agent fixes it.
 
 ## Startup
 
-**A release still lands at a start.** A new release comes with new host
-code, so the host restarts. The agents merge the release at that start.
-Their own edits between two starts need no merge: each one loads at the
-next activation.
+**A release lands at a start.** A new release comes with new host code,
+so the host restarts. Edits between two starts need no merge: each one
+loads at the next activation.
 
 ```mermaid
 sequenceDiagram
   participant H as Host
-  participant T as templates/config
-  participant F as agent/config
-  participant R as Startup room
+  participant C as config/agent
+  participant R as Merge room of the agent
   participant A as Agent
-  H->>T: register the release folder
-  H->>F: read the tip and its trailer
-  alt the trailer names the template tip
-    H->>H: load the tip at the first activation
-  else the release is newer
+  H->>C: commit the release folder on release
+  alt release did not move
+    H->>H: load live
+  else live is the old release tip
+    H->>C: fast-forward live to release
+    H->>H: load live
+  else live holds edits
     H->>R: post "merge the release"
-    R->>A: activation on the last good harness
-    A->>F: merge the template, resolve, push with the trailer
+    R->>A: activation on the last good live
+    A->>C: merge release into live, resolve, push
     H->>H: load the first commit that loads
   end
   H->>H: resume the application canvas
 ```
 
-**The host detects a lagging fork from a trailer.** Each merge commit of
-an agent ends with the line `Release: <template commit>`. The release of
-a fork is the commit that the latest trailer names, or the template
-commit that the fork came from. The host walks the first parents of the
-tip with `show` to find it, and compares it with the tip of the
-template.
+**An agent with no edits merges nothing.** When `live` is the old tip of
+`release`, the host fast-forwards `live`. No activation runs.
 
-**The agents merge in a startup room.** The host opens a second canvas,
-`config`, on the same canvas store. Its one root room seats each agent
-whose fork lags. Each agent runs on its last good harness, so the agent
-that resolves a conflict has the instructions under which it made the
-edit.
+**An agent with edits merges in its own room.** The host opens a second
+canvas, `config`, on the same canvas store. It holds one root room for
+each agent that must merge, and that agent is the one seat. The host does
+not mirror these rooms, so no agent reads another agent's merge. The agent
+runs on its last good `live`, so it resolves each conflict with the
+instructions under which it made the edit.
 
-**Each agent merges its own fork.** It fetches `templates/config`,
-merges it, and resolves each conflict with its commit messages and the
-exchanges they cite. It checks that each skill still loads, then pushes
-with the trailer. Agents that edited the same shared skill can talk in
-the room before they push.
+**A person can take part in the merge.** The merge room is a root room
+of a canvas, so a person can visit it, read the conflicts, and answer the
+agent. The agent asks the person when a conflict needs a decision that
+its edits do not settle. The room then records how each conflict was
+resolved and why.
+
+**The agent merges `release` into `live`.** It resolves each conflict with
+its commit messages and the exchanges they cite. It checks that each
+skill still loads, then pushes `live`. The host knows the merge is done
+when the tip of `release` is a parent of a commit on `live`.
 
 **At the start, the host loads the first rung that loads, for each
 agent.**
 
-1. The merged tip of the fork.
-2. The last commit that loaded for that agent.
-3. The release folder.
+1. `live` after the merge.
+2. The last commit of `live` that loaded.
+3. The tip of `release`.
 
 **The last good commit can fail on new host code.** A macro can name a
 tool that the release removed, and `loadSkills` or `defineAgent` then
-refuses it. The release folder always loads, because the developer tested
-it with that host code.
+refuses it. The tip of `release` always loads, because the developer
+tested it with that host code.
 
 **A merge that fails is kept.** On a deadline or an `exhausted` exchange,
-the host loads the next rung for that agent and posts the outcome to the
-startup room. The fork keeps what the agent pushed. The agent can finish
-the merge later, and the merged tip loads at its next activation. The
-startup room is the record of each merge.
+the host loads the next rung and posts the outcome to the merge room.
+`live` keeps what the agent pushed. The agent can finish the merge later,
+and `live` then loads at its next activation. The merge room is the
+record of each merge.
 
 **The release keeps each agent name.** A breakout row whose definition
 is gone stays `running` at `resume` ([Canvas](canvas.md)).
 
 ## Record the version
 
-**The trace records which harness ran each activation.** The host wraps
-its `TraceLogger` and adds the loaded commit of the seat and the release
-to each step. The commit can change from one activation to the next, so
-the trace is the one place that records it. A step already names the room, the seat, the activation, and
-the exchange ([Executors](executors.md)). The host stores the trace,
-because a restart keeps none.
+**The trace records which commit ran each activation.** The host wraps
+its `TraceLogger` and adds the loaded commit of `live` and the tip of
+`release` to each step. The commit can change from one activation to the
+next, so the trace is the one place that records it. A step already names
+the room, the seat, the activation, and the exchange
+([Executors](executors.md)). The host stores the trace, because a restart
+keeps none.
 
 **The host keeps one log entry for each load.** The entry holds the
 seat, the commit, and the outcome: loaded, refused with the error, or
@@ -248,56 +265,68 @@ decided.
 
 ## Fold the edits back into the source
 
-**The fold is a three-way apply onto the release tag.** The commits of
-`templates/config` come from registration, so the source repository does
-not hold them. The tree of the template commit equals the release folder
-byte for byte, so it is an exact base:
+**The customization of an agent is the difference between its two
+branches.** After a merge, `live` holds the current release and the edits
+of the agent:
 
 ```sh
-git checkout -b harvest/<agent> v<release>
-git diff <template commit> <agent tip> | git apply -3 --directory=config
+git diff release live
 ```
 
+**The developer applies it onto the source commit of the release.** The
+message of the `release` tip names that commit. A harvest script maps each
+path back to its source folder: `instructions.md` and `identity.md` to
+the folder of the agent, and a skill to the folder of the agent or the
+folder of shared skills. It then applies the patch with `git apply -3`.
+
 **The developer folds one agent at a time.** Two agents that edited the
-same shared skill give two branches. The developer merges them in the
+same shared skill give two patches. The developer merges them in the
 source repository and picks one text for the next release.
 
-**The host exports each fork.** On a workstation, the developer fetches
-over SSH. With `justGitBackend`, the server runs in the host's process,
-so a host script clones each fork and writes a git bundle.
+**The host exports each repository.** On a workstation, the developer
+fetches over SSH. With `justGitBackend`, the server runs in the host's
+process, so a host script clones each repository and writes a git bundle.
 
 ## Trust
 
-| Attempt                                       | Result                                        |
-| --------------------------------------------- | --------------------------------------------- |
-| Edit its own instructions, skills, or macros  | Allowed; takes effect at the next activation  |
-| Push to another agent's harness               | Refused: no write credential                  |
-| Push to `templates/config`                    | Refused: read-only                            |
-| Change a tool or a credential                 | Not possible: host code                       |
-| Delete every file of its harness              | Refused at load; the current definition stays |
-| Write text that enters another agent's prompt | Not possible: each agent loads its own fork   |
+| Attempt                                               | Result                                                                                                          |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Edit its own instructions, skills, or macros          | Allowed; takes effect at the next activation                                                                    |
+| Read or clone the configuration of another agent      | Refused: the repository is private to its agent                                                                 |
+| Push to `release`                                     | Refused: the host alone writes it                                                                               |
+| Change a tool or a credential                         | Not possible: host code                                                                                         |
+| Delete every file on `live`                           | Refused at load; the current definition stays                                                                   |
+| Write text that enters another agent's prompt         | Not possible: each agent loads its own repository                                                               |
+| Read the working copy or `~/.skills` of another agent | Possible on the just-bash backends: no wall between homes. Refused on the workstation: each home is mode `0700` |
 
-**Use this design in a room of trusted agents.** An agent rewrites its own
+**Isolation is complete on the workstation alone.** On the just-bash
+backends, every agent can read every home ([Macros](macros.md#review-a-macro)),
+so a clone or the skills copy of an agent is readable there. A host that
+needs isolation runs the agents on a workstation.
+
+**Use this design with trusted agents.** An agent rewrites its own
 instructions, and the edit applies at once. A prompt injection that
-reaches an agent can persist through its harness until a person pins the
-seat. A room open to untrusted agents loads the release
-folder alone ([Trust](trust.md)).
+reaches an agent can persist through its configuration until a person
+pins the seat. A room open to untrusted agents loads `release` alone
+([Trust](trust.md)).
 
 ## What must be added
 
-| Piece                                          | State                               |
-| ---------------------------------------------- | ----------------------------------- |
-| Register `templates/config`, fork it per agent | Works today                         |
-| Load a definition from a checkout of a fork    | Works today: clone, `fromDirectory` |
-| Read the files of a commit from the host       | Missing: `GitEnv` has no file read  |
-| `definitionFor` in the room and the canvas     | Missing: a kernel change            |
-| A new thread on a changed agent part (Codex)   | Missing: executor code              |
-| The trailer check, the startup room, the rungs | Missing: host code                  |
-| The load cache, the refusal reminder, the pin  | Missing: host code                  |
-| The trace stamp and the load log               | Missing: host code                  |
-| The export of each fork for the developer      | Missing: a host script              |
+| Piece                                                                                                               | State                                                   |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| A private repository `config/<agent>`: its owner alone reads and writes it, and `repos` shows it to its owner alone | Missing: both git backends, with a conformance case     |
+| A `release` branch that the host alone writes                                                                       | Missing: a server hook, as for templates                |
+| A host commit of a folder on a branch                                                                               | Missing: the rule of template registration, on a branch |
+| Read the files of a commit from the host                                                                            | Missing: `GitEnv` has no file read                      |
+| `definitionFor` in the room and the canvas                                                                          | Missing: a kernel change                                |
+| A new thread on a changed agent part (Codex)                                                                        | Missing: executor code                                  |
+| The fast-forward, the merge rooms, the rungs                                                                        | Missing: host code                                      |
+| The load cache, the refusal reminder, the pin                                                                       | Missing: host code                                      |
+| The trace stamp and the load log                                                                                    | Missing: host code                                      |
+| The harvest script and the export                                                                                   | Missing: host code                                      |
 
 **One kernel change is needed: `definitionFor`.** It reverses the
 decision in `planning/backlog.md` that the definition set is fixed for
-each run. Each other piece is host code or an additive method of
+each run. The private repository and the host-only branch change both git
+backends. Each other piece is host code or an additive method of
 `GitEnv`.
