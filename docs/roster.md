@@ -61,10 +61,12 @@ a configured summary writer. Summary activations have their own authority.
 while a seat works goes into that activation only when the seat would hear
 it at rest. A message that names the seat reaches it at any attention. An
 undirected say reaches a seat at `broadcast` or wider. A directed say to
-another seat does not reach a seat at work. In a room where the assistant
-sits at `broadcast` and the specialists sit at `named`, a message of a person
-reaches the assistant alone, and the assistant sends the specialists a
-directed say. Every seat reads the whole record at its next activation.
+another seat does not reach a seat at work. Take a room where the assistant sits at `broadcast` and the specialists sit
+at `named`. A message of a person reaches the assistant alone. The assistant
+sends each specialist a directed say. Every seat reads the whole record at
+its next activation. A specialist at work that was not steered reads the
+missed message when its next say is refused as missed, which costs one more
+model call.
 
 Attention controls waking and steering. It does not grant authority to commit. The room
 checks the activation, lease, recipient, and consumed context for every write.
