@@ -257,6 +257,7 @@ const entries: RoomEntry[] = [
 			activation: 'closed:27:assistant:1',
 		},
 	},
+	message(32, 'priya', { to: 'alpha', wakes: ['alpha'] }),
 ];
 
 type HistoricalLease = { id: string; openedSeq: number; until: number | undefined };
@@ -275,6 +276,31 @@ function historicalLeases(history: readonly RoomEntry[]): Map<string, Historical
 	return leases;
 }
 
+/** The attention of each seat that the history seated, read again from the entries. */
+function historicalAttention(
+	history: readonly RoomEntry[],
+	before: number,
+): Map<string, Attention> {
+	const attention = new Map<string, Attention>();
+	for (const entry of history) {
+		if (entry.seq >= before) break;
+		if (entry.kind === 'composition')
+			for (const seat of entry.body.seated) attention.set(seat.name, seat.attention);
+		if (entry.kind !== 'message') continue;
+		const body = entry.body as Message;
+		if (body.kind === 'seated') attention.set(body.subject, body.attention ?? 'broadcast');
+		if (body.kind === 'unseated') attention.delete(body.subject);
+	}
+	return attention;
+}
+
+/** A say or a system message reaches a seat at work by its name, or by a wide enough attention. */
+function reaches(body: Message, seat: string, held: Attention | undefined): boolean {
+	if (body.kind !== 'said' && body.kind !== 'system') return true;
+	if (held === undefined || body.to === seat) return true;
+	return body.to === undefined && (held === 'broadcast' || held === 'presence');
+}
+
 function historicalDeliveries(
 	history: readonly RoomEntry[],
 	roster: ReadonlySet<string>,
@@ -286,12 +312,14 @@ function historicalDeliveries(
 		const body = entry.body as Message;
 		const explicit = new Set(body.wakes ?? []);
 		const steers = new Set<string>();
+		const attention = historicalAttention(history, entry.seq);
 		for (const held of leases.values()) {
 			const id = decodeActivationId(held.id);
 			if (
 				id?.source === 'message' &&
 				id.seat !== body.from &&
 				!explicit.has(id.seat) &&
+				reaches(body, id.seat, attention.get(id.seat)) &&
 				held.openedSeq < entry.seq &&
 				(held.until === undefined || entry.seq <= held.until)
 			)
