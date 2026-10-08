@@ -9,7 +9,7 @@ what must be added.
 **The configuration of an agent is everything that shapes how it works.**
 It is the instructions and identity text, the skills, the macros of each
 skill, and their scripts and references. One private repository for each
-agent holds it, `config/<agent>`. The name is provisional.
+agent holds it, `<agent>/config`. The name is provisional.
 
 ## Decisions
 
@@ -32,7 +32,7 @@ agent holds it, `config/<agent>`. The name is provisional.
 
 ## What the repository holds
 
-| In `config/<agent>`                        | In host code, not editable |
+| In `<agent>/config`                        | In host code, not editable |
 | ------------------------------------------ | -------------------------- |
 | `instructions.md`, the instructions        | Tools and tool bundles     |
 | `identity.md`, the identity                | Credentials                |
@@ -88,12 +88,14 @@ creates the repository with one commit on `release` and points `live` at
 the same commit.
 
 **The history keeps everything.** Each edit, each merge of a release, and
-each resolved conflict is a commit on `live`.
+each resolved conflict is a commit on `live`. `live` takes the hook of the
+shared default branch: a push cannot delete it or move it to a commit that
+does not descend from its tip.
 
 ## Edit the configuration
 
 **An agent edits its configuration like any other repository.** It clones
-`config/<agent>`, works on `live`, commits, and pushes. The guidance of
+`<agent>/config`, works on `live`, commits, and pushes. The guidance of
 the agent states three rules:
 
 1. Push each edit. On `memoryBackend`, a commit that is not pushed is
@@ -119,7 +121,7 @@ once per run.
 sequenceDiagram
   participant R as Room
   participant H as Host
-  participant C as config/agent
+  participant C as agent/config
   participant E as Executor
   R->>H: definitionFor(seat, current)
   H->>C: resolve live
@@ -186,7 +188,7 @@ loads at the next activation.
 ```mermaid
 sequenceDiagram
   participant H as Host
-  participant C as config/agent
+  participant C as agent/config
   participant R as Merge room of the agent
   participant A as Agent
   H->>C: commit the release folder on release
@@ -208,7 +210,7 @@ sequenceDiagram
 `release`, the host fast-forwards `live`. No activation runs.
 
 **An agent with edits merges in its own room.** The host opens a second
-canvas, `config`, on the same canvas store. It holds one root room for
+canvas, `config`, on a canvas store of its own. It holds one root room for
 each agent that must merge, and that agent is the one seat. The host does
 not mirror these rooms, so no agent reads another agent's merge. The agent
 runs on its last good `live`, so it resolves each conflict with the
@@ -223,7 +225,8 @@ resolved and why.
 **The agent merges `release` into `live`.** It resolves each conflict with
 its commit messages and the exchanges they cite. It checks that each
 skill still loads, then pushes `live`. The host knows the merge is done
-when the tip of `release` is a parent of a commit on `live`.
+when the tip of `release` is an ancestor of `live`, as `git merge-base
+--is-ancestor` tests it.
 
 **At the start, the host loads the first rung that loads, for each
 agent.**
@@ -289,20 +292,23 @@ process, so a host script clones each repository and writes a git bundle.
 
 ## Trust
 
-| Attempt                                               | Result                                                                                                          |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Edit its own instructions, skills, or macros          | Allowed; takes effect at the next activation                                                                    |
-| Read or clone the configuration of another agent      | Refused: the repository is private to its agent                                                                 |
-| Push to `release`                                     | Refused: the host alone writes it                                                                               |
-| Change a tool or a credential                         | Not possible: host code                                                                                         |
-| Delete every file on `live`                           | Refused at load; the current definition stays                                                                   |
-| Write text that enters another agent's prompt         | Not possible: each agent loads its own repository                                                               |
-| Read the working copy or `~/.skills` of another agent | Possible on the just-bash backends: no wall between homes. Refused on the workstation: each home is mode `0700` |
+| Attempt                                                         | Result                                                                                                                                   |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Edit its own instructions, skills, or macros                    | Allowed; takes effect at the next activation                                                                                             |
+| Read, clone, or fork the configuration of another agent         | Refused: the repository is private to its agent                                                                                          |
+| Push to `release`                                               | Refused: the host alone writes it                                                                                                        |
+| Change a tool or a credential                                   | Not possible: host code                                                                                                                  |
+| Delete every file on `live`                                     | Refused at load; the current definition stays                                                                                            |
+| Write text that enters another agent's prompt                   | Possible on the just-bash backends: an agent can change the clone in another home, and the owner can push it. Refused on the workstation |
+| Read or change the working copy or `~/.skills` of another agent | Possible on the just-bash backends: no wall between homes. Refused on the workstation: each home is mode `0700`                          |
+| Read the edits of another agent in the audit log                | Possible on both backends when the workspace sets `audit`                                                                                |
 
-**Isolation is complete on the workstation alone.** On the just-bash
+**Isolation needs the workstation and no audit log.** On the just-bash
 backends, every agent can read every home ([Macros](macros.md#review-a-macro)),
-so a clone or the skills copy of an agent is readable there. A host that
-needs isolation runs the agents on a workstation.
+so a clone or the skills copy of an agent is readable there. The audit log
+holds the arguments and the result of each file and `bash` call, and every
+agent can read it ([Workspace](workspace.md)). A host that needs isolation
+runs the agents on a workstation and sets no `audit`.
 
 **Use this design with trusted agents.** An agent rewrites its own
 instructions, and the edit applies at once. A prompt injection that
@@ -312,18 +318,20 @@ pins the seat. A room open to untrusted agents loads `release` alone
 
 ## What must be added
 
-| Piece                                                                                                               | State                                                   |
-| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| A private repository `config/<agent>`: its owner alone reads and writes it, and `repos` shows it to its owner alone | Missing: both git backends, with a conformance case     |
-| A `release` branch that the host alone writes                                                                       | Missing: a server hook, as for templates                |
-| A host commit of a folder on a branch                                                                               | Missing: the rule of template registration, on a branch |
-| Read the files of a commit from the host                                                                            | Missing: `GitEnv` has no file read                      |
-| `definitionFor` in the room and the canvas                                                                          | Missing: a kernel change                                |
-| A new thread on a changed agent part (Codex)                                                                        | Missing: executor code                                  |
-| The fast-forward, the merge rooms, the rungs                                                                        | Missing: host code                                      |
-| The load cache, the refusal reminder, the pin                                                                       | Missing: host code                                      |
-| The trace stamp and the load log                                                                                    | Missing: host code                                      |
-| The harvest script and the export                                                                                   | Missing: host code                                      |
+| Piece                                                                                                                                                                                         | State                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| A private repository `<agent>/config`: its owner alone reads it. The owner already writes it. The read credential, the server, `fork`, `repos`, and the git guidance must refuse other agents | Missing: both git backends, with a conformance case       |
+| A hook on `live`: no deletion, no push that does not descend from its tip                                                                                                                     | Missing: the hook of the shared default branch, on `live` |
+| An ancestor test and a branch move from the host                                                                                                                                              | Missing: `GitEnv` has neither                             |
+| A `release` branch that the host alone writes                                                                                                                                                 | Missing: a server hook, as for templates                  |
+| A host commit of a folder on a branch                                                                                                                                                         | Missing: the rule of template registration, on a branch   |
+| Read the files of a commit from the host                                                                                                                                                      | Missing: `GitEnv` has no file read                        |
+| `definitionFor` in the room and the canvas                                                                                                                                                    | Missing: a kernel change                                  |
+| A new thread on a changed agent part (Codex)                                                                                                                                                  | Missing: executor code                                    |
+| The fast-forward, the merge rooms, the rungs                                                                                                                                                  | Missing: host code                                        |
+| The load cache, the refusal reminder, the pin                                                                                                                                                 | Missing: host code                                        |
+| The trace stamp and the load log                                                                                                                                                              | Missing: host code                                        |
+| The harvest script and the export                                                                                                                                                             | Missing: host code                                        |
 
 **One kernel change is needed: `definitionFor`.** It reverses the
 decision in `planning/backlog.md` that the definition set is fixed for
