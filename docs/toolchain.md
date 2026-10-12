@@ -308,9 +308,8 @@ one `typebox` version, a CommonJS export, a missing export or types path, a
 pack list without `dist`, the README, or the license, a pack list with
 source, test, or config files, versions out of lockstep, and a different
 `engines.node`. Each package carries a copy of the root `LICENSE`, because
-`pnpm pack` does not add the root file. It then packs every package and
-verifies version agreement with `node scripts/version.mjs --check` and
-`node scripts/publish.mjs --pack-only`.
+`pnpm pack` does not add the root file. The job then packs every package with
+`node scripts/publish.mjs --pack-only`, which refuses versions that disagree.
 
 **The package hygiene check also reads every built file in `dist`.** It
 fails on an import of a package that the manifest does not declare in
@@ -385,7 +384,6 @@ Versions are lockstep:
 
 ```sh
 node scripts/version.mjs 0.8.0   # set versions
-node scripts/version.mjs --check # verify agreement
 ```
 
 **Dev builds come from CI.** `.github/workflows/dev-release.yml` runs on a

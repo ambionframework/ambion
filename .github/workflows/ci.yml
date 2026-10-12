@@ -57,9 +57,7 @@ jobs:
         run: pnpm run check:packages
 
       - name: packages pack cleanly
-        run: |
-          node scripts/version.mjs --check
-          node scripts/publish.mjs --pack-only
+        run: node scripts/publish.mjs --pack-only
 
   test:
     name: Test on Node 26.4.0 (library packages and examples/workbench)
