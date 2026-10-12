@@ -20,7 +20,6 @@ export const ProcessFacts = Type.Object(
 	{
 		handle: Type.String({ description: 'The key of the process, such as bash-1a2b3c4d5e6f.' }),
 		name: Type.Optional(Type.String({ description: 'The label that bash was given, if any.' })),
-		kind: Type.Literal('bash'),
 		agent: Type.String({ description: 'The agent that started the process.' }),
 		command: Type.String({ description: 'The command, as it was given.' }),
 		port: Type.Integer({
@@ -119,11 +118,11 @@ export const ProcessOutput = Type.Object(
 	{ $id: 'ProcessResult', description: 'One process, and the new output of its result.' },
 );
 
-/** What `wait` on several handles gives: every state in the order of the handles, and each process it shows. */
+/** What `wait` on several processes gives: every state in the order of the references, and each process it shows. */
 const WaitedOutput = Type.Object(
 	{
 		processes: Type.Array(ProcessFacts, {
-			description: 'Every process, in the order of the handles.',
+			description: 'Every process, in the order of the references.',
 		}),
 		ended: Type.Array(ProcessOutput, {
 			description: 'The result of each process that ended and fit the result.',
@@ -132,16 +131,16 @@ const WaitedOutput = Type.Object(
 	{ $id: 'WaitedResult' },
 );
 
-/** What `wait` gives: the result of `bash` for one handle, and `WaitedOutput` for several. */
+/** What `wait` gives: the result of `bash` for one process, and `WaitedOutput` for several. */
 export const WaitOutput = Type.Union([ProcessOutput, WaitedOutput], { $id: 'WaitResult' });
 
 /** The running processes of the caller. */
 export const PsOutput = Type.Object({ processes: Type.Array(ProcessFacts) }, { $id: 'PsResult' });
 
-/** What a handle tool gives in `details`. */
+/** What a process tool gives in `details`. */
 export type ProcessDetails = Static<typeof ProcessOutput>;
 
-/** What `wait` on several handles gives in `details`. */
+/** What `wait` on several processes gives in `details`. */
 export type WaitDetails = Static<typeof WaitedOutput>;
 
 /** What `ps` gives in `details`. */

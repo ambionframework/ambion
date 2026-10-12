@@ -168,7 +168,7 @@ vocabulary across every controller.
 ## Read the end of a controller
 
 **The state of the process gives the safety of the world.** The agent
-reads it with `wait` and `timeout: 0`.
+reads it with `wait` and `wait: 0`.
 
 | The process ended                                 | The world                                       | The agent                          |
 | ------------------------------------------------- | ----------------------------------------------- | ---------------------------------- |

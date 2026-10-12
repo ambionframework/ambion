@@ -132,8 +132,8 @@ const viewer = canvas.widgetTools(); // show, hide, and the reminder
 the pointer to the data and reads no source. The host draws the widget.
 `widgetTools()` is a refusal when `widgets.kinds` is absent or empty. A `show`
 checks the name, the title, the kind, and the source against the catalog. A
-process source is `{ type: 'process', handle, path }`: the handle of a process
-of the agent, and a path that the process serves on its port.
+process source is `{ type: 'process', process, path }`: the handle or the name of a
+process of the agent, and a path that the process serves on its port.
 
 **The canvas keeps every revision.** `resume` loads them, so `widgets(room)`
 and `revision(id)` are synchronous. Each write emits a `widget` event. The

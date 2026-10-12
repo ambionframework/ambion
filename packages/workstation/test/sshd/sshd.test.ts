@@ -254,7 +254,7 @@ async function specOf(
 ): Promise<string> {
 	const dir = await env.absolutePath(`~/.processes/${handle}`);
 	if (!dir.ok) throw dir.error;
-	const spec = { handle, kind: 'bash', agent: OWNER, command, timeout, grace: 10, startedAt };
+	const spec = { handle, agent: OWNER, command, timeout, grace: 10, startedAt };
 	expect(await env.createDir(dir.value, { recursive: true })).toMatchObject({ ok: true });
 	expect(await env.writeFile(`${dir.value}/spec`, JSON.stringify(spec))).toMatchObject({
 		ok: true,
@@ -316,7 +316,7 @@ async function call(workspace: Workspace, name: string, params: unknown) {
  * host reads the same table, so it gives the final state of the process.
  */
 async function lostRead(workspace: Workspace, handle: string) {
-	await expect(call(workspace, 'wait', { handles: [handle], timeout: 0 })).rejects.toThrow(
+	await expect(call(workspace, 'wait', { processes: [handle], wait: 0 })).rejects.toThrow(
 		`Process ${handle} failed: ${LOST}`,
 	);
 	return (await workspace.processes.list({ agent: OWNER })).find((one) => one.handle === handle);
@@ -350,19 +350,19 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 				'bash-0000000000a1',
 				'bash-0000000000a2',
 			]);
-			const read = await call(workspace, 'wait', { handles: ['bash-0000000000a1'], timeout: 0 });
+			const read = await call(workspace, 'wait', { processes: ['bash-0000000000a1'], wait: 0 });
 			expect(read.process?.state).toBe('running');
 			expect(read.text).toMatch(/^adopted\n/);
 			const waited = await call(workspace, 'wait', {
-				handles: ['bash-0000000000a1'],
-				timeout: 1,
+				processes: ['bash-0000000000a1'],
+				wait: 1,
 			});
 			expect(waited.process?.state).toBe('running');
 			// A process that timed out fails the wait, and the text states the timeout.
 			await expect(
-				call(workspace, 'wait', { handles: ['bash-0000000000a2'], timeout: 20 }),
+				call(workspace, 'wait', { processes: ['bash-0000000000a2'], wait: 20 }),
 			).rejects.toThrow(/Process bash-0000000000a2 timed out/);
-			const cancelled = await call(workspace, 'cancel', { handle: 'bash-0000000000a1' });
+			const cancelled = await call(workspace, 'cancel', { process: 'bash-0000000000a1' });
 			expect(cancelled.process?.state).toBe('cancelled');
 			// The kill reaches the whole group: each wrapper shell, and the child that one started.
 			await withEnv(backend, OWNER, async (env) => {
@@ -422,9 +422,9 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			});
 			// With the pid of the decoy alone, /proc has it: the listing runs ps and adopts it.
 			await withEnv(backend, OWNER, (env) => env.writeFile(`${lost}/pid`, `${decoy}\n`));
-			const found = await call(workspace, 'wait', { handles: ['bash-0000000000b1'], timeout: 0 });
+			const found = await call(workspace, 'wait', { processes: ['bash-0000000000b1'], wait: 0 });
 			expect(found.process?.state).toBe('running');
-			const cancelled = await call(workspace, 'cancel', { handle: 'bash-0000000000b1' });
+			const cancelled = await call(workspace, 'cancel', { process: 'bash-0000000000b1' });
 			expect(cancelled.process?.state).toBe('cancelled');
 			await withEnv(backend, OWNER, async (env) => {
 				// The stop of the cancel writes over the lost line.
@@ -445,13 +445,13 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			await withEnv(backend, OWNER, (env) => env.exec(WIPE, undefined));
 			const clean = "trap 'echo cleanup; exit 0' TERM\nsleep 300 &\nwait";
 			const started = await call(workspace, 'bash', { command: clean, wait: 0 });
-			const cancelled = await call(workspace, 'cancel', { handle: started.process?.handle });
+			const cancelled = await call(workspace, 'cancel', { process: started.process?.handle });
 			expect(cancelled.process).toMatchObject({ state: 'exited', exitCode: 0 });
 			expect(cancelled.text).toMatch(/^cleanup\n\n\[Process /);
 			const stubborn = 'trap \'\' TERM\nsleep 300 &\necho "$!" > child\nwait';
 			const ignoring = await call(workspace, 'bash', { command: stubborn, wait: 1 });
 			const began = Date.now();
-			const killed = await call(workspace, 'cancel', { handle: ignoring.process?.handle });
+			const killed = await call(workspace, 'cancel', { process: ignoring.process?.handle });
 			expect(Date.now() - began).toBeGreaterThanOrEqual(10_000);
 			expect(killed.process?.state).toBe('cancelled');
 			await withEnv(backend, OWNER, async (env) => {
@@ -472,7 +472,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			const started = await call(workspace, 'bash', { command: stubborn, grace: 2, wait: 1 });
 			expect(started.process).toMatchObject({ state: 'running', grace: 2 });
 			const began = Date.now();
-			const killed = await call(workspace, 'cancel', { handle: started.process?.handle });
+			const killed = await call(workspace, 'cancel', { process: started.process?.handle });
 			const elapsed = Date.now() - began;
 			// The default grace of 10 s would hold the cancel for longer.
 			expect(elapsed).toBeGreaterThanOrEqual(2_000);

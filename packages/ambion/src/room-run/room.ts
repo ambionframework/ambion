@@ -25,12 +25,7 @@
 import type { Answering } from '../answers.ts';
 import { answerCommit, answerLease, answerView } from '../answers.ts';
 import { AmbionError } from '../errors.ts';
-import {
-	type ExecutionConnector,
-	type RunningRoom,
-	type RuntimeState,
-	tokenWindowOf,
-} from '../host/runtime.ts';
+import type { ExecutionConnector, RunningRoom, RuntimeState } from '../host/runtime.ts';
 import type { Composition } from '../journal/entries.ts';
 import { type RoomEntry, type RoomJournal, roomJournal } from '../journal/journal.ts';
 import type {
@@ -54,7 +49,7 @@ import {
 import { captureMessageSelection, type MessageSelection, toRoomRead } from '../room/read.ts';
 import { liveWork } from '../room/reconcile.ts';
 import { decide, type Refusal, type ReleaseCommand } from '../room/transition.ts';
-import type { TokenWindow } from '../room/view.ts';
+import { type TokenWindow, tokenWindowOf } from '../room/view.ts';
 import { type SingleFlight, singleFlight } from '../single-flight.ts';
 import type {
 	AgentDefinition,
@@ -398,10 +393,10 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 		if (this.gone()) throw new AmbionError('room_stopped', `Room '${this.name}' is stopped.`);
 	}
 
-	/** The token limit of a seat and the estimator it names. Absent when it sets no limit. */
+	/** The token limit of a seat and its estimator. Absent when it sets no limit. */
 	tokenWindow(seat: string): TokenWindow | undefined {
 		const agent = this.defs.get(seat);
-		return agent === undefined ? undefined : tokenWindowOf(agent, this.runtime);
+		return agent === undefined ? undefined : tokenWindowOf(agent);
 	}
 
 	/** The seats live now, for a caller that reads no more than the names. */

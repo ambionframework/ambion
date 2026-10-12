@@ -29,7 +29,7 @@ the `observe` macro of the camera template, which `compose` runs with the
 handle: it reads the index, the observation, and the frame, and it returns the
 snapshot refs. The agent cites the refs. The host loads the macro from its own
 copy of the template, so an edit of a fork changes nothing that runs. When the camera answers, the
-agent calls `show` with the handle to place the viewfinder. There is no camera-specific
+agent calls `show` with the process to place the viewfinder. There is no camera-specific
 observation tool.
 
 ## Run on macOS
@@ -104,20 +104,20 @@ declares one widget kind, `frame`: the newest frame that a process serves,
 with the source type `process`, and with actions. The observer holds
 `canvas.widgetTools()` and no tool to open breakout rooms.
 
-**A widget binds to the handle that the agent passes.** The agent picks a
+**A widget binds to the process that the agent passes.** The agent picks a
 short name for each camera, such as `front` or `desk`, or uses the name that the
 person gives. That name is the name of the widget. The title of the widget is a
 label for people, such as "Front door". The preview labels each box with the
 name and the title, so the person can say "hide desk". The agent starts the
-camera with `bash` and the same name, which helps the person read `ps`, and
-nothing binds by it. The agent takes the handle from the `bash` result. After
+camera with `bash` and the same name, which helps the person read `ps`. The
+agent takes the handle from the `bash` result. After
 the camera process answers, the agent calls:
 
 ```ts
 show({
   name: 'front',
   kind: 'frame',
-  source: { type: 'process', handle: 'bash-4f1c9a02d7be', path: '/camera/observe' },
+  source: { type: 'process', process: 'bash-4f1c9a02d7be', path: '/camera/observe' },
   title: 'Front door',
   actions: [{ id: 'look', label: 'Look now' }],
 });
@@ -133,12 +133,12 @@ process for that camera.
 
 **The preview keeps one binding for each shown `frame` widget** of the room
 `camera`, four at most. The preview lists a further widget in the status line
-and does not bind it. A binding checks once that the handle belongs to a running process of the
+and does not bind it. A binding checks once that the process of the widget, a handle or a name, is a running process of the
 author of its widget, then reads the path of that process by handle. The
 preview reads the widgets again on the `started` event of the room and on each
 `widget` event. An adopted process keeps its handle, so a restart finds the
 widgets in their rows and binds the cameras that still run from an earlier
-host run. A `show` with another handle binds the new process.
+host run. A `show` with another process binds the new process.
 
 A timer of each binding reads five times each second. Each read calls
 `workspace.fetch` for the path of the widget and then for the frame at
@@ -180,7 +180,7 @@ first cameras that fit with their action rows.
 widget `front`, and the camera stays on. "Stop front" or "turn off front"
 calls `cancel` on the process of `front`, and nothing else: the widget stays
 and draws nothing. "Start front again" starts a new process, then calls `show`
-with its new handle. Ask about a scene by naming the camera. With several
+with its new handle as the process. Ask about a scene by naming the camera. With several
 cameras and no name, the agent asks which one or describes each. A
 host restart resumes the room from its canvas row and its journal. The
 previews bind the widget rows again by handle against the processes of

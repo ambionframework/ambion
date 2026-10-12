@@ -143,7 +143,7 @@ async function showFrame(
 			name,
 			kind: 'frame',
 			title,
-			source: { type: 'process', handle, path: '/camera/observe' },
+			source: { type: 'process', process: handle, path: '/camera/observe' },
 			actions: [{ id: 'look', label: 'Look now' }],
 		},
 		{
@@ -363,7 +363,7 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 				kind: 'frame',
 				state: 'shown',
 				author: 'observer',
-				source: { type: 'process', handle: camera.handle, path: '/camera/observe' },
+				source: { type: 'process', process: camera.handle, path: '/camera/observe' },
 			},
 		]);
 		expect(host.preview.bindings.map((binding) => binding.name)).toEqual(['front']);
@@ -417,7 +417,7 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 		await expect.poll(() => modal?.visible).toBe(true);
 		await expect.poll(observed).toBeGreaterThan(hiddenReads);
 		reads.mockRestore();
-		await invoke('cancel', { handle: camera.handle });
+		await invoke('cancel', { process: camera.handle });
 		await expect.poll(() => host.preview.bindings[0]?.handle).toBeUndefined();
 		await setup.renderOnce();
 		expect(modal?.visible).toBe(false);
@@ -587,7 +587,7 @@ async function viewfinderCanvas(store = memoryCanvas(), storage = memoryJournals
 			name,
 			kind: 'frame',
 			title: `Camera ${name}`,
-			source: { type: 'process', handle, path: '/camera/observe' },
+			source: { type: 'process', process: handle, path: '/camera/observe' },
 		});
 	const start = async () => {
 		await canvas.resume({ agents: [agent] });
@@ -655,6 +655,32 @@ describe('the previews', () => {
 		} finally {
 			preview.close();
 			await canvas.close();
+		}
+	});
+
+	it('binds a widget that names its process, and refuses a name that two processes hold', async () => {
+		const { workspace, emit } = fakeWorkspace([
+			camera('bash-front', 1),
+			camera('bash-twin1', 2, 'observer', 'twin'),
+			camera('bash-twin2', 3, 'observer', 'twin'),
+		]);
+		const { canvas, show, start } = await viewfinderCanvas();
+		await start();
+		const preview = cameraPreview(workspace, canvas, () => {}, 'camera');
+		try {
+			// The name stands for the handle of the one running process that holds it.
+			await show('front', 'front');
+			await expect.poll(() => bound(preview, 'front')?.handle).toBe('bash-front');
+			// A name that two running processes hold binds nothing.
+			await show('desk', 'twin');
+			await expect.poll(() => bound(preview, 'desk')?.title).toBe('Camera desk');
+			await wait(300);
+			expect(bound(preview, 'desk')?.handle).toBeUndefined();
+			// The end of the process that the name stands for clears the frame.
+			emit('ended', camera('bash-front', 1));
+			expect(bound(preview, 'front')?.handle).toBeUndefined();
+		} finally {
+			preview.close();
 		}
 	});
 

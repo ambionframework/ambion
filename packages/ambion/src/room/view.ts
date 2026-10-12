@@ -8,7 +8,7 @@ import type {
 	ContextParticipant,
 } from '../protocol.ts';
 import { type Block, blocks, renderLine } from '../record.ts';
-import type { AgentParticipant, ExchangeRef, Participant, Seq } from '../types.ts';
+import type { AgentDefinition, AgentParticipant, ExchangeRef, Participant, Seq } from '../types.ts';
 import { isSummary, type MessageSnapshot as Message, withoutPreferences } from '../types.ts';
 import type { RoomState } from './fold.ts';
 
@@ -16,6 +16,18 @@ import type { RoomState } from './fold.ts';
 export interface TokenWindow {
 	readonly limit: number;
 	readonly estimate: (text: string) => number;
+}
+
+/** A length estimate of four characters to one token. */
+const lengthEstimate = (text: string): number => Math.ceil(text.length / 4);
+
+/**
+ * The token window of one definition: its limit, and its own estimator or the
+ * length estimate. Absent when the definition sets no limit.
+ */
+export function tokenWindowOf(agent: AgentDefinition): TokenWindow | undefined {
+	const { activationTokenLimit: limit, estimateTokens: estimate = lengthEstimate } = agent.executor;
+	return limit === undefined ? undefined : { limit, estimate };
 }
 
 /**

@@ -18,9 +18,6 @@
 import type { WorkspaceEnv } from './backend.ts';
 import { runScript, shellQuote } from './execution-env.ts';
 
-/** The kinds of process. A handle starts with its kind. */
-export type ProcessKind = 'bash';
-
 /** Where a process is in its life. Every state but `running` is final. */
 export type ProcessState = 'running' | 'exited' | 'timed_out' | 'cancelled' | 'failed';
 
@@ -30,7 +27,6 @@ export interface Process {
 	readonly handle: string;
 	/** The label the agent gave the process, when it gave one. */
 	readonly name?: string;
-	readonly kind: ProcessKind;
 	/** The owner agent: the agent whose call started the process. */
 	readonly agent: string;
 	/** The command as the agent gave it. */
@@ -61,7 +57,6 @@ export interface Process {
 export interface ProcessSpec {
 	readonly handle: string;
 	readonly name?: string;
-	readonly kind: ProcessKind;
 	readonly agent: string;
 	readonly command: string;
 	/** The port that the workspace sets in `$PORT` for the command. */
@@ -79,7 +74,7 @@ export const DEFAULT_GRACE_SECONDS = 10;
 /** The directory in each agent's home that holds its processes. */
 export const PROCESSES_DIR = '~/.processes';
 
-/** A handle: a kind, a dash, and 12 hex digits. The pattern keeps a handle out of the shell's syntax. */
+/** A handle: letters, a dash, and 12 hex digits, as in bash-1a2b3c4d5e6f. The pattern keeps a handle out of the shell's syntax. */
 const HANDLE = /^[a-z]+-[0-9a-f]{12}$/;
 
 /** The error of a process that no run of the host runs now, and that left no end. */
@@ -427,7 +422,6 @@ export function statusOf(files: ProcessFiles, owned: boolean): Process {
 	return Object.freeze({
 		handle: spec.handle,
 		...(spec.name === undefined ? {} : { name: spec.name }),
-		kind: spec.kind,
 		agent: spec.agent,
 		command: spec.command,
 		// A spec written before ports has none: port 0 means the process does not listen.

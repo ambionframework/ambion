@@ -107,7 +107,7 @@ async function cancelOrphan(): Promise<void> {
 			latest(listing.results, 'ps'),
 		)?.[1];
 		if (handle !== undefined)
-			await runToolRoom(workspace, 'analyst', [action('cancel', { handle })]);
+			await runToolRoom(workspace, 'analyst', [action('cancel', { process: handle })]);
 	} finally {
 		await workspace.dispose();
 		await bash.dispose?.();

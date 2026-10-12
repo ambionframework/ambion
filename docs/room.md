@@ -209,11 +209,9 @@ at least the newest block. A summarised range counts once, as the line of
 its summary. An older exchange falls out of context, and its summary stands
 for it when one exists. An agent with no limit reads what the cap serves.
 
-**The room runs the estimator that the seat names.** `estimateTokens` names
-an estimator in the registry of the runtime. `length`, the default, counts
-`Math.ceil(text.length / 4)`, and `createRuntime({ estimators })` adds other
-names. A host cannot replace `length`. A name that the registry does not
-hold fails `startRoom` and `resumeRoom`.
+**The room runs the estimator of the seat.** `estimateTokens` is a function
+from a text to a token count. The default counts
+`Math.ceil(text.length / 4)`.
 
 **`recall` reads below the window.** `view(activation, message)` returns
 the view of that one message when the purpose may read it. No cap and no

@@ -1,4 +1,3 @@
-import { memoryJournals } from '@ambionframework/journal';
 /**
  * The record window: the one rule by which the room bounds the record of a
  * view. The room keeps the newest messages under its cap, then under the
@@ -8,12 +7,12 @@ import { memoryJournals } from '@ambionframework/journal';
  */
 import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
+import { captureAgent } from '../src/define.ts';
 import { renderActivation } from '../src/execution/render.ts';
-import { createRuntime, runtimeStateOf, tokenWindowOf } from '../src/host/runtime.ts';
 import type { RoomEntry } from '../src/journal/journal.ts';
 import type { ActivationSpec } from '../src/protocol.ts';
 import type { RoomState } from '../src/room/fold.ts';
-import { type RoomFacts, viewOf } from '../src/room/view.ts';
+import { type RoomFacts, tokenWindowOf, viewOf } from '../src/room/view.ts';
 import type { Message, Seq } from '../src/types.ts';
 import { replayState } from './support/fold.ts';
 import { scriptedAgent } from './support/room.ts';
@@ -101,23 +100,17 @@ function wideState(): RoomState {
 }
 const wide = wideState();
 
-/** A runtime whose registry holds `chars`: one token per character, so a limit reads as a length. */
-const runtime = runtimeStateOf(
-	createRuntime({
-		storage: memoryJournals(),
-		estimators: { chars: (text: string) => text.length },
-	}),
-);
-const chars = 'chars';
+/** One token per character, so a limit reads as a length. */
+const chars = (text: string) => text.length;
 
 interface Case {
 	state: RoomState;
 	spec: ActivationSpec;
 	/** The room cap. Absent is unbounded. */
 	cap?: number;
-	/** The token limit of the seat, and the estimator it names. Absent sets no limit. */
+	/** The token limit of the seat, and its estimator. Absent sets no limit. */
 	tokens?: number;
-	estimator?: string;
+	estimator?: (text: string) => number;
 	/** The first seq the view holds, and how many messages it leaves out. */
 	from: Seq;
 	omitted?: number;
@@ -132,7 +125,7 @@ function read({ state, spec, cap, tokens, estimator }: Case) {
 		...(tokens === undefined ? {} : { activationTokenLimit: tokens }),
 		...(estimator === undefined ? {} : { estimateTokens: estimator }),
 	});
-	const window = tokenWindowOf(agent, runtime);
+	const window = tokenWindowOf(agent);
 	const facts: RoomFacts = {
 		name: 'window',
 		now,
@@ -294,43 +287,32 @@ describe('the view of one message', () => {
 	});
 });
 
-describe('the estimator a seat names', () => {
-	it('is a name, needs a limit, and stays on the executor', () => {
+describe('the estimator a seat holds', () => {
+	it('is a function, needs a limit, and stays on the executor', () => {
 		const base = { instructions: 'Read.', model: 'scripted/reader' };
 		expect(() => pi({ ...base, estimateTokens: chars })).toThrow(/activationTokenLimit/);
 		expect(() => pi({ ...base, activationTokenLimit: 0 })).toThrow(/positive integer/);
-		expect(() => pi({ ...base, activationTokenLimit: 5, estimateTokens: '' })).toThrow(
-			/name of an estimator/,
-		);
+		expect(() =>
+			pi({
+				...base,
+				activationTokenLimit: 5,
+				estimateTokens: 'chars' as unknown as typeof chars,
+			}),
+		).toThrow('An agent estimateTokens must be a function.');
 		const executor = pi({ ...base, activationTokenLimit: 500, estimateTokens: chars });
 		expect(executor.activationTokenLimit).toBe(500);
 		expect(executor.estimateTokens).toBe(chars);
 	});
 
-	it('resolves from the registry of the runtime, and a name it does not hold throws', () => {
-		const limited = (estimateTokens?: string) =>
+	it('counts the length estimate by default and its own function when it has one', () => {
+		const limited = (estimateTokens?: typeof chars) =>
 			scriptedAgent('reader', 'Reads.', {
 				activationTokenLimit: 10,
 				...(estimateTokens === undefined ? {} : { estimateTokens }),
 			});
-		expect(tokenWindowOf(scriptedAgent('reader'), runtime)).toBeUndefined();
-		expect(tokenWindowOf(limited(), runtime)?.estimate('abcde')).toBe(2);
-		expect(tokenWindowOf(limited(chars), runtime)?.estimate('abcde')).toBe(5);
-		expect(() => tokenWindowOf(limited('words'), runtime)).toThrow(
-			"Agent 'reader' names estimator 'words', and the runtime holds none by that name.",
-		);
-	});
-
-	it('registers a function under a new name only', () => {
-		const estimate = (text: string) => text.length;
-		expect(() =>
-			createRuntime({ storage: memoryJournals(), estimators: { length: estimate } }),
-		).toThrow(/is built in/);
-		expect(() =>
-			createRuntime({
-				storage: memoryJournals(),
-				estimators: { chars: 'text' as unknown as typeof estimate },
-			}),
-		).toThrow('Runtime estimators.chars must be a function.');
+		expect(tokenWindowOf(scriptedAgent('reader'))).toBeUndefined();
+		expect(tokenWindowOf(limited())?.estimate('abcde')).toBe(2);
+		expect(tokenWindowOf(limited(chars))?.estimate('abcde')).toBe(5);
+		expect(tokenWindowOf(captureAgent(limited(chars)))?.estimate('abcde')).toBe(5);
 	});
 });

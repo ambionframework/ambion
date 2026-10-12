@@ -76,7 +76,7 @@ const widget = (
 	rev,
 	state: 'shown',
 	kind: 'frame',
-	source: { type: 'process', handle: 'bash-1', path: '/status' },
+	source: { type: 'process', process: 'bash-1', path: '/status' },
 	title: 'Status',
 	author: 'observer',
 	actions: [],

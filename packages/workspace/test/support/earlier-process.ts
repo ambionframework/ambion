@@ -28,7 +28,7 @@ export async function earlierProcess(
 ) {
 	const dir = join(started.homes.get(agent) ?? '', '.processes', handle);
 	await mkdir(dir, { recursive: true });
-	const spec = { handle, kind: 'bash', agent, command: 'loop', ...extra };
+	const spec = { handle, agent, command: 'loop', ...extra };
 	await writeFile(
 		join(dir, 'spec'),
 		JSON.stringify({

@@ -59,15 +59,11 @@ the whole record the room serves. See `limits.context.messages` in
 trace keeps of the agent's work; see
 [the step vocabulary](executors.md#the-step-vocabulary).
 
-**The room runs the token estimator.** `estimateTokens` is the name of an
-estimator in the registry of the runtime, and the default name is `length`,
-`Math.ceil(text.length / 4)`. A function does not cross the wire, so
-`createRuntime({ estimators })` holds each other estimator by name, and a
-definition carries the name alone. The room applies the limit inside the
-view, so a seat on another host reads the same window. A name that the
-registry does not hold fails `startRoom` and `resumeRoom`. The start is the
-first point where the definition and the registry meet, and a failure there
-reaches the host before any activation reads a view.
+**The room runs the token estimator.** `estimateTokens` is a function from
+a text to a token count. The default counts `Math.ceil(text.length / 4)`.
+The definition holds the function, and the room calls it. The room applies
+the limit inside the view, so a seat on another host reads the same window.
+`defineAgent` throws when `estimateTokens` is not a function.
 
 `summaryWriter` is an optional name from `agents`. It names the ordinary
 agent that runs summary activations. `assistant` accepts an ordinary agent
@@ -98,7 +94,7 @@ const lookup = defineTool({
 
 **Arguments that break the schema fail the call.** The error text is
 `Invalid arguments for tool '<name>': <rules>.`, and `<rules>` names each
-property path and the rule it breaks, such as `handles must not have fewer
+property path and the rule it breaks, such as `processes must not have fewer
 than 1 items`. The model reads this text as a tool error.
 
 Every respond activation receives `say`, `schedule`, `unseat`, `dismiss`, and

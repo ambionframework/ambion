@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### Breaking changes
+
+**`estimateTokens` is a function.** The executor option of `pi()`, `claude()`,
+and `codex()`, and `Executor.estimateTokens`, take a function from a text to
+a token count, and the default counts `Math.ceil(text.length / 4)`.
+`createRuntime` takes no `estimators` option, `Runtime` holds no registry,
+and `configure` of `@ambionframework/cloudflare` takes no `estimators`.
+`startRoom` and `resumeRoom` make no estimator check, so the
+`missing_definition` error for an unknown estimator name does not occur.
+`defineAgent` throws when `estimateTokens` is not a function. The room still
+computes the window of a seat room-side, from the function of the agent.
+
+**One noun names a process, and one word names a wait.** `cancel` takes
+`{ process }`, and `wait` takes `{ processes, wait? }`. `fetch` keeps
+`{ process, path }`. A `process` value is a handle or the name of one process.
+`fetch`, `wait`, and `cancel` find it through one resolver, `resolveProcess`,
+which `@ambionframework/workspace` exports. `cancel` and `wait` look among the
+processes of the caller. A name that more than one process holds is refused
+with the list of their handles. When some of the processes with a name run,
+only the running ones count. The wait window has one name, `wait`, in seconds,
+on `bash` and on the `wait` tool. `timeout` of `wait` is gone, and `timeout`
+of `bash` stays the lifetime of the process. The `source` of a `show` widget
+holds `process` in place of `handle`, and takes a handle or a name. `Process`,
+`ProcessSpec`, the `spec` file, and the `Process` schema of `compose` have no
+`kind` field, and `ProcessKind` is gone. The text of the guidance, the
+reminder, and the state line names `wait 0`, `processes`, and `process`.
+
 **`processRuntime` is gone.** `@ambionframework/compose/runtime` exports
 `quickjsRuntime` only. The types `ProcessOptions` and `SpawnChild` go with
 `processRuntime`, and the package no longer builds a child entry. No seat
@@ -9,6 +36,14 @@ used it: `pi()`, `claude()`, and `codex()` give every seat `quickjsRuntime()`
 by default. A host that passed `processRuntime()` in `compose: { runtime }`
 passes `quickjsRuntime()` or a `ComposeRuntime` of its own. The accepted
 risk that a compose child process outlives its host closes with the code.
+
+### Fixes
+
+**A question stays open when the asker schedules a check-in.** An agent that
+asked a person and then scheduled a say to itself closed its exchange as
+`complete`, and `awaitingFor` listed nothing. The exchange outcome now skips a
+scheduled say when it looks for the last said message, so the exchange stays
+`awaiting` the person.
 
 ## 0.8.0 (2026-10-07)
 

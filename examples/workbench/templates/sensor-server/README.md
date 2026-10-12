@@ -126,9 +126,9 @@ data.
 
 ## Stop, replace, and roll back
 
-Use the workspace `cancel({ handle })` call to stop the process before
+Use the workspace `cancel({ process })` call to stop the process before
 editing or replacing the checkout, for example
-`cancel({ handle: 'bash-1a2b3c4d5e6f' })`. The server handles SIGINT and
+`cancel({ process: 'bash-1a2b3c4d5e6f' })`. The server handles SIGINT and
 SIGTERM and closes its listener. Then validate, commit, push, and start the
 saved version as a new process. Keep the same
 `AMBION_SENSOR_DATA_DIR="$HOME/sensor-data/bench"` value when replacing or

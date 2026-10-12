@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import {
+	awaitingFor,
 	createRuntime,
 	definePerson,
 	type Message,
@@ -67,6 +68,19 @@ const changesItsMind: PiScript = (context) => {
 	if (seq !== undefined) return callTool('dismiss', { message: Number(seq) });
 	if (last?.startsWith('dismissed')) return say('I dropped the check.', 'priya');
 	if (last !== undefined) return quiet();
+	return schedule('Check the build.', DELAY_SECONDS);
+};
+
+/**
+ * The worker schedules a check for the question. When the check comes back, it
+ * asks the person for approval and schedules a check-in on the answer.
+ */
+const asksThenChecksIn: PiScript = (context) => {
+	const last = toolResultTexts(context).at(-1);
+	if (last?.startsWith('said #')) return schedule('Check for the approval.', DELAY_SECONDS);
+	if (last?.startsWith('scheduled')) return quiet();
+	if (contextText(context).includes('[system → worker, returns'))
+		return say('Approve the deploy?', 'priya');
 	return schedule('Check the build.', DELAY_SECONDS);
 };
 
@@ -157,6 +171,27 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		const closed = after.exchanges.find((exchange) => exchange.from === returned?.seq);
 		expect(closed).toMatchObject({ outcome: { kind: 'awaiting', person: 'priya' } });
 		expect(closed).not.toHaveProperty('person');
+	});
+
+	it('keeps a question open when the asker schedules a check-in after it', async () => {
+		const { clock, runtime } = await setup();
+		const room = await start(runtime(), asksThenChecksIn);
+		await (await (await room.visit(priya)).send({ text: 'Is the build green?' })).waitForClose();
+		const opened = new Promise<number>((resolve) => {
+			const off = room.subscribe((event) => {
+				if (event.type !== 'exchange_opened') return;
+				off();
+				resolve(event.exchange.from);
+			});
+		});
+		await clock.advance(DELAY_SECONDS * 1000);
+		const from = await opened;
+		await room.exchange(from)?.waitForClose();
+		const after = await room.read({ messages: false });
+		const closed = after.exchanges.find((exchange) => exchange.from === from);
+		expect(after.scheduled).toMatchObject([{ seat: 'worker', text: 'Check for the approval.' }]);
+		expect(closed).toMatchObject({ outcome: { kind: 'awaiting', person: 'priya' } });
+		expect(awaitingFor(after, 'priya')).toMatchObject([{ from }]);
 	});
 
 	it.each([

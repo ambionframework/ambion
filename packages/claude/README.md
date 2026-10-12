@@ -112,17 +112,17 @@ list, such as `[piExecution(), claudeExecution()]`.
 
 ## Options
 
-| Option                 | Default                  | Meaning                                                       |
-| ---------------------- | ------------------------ | ------------------------------------------------------------- |
-| `instructions`         | Required                 | The private guidance of the agent.                            |
-| `model`                | Required                 | A Claude model id.                                            |
-| `tools`, `bundles`     | None                     | The tools of the agent and the bundles that add tools.        |
-| `respondPolicy`        | `DEFAULT_RESPOND_POLICY` | The respond policy. It replaces the default.                  |
-| `summaryPolicy`        | `DEFAULT_SUMMARY_POLICY` | The summary policy. It replaces the default.                  |
-| `activationTokenLimit` | The whole record         | The token limit of the record one activation reads.           |
-| `estimateTokens`       | `'length'`               | The name of the estimator in the runtime. It needs the limit. |
-| `maxBudgetUsd`         | None                     | The most one activation may spend, in US dollars.             |
-| `effort`               | The SDK default          | `low`, `medium`, `high`, `xhigh`, or `max`.                   |
+| Option                 | Default                      | Meaning                                                          |
+| ---------------------- | ---------------------------- | ---------------------------------------------------------------- |
+| `instructions`         | Required                     | The private guidance of the agent.                               |
+| `model`                | Required                     | A Claude model id.                                               |
+| `tools`, `bundles`     | None                         | The tools of the agent and the bundles that add tools.           |
+| `respondPolicy`        | `DEFAULT_RESPOND_POLICY`     | The respond policy. It replaces the default.                     |
+| `summaryPolicy`        | `DEFAULT_SUMMARY_POLICY`     | The summary policy. It replaces the default.                     |
+| `activationTokenLimit` | The whole record             | The token limit of the record one activation reads.              |
+| `estimateTokens`       | `Math.ceil(text.length / 4)` | A function that counts the tokens of a text. It needs the limit. |
+| `maxBudgetUsd`         | None                         | The most one activation may spend, in US dollars.                |
+| `effort`               | The SDK default              | `low`, `medium`, `high`, `xhigh`, or `max`.                      |
 
 `claudeExecution({ pathToClaudeCodeExecutable, env, configRoot })` takes three
 options. The first selects the executable. The second sets its environment.

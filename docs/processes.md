@@ -9,10 +9,11 @@
 > processes.
 
 **`bash` starts every command as a background process.** The call gives a
-handle for the process. `cancel` takes that handle, `wait` takes a list of
-handles, and `ps` lists the processes. `wait` with one handle and `timeout:
-0` reads the state and the new output at once. Every workspace has these four
-tools, on every bash backend.
+handle for the process. `cancel` takes one `process`, `wait` takes a list of
+`processes`, and `ps` lists the processes. A `process` is the handle or the
+name of one process. `wait` with one process and `wait: 0` reads the state and
+the new output at once. Every workspace has these four tools, on every bash
+backend.
 
 **The files of the bash backend are the source of truth.** Each process
 is a directory in its owner agent's home. The table reads those files for
@@ -37,6 +38,7 @@ the processes of the agents of this run through `workspace.processes`
 | `process-cancel.ts` | The cancels: the chain of steps for each agent, and the waits        |
 | `process-run.ts`    | One run of a process, and the waits                                  |
 | `process-fetch.ts`  | The forward cache: the lookup of a process and the request to it     |
+| `process-ref.ts`    | `resolveProcess`: the one lookup of a handle or a name               |
 | `process-tools.ts`  | The four tools, and the read of the end of an output                 |
 | `process-text.ts`   | The state line, the `ps` table, and the reminder text                |
 
@@ -45,19 +47,19 @@ states the resources and the backends that a process runs on.
 
 ## Words
 
-| Word        | Meaning                                                                       |
-| ----------- | ----------------------------------------------------------------------------- |
-| process     | One background command that the workspace runs for one agent                  |
-| handle      | The key of one process: `<kind>-<12 hex digits>`, such as `bash-3f9a2c1d0b7e` |
-| name        | A label that the agent gives a process, such as `tests`                       |
-| port        | The number in `$PORT` for one process, from 20000 to 29999                    |
-| forward     | One tunnel from the host to the port of one process, over the backend         |
-| owner agent | The agent whose call started the process                                      |
-| run         | One run of the host process, from `openWorkspace` to `dispose` or a crash     |
-| adopt       | Take a live process of an earlier run into this run's timers and cancels      |
-| output file | `~/.processes/<handle>/out` in the owner agent's home                         |
-| kind        | What started the process. `bash` is the one kind today                        |
-| grace       | The seconds from `SIGTERM` to `SIGKILL` when the table cancels a process      |
+| Word        | Meaning                                                                     |
+| ----------- | --------------------------------------------------------------------------- |
+| process     | One background command that the workspace runs for one agent                |
+| handle      | The key of one process: `bash-<12 hex digits>`, such as `bash-3f9a2c1d0b7e` |
+| name        | A label that the agent gives a process, such as `tests`                     |
+| process ref | The value of a `process` parameter: a handle, or the name of one process    |
+| port        | The number in `$PORT` for one process, from 20000 to 29999                  |
+| forward     | One tunnel from the host to the port of one process, over the backend       |
+| owner agent | The agent whose call started the process                                    |
+| run         | One run of the host process, from `openWorkspace` to `dispose` or a crash   |
+| adopt       | Take a live process of an earlier run into this run's timers and cancels    |
+| output file | `~/.processes/<handle>/out` in the owner agent's home                       |
+| grace       | The seconds from `SIGTERM` to `SIGKILL` when the table cancels a process    |
 
 ## The tools
 
@@ -65,16 +67,19 @@ states the resources and the backends that a process runs on.
 | -------- | ------------------------------------------------- | ----------------------------------------------------------------- |
 | `bash`   | `command`, `name?`, `timeout?`, `wait?`, `grace?` | Starts a process, waits up to `wait` seconds, and gives its state |
 | `ps`     | None                                              | Lists the caller's running processes                              |
-| `wait`   | `handles`, `timeout?`                             | Waits up to `timeout` seconds for the first process to end        |
-| `cancel` | `handle`                                          | Cancels a running process, waits for it to end, then as `wait`    |
+| `wait`   | `processes`, `wait?`                              | Waits up to `wait` seconds for the first process to end           |
+| `cancel` | `process`                                         | Cancels a running process, waits for it to end, then as `wait`    |
 
 | Value                | Default | Range                                        |
 | -------------------- | ------- | -------------------------------------------- |
 | `bash` `timeout`     | 600 s   | Above 0, up to 2,147,483 s                   |
 | `bash` `wait`        | 30 s    | 0 to 600 s. 0 returns at once                |
-| `wait` `timeout`     | 30 s    | 0 to 600 s. 0 reads without a wait           |
+| `wait` `wait`        | 30 s    | 0 to 600 s. 0 reads without a wait           |
 | `bash` `grace`       | 10 s    | 1 to 300 s                                   |
 | The wait of `cancel` | 15 s    | At most 15 s: the grace, up to 10 s, and 5 s |
+
+**`wait` is the seconds that one call waits, on `bash` and on the `wait`
+tool.** `timeout` of `bash` is the seconds that the process may run.
 
 **`bash` with `wait` is `bash` with a `wait` of 0 and then the `wait`
 tool.** A command that ends inside the window gives its output and its
@@ -87,9 +92,19 @@ characters: lowercase letters, digits, `.`, `_`, and `-`. The result line,
 `ps`, and the reminder show it beside the handle. The handle stays the
 key. Two processes can have the same name.
 
-**Every tool reaches the caller's own processes alone.** The table of an
-agent is the agent's own home. A handle of another agent fails with
-`You have no process <handle>.`
+**`cancel`, `wait`, and `fetch` take a process ref.** A ref is a handle or
+a name. A name finds the one process with that name. When some processes
+with the name run and some have ended, only the running ones count. A name
+that more than one process holds fails, and the text lists the handles:
+`Two running processes are named 'tests': <handle> of <agent>, <handle> of
+<agent>. Give the handle.` One resolver, `resolveProcess`, finds the process
+for the three tools. A ref that has the shape of a handle (letters, a dash,
+12 hex digits) is a handle, so a name of that shape cannot be found by name.
+
+**`cancel` and `wait` reach the caller's own processes alone.** The table
+of an agent is the agent's own home. A handle or a name of another agent
+fails with `You have no process <ref>.` `fetch` reads a running process of
+any agent ([Processes that serve HTTP](#processes-that-serve-http)).
 
 ## The files
 
@@ -181,8 +196,9 @@ lost when `/proc` has no directory for its pid. Shell builtins read that
 `stop` and test the directory, so the skip starts no program. A read
 costs one `exec` on every backend, and just-bash reads a table of 64
 processes in about 30 ms. `ps` and the reminder read the whole table.
-`cancel` reads the one process. `wait` reads the one process when `handles`
-holds one, and the whole table on each read when it holds several.
+`cancel` reads the one process. `wait` lists the table once to find each
+process of `processes` that holds a name, and then polls those processes by
+handle.
 
 ## The result
 
@@ -190,7 +206,7 @@ holds one, and the whole table on each read when it holds several.
 then one bracketed line.** The new output is the output after the cursor: the
 part that no earlier result of the agent showed. The line states the process,
 its handle, its name when it has one, and its output file. A `wait` on several
-handles gives this for each process that ended and fits its budget, then the
+processes gives this for each process that ended and fits its budget, then the
 bracketed line of each one that still runs. A process that ended with no
 output shows `(no output)`. A process that wrote nothing new since the last
 result shows `(no new output)`. A running process that has written nothing yet
@@ -218,7 +234,7 @@ slab pour Thu
 ```text
 compiling 14 of 120
 
-[Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e/out. Call wait with its handle, and timeout 0 to read it at once. Call cancel with its handle, or ps to list your processes. $PORT=24817.]
+[Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e/out. Call wait with its handle, and wait 0 to read it at once. Call cancel with its handle, or ps to list your processes. $PORT=24817.]
 ```
 
 | State       | The bracketed line, where `<h>` is the handle and the name                |
@@ -250,7 +266,7 @@ a last `wait` against a `schedule` call by that number. When the deadline
 also cut the wait, the note starts with the line of the cut, which names
 the same seconds. The seconds show once.
 
-**The note names each process that qualifies.** `wait` on several handles
+**The note names each process that qualifies.** `wait` on several processes
 adds one note, and it names each running process past the reach of a wait.
 `cancel` adds no note.
 
@@ -297,7 +313,6 @@ same value.
 | ----------- | -------------------------------------------------------------------------- |
 | `handle`    | The key of the process                                                     |
 | `name`      | The label, when the agent gave one                                         |
-| `kind`      | `bash`                                                                     |
 | `agent`     | The owner agent                                                            |
 | `command`   | The command as the agent gave it                                           |
 | `state`     | `running`, `exited`, `timed_out`, `cancelled`, or `failed`                 |
@@ -315,7 +330,7 @@ same value.
 code other than 0, a timeout, and a failed process make `bash` and
 `wait` a tool error. The error text is the result text: the new
 output, then the bracketed line that names the handle and the state. On
-several handles, `wait` fails when a process that it reports as ended
+several processes, `wait` fails when a process that it reports as ended
 ended badly. `cancel` gives the state of the process it cancelled, and
 `ps` lists running processes, so neither fails on a state. An unknown
 handle and the limit of running processes fail too
@@ -528,7 +543,7 @@ on that port serves HTTP to `fetch`.
 
 **A caller with no running process gets one line:** `No running
 processes.` A finished process stays in the files, and `wait` with its
-handle and `timeout: 0` reaches it.
+handle and `wait: 0` reaches it.
 
 ## The host's view
 
@@ -701,7 +716,7 @@ Your background processes in the workspace:
 - tests, bash-3f9a2c1d0b7e, is running for 2m 14s: npm test
 - server-log, bash-5e7b20c4f1d9, is running for 40s in the room review: tail -f server.log
 - bash-9c01d4e2aa31 exited with code 1 at 14:02:11 UTC: make build
-Call wait with a list of handles, and timeout 0 to read at once. Call cancel with a handle. Call ps to list processes.
+Call wait with a list of processes, and wait 0 to read at once. Call cancel with a process. Call ps to list processes.
 ```
 
 **Each line starts with the name when the process has one.** The handle
@@ -754,7 +769,7 @@ this rule to the agent. Codex's unified exec follows the same rule: the
 model polls with `write_stdin`, and nothing wakes it.
 
 **An agent waits for the result that its answer needs.** It calls `wait`
-before it answers. `wait` returns when the first process in `handles` ends. A
+before it answers. `wait` returns when the first process in `processes` ends. A
 wait stops 30 seconds before the room ends the activation, so one activation
 can wait for a process for up to 570 seconds with the default lease deadline
 of 600 seconds.
@@ -769,7 +784,7 @@ then, the end stays in the files.
 `delaySeconds` before its activation ends. The room gives the say
 back when it is due, and the returned say starts an activation for the
 same seat ([Exchange](exchange.md#6-a-scheduled-say)). That activation
-reads the process in its reminder, and `wait` with `timeout: 0` gives the output. When the
+reads the process in its reminder, and `wait` with `wait: 0` gives the output. When the
 process still runs, the agent can schedule another say. The guidance
 states this to the agent, and the result of a process past the reach of a
 wait states it again.
@@ -783,7 +798,7 @@ process before it returns the say.
 `workspace.processes.subscribe` gives an `ended` event. The host calls
 `room.post` to the owner agent, under a key that names the handle. The system
 message starts an activation, so the owner seat reads the end in its reminder, and
-`wait` with `timeout: 0` gives the output. The kernel adds nothing else for this.
+`wait` with `wait: 0` gives the output. The kernel adds nothing else for this.
 
 ```ts
 workspace.processes.subscribe((event) => {
@@ -792,7 +807,7 @@ workspace.processes.subscribe((event) => {
   room
     .post({
       to: agent,
-      text: `lab: process ${name ?? handle} is ${state}. Call wait with ${handle} and timeout 0 for its output.`,
+      text: `lab: process ${name ?? handle} is ${state}. Call wait with ${handle} and wait 0 for its output.`,
       key: `process-ended:${handle}`,
     })
     .catch((error: unknown) => log.error(error));
@@ -831,47 +846,47 @@ host cancels it, or the workspace disposes.
 process that is still running gives `running`. An abort of the call stops
 the wait, and the process keeps running.
 
-**`wait` with one handle and `timeout: 0` reads the process.** The call does
+**`wait` with one process and `wait: 0` reads the process.** The call does
 not wait. It gives the state of the process and its new output, the output
 after the last result for it, and a process that ended badly fails it.
 
-**`wait` returns when the first process in `handles` ends.** It takes 1 to 16
-handles, and counts a handle that repeats once. For one process, the result is
+**`wait` returns when the first process in `processes` ends.** It takes 1 to 16
+process refs, and counts a process that repeats once, by handle or by name. For one process, the result is
 the state and the new output of that process. For several, the result gives the new output and the
 bracketed line of each process that ended, then the bracketed line of each one
 that still runs, within a budget. `details.processes` holds every state in
-the order of the handles, and `details.ended` holds the details of each
+the order of the refs, and `details.ended` holds the details of each
 process that it shows.
 
-**The schema of `wait` states the bounds of `handles`.** It sets `minItems`
+**The schema of `wait` states the bounds of `processes`.** It sets `minItems`
 to 1 and `maxItems` to 16, so the model reads them. A call outside them, or a
-call with `handle` in place of `handles`, fails. The harness sets the text
+call with `process` in place of `processes`, fails. The harness sets the text
 that the model reads:
 
-| Harness | Who refuses the call                | What the model reads                                                        |
-| ------- | ----------------------------------- | --------------------------------------------------------------------------- |
-| Pi      | The harness, before the tool runs   | The validation text of Pi                                                   |
-| Claude  | The Agent SDK, before the tool runs | The validation text of the SDK                                              |
-| Codex   | `defineTool`, in the host           | `Invalid arguments for tool 'wait': must have required properties handles.` |
+| Harness | Who refuses the call                | What the model reads                                                          |
+| ------- | ----------------------------------- | ----------------------------------------------------------------------------- |
+| Pi      | The harness, before the tool runs   | The validation text of Pi                                                     |
+| Claude  | The Agent SDK, before the tool runs | The validation text of the SDK                                                |
+| Codex   | `defineTool`, in the host           | `Invalid arguments for tool 'wait': must have required properties processes.` |
 
-The Codex text above is for the call with `handle`. A call with no handles
-gives `handles must not have fewer than 1 items` after the colon. The trace
+The Codex text above is for the call with `process`. A call with no processes
+gives `processes must not have fewer than 1 items` after the colon. The trace
 holds each refused call as a `tool_call` step and a `tool_result` step with
 an `error`, on each harness.
 
-**A wait on several handles bounds its output.** It shows the processes that
-ended in the order of the handles, until its text holds 50 KB. One view holds
+**A wait on several processes bounds its output.** It shows the processes that
+ended in the order of the refs, until its text holds 50 KB. One view holds
 at most 50 KB, so a result holds at most about 100 KB. Each process after that
 gives its bracketed line and `Its new output did not fit this
-result: call wait with its handle and timeout 0 to read it.` The wait does not read
-the output of that process, so its cursor stays, and a `wait` with `timeout: 0`
+result: call wait on it with wait 0 to read it.` The wait does not read
+the output of that process, so its cursor stays, and a `wait` with `wait: 0`
 gives the output.
 
 **A process that already ended makes `wait` return at once.** An agent
 that runs a parameter sweep as four processes calls `wait` with the four
-handles, reads the result of the first that ends, and calls `wait` again
-with the handles that still run. The last line of the result names each
-handle that ended: `Drop <handles> from handles: they have ended, and a wait
+processes, reads the result of the first that ends, and calls `wait` again
+with the processes that still run. The last line of the result names each
+handle that ended: `Drop <handles> from processes: they have ended, and a wait
 that holds one returns at once.` The description of `wait` states the same
 rule. A handle of a process that ended badly fails each `wait` that holds
 it.
@@ -891,7 +906,7 @@ seat's host.
 The state becomes `cancelled`, or `exited` for a command that ended inside
 the grace ([The cancel](#the-cancel)). A process that has not ended after 15
 seconds still reads `running` with `stopping: true`, for example when its
-grace is 30 seconds. Its cancel goes on, and a later `wait` with `timeout: 0` gives its end. A
+grace is 30 seconds. Its cancel goes on, and a later `wait` with `wait: 0` gives its end. A
 `cancel` of a process in a final state gives that state again.
 
 **A shell that outlives its run becomes adopted.** A process can outlive
@@ -941,7 +956,7 @@ workstation's Unix accounts.
 bash resource after the call ends. The entry of a `bash` call holds the state at
 the end of the call, which can be `running`. A call that fails on a process
 that ended badly records `error` with the name `ToolFailure` and the `details`
-of its result: the `Process`, and for `wait` on several handles, every
+of its result: the `Process`, and for `wait` on several processes, every
 status. A `bash` call that an abort cuts while it waits records an error with
 no handle, and the process keeps running. The reminder and `ps` name it. The
 files of a process are its record.
@@ -973,10 +988,9 @@ room.** An exchange closes when no activation is live, so a cancel at the
 close ends a process at the first quiet moment. `bash` is the one kind
 of process.
 
-**A new kind adds three parts.** It adds a name to `ProcessKind`, a
-runner that writes the same files, and a tool that starts it. The table,
-the handle format, the files, `ps`, the host's view, the reminder, and
-the two handle tools stay as they are.
+**A new kind adds two parts.** It adds a runner that writes the same
+files, and a tool that starts it. The table, the files, `ps`, the host's
+view, the reminder, `wait`, and `cancel` stay as they are.
 
 ## Decisions taken
 
@@ -992,7 +1006,7 @@ the two handle tools stay as they are.
 | The table holds the timeout, and adopts a live process          | A cancel goes through the cancels of its agent, in every run                                         |
 | A cancel writes no `stop` after `exit`                          | A command that ended reads its own end, whatever cancel came late                                    |
 | The default timeout is 600 seconds, and the agent can raise it  | An adopted process needs a bound from its spec                                                       |
-| A name is a label, and the handle is the key                    | Two processes can have one name with no rule for which one a call takes                              |
+| A name is a label, and the handle is the key                    | A name that two processes hold is refused with their handles, so no call takes one by chance         |
 | Every process gets a port in `$PORT`                            | A server needs no flag, no registration, and no output line to be read; the workspace knows its port |
 | `fetch` sends GET alone                                         | A request that asks a process to act needs a tool of its own                                         |
 | `ps` writes an audit entry                                      | The audit log records every tool call                                                                |

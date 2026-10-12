@@ -394,7 +394,7 @@ it('changes membership by name without installing a definition', async () => {
 	);
 });
 
-it('serves a token-windowed view over RPC to a seat that names a registered estimator', async () => {
+it('serves a token-windowed view over RPC to a seat that holds its own estimator', async () => {
 	// The scripted stream records what the reader reads, and answers as the tier does.
 	const prompts: string[] = [];
 	const stream: StreamFn = (model, context, options) => {

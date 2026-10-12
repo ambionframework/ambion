@@ -79,7 +79,7 @@ describe.skipIf(configPath === undefined)('process HTTP on OpenSSH', () => {
 		expect(latest(after.results, 'fetch')).toContain('21.5');
 
 		await runToolRoom(recovery.workspace, OWNER, [
-			action('cancel', { handle: host.handle }, expectCancelled(host.handle)),
+			action('cancel', { process: host.handle }, expectCancelled(host.handle)),
 		]);
 		const refused = await runToolRoom(recovery.workspace, READER, [action('fetch', READING)]);
 		expect(latest(refused.results, 'fetch')).toContain(

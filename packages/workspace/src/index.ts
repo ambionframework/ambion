@@ -79,7 +79,8 @@ export type {
 	WorkspaceExecOptions,
 } from './port.ts';
 export { err, FileError, ok, ShellError } from './port.ts';
-export type { Process, ProcessKind, ProcessState } from './process-files.ts';
+export type { Process, ProcessState } from './process-files.ts';
+export { resolveProcess } from './process-ref.ts';
 export { MAX_TIMER_SECONDS } from './process-run.ts';
 export type { ProcessEvent, ProcessQuery } from './process-table.ts';
 export type { SkillInfo, SkillSet } from './skills.ts';

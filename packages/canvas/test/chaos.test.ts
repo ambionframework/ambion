@@ -401,7 +401,7 @@ describe.each(storages)('a host that shows a widget on $name', (kind) => {
 		const args = {
 			name: 'front',
 			kind: 'frame',
-			source: { type: 'process', handle: 'bash-1', path: '/' },
+			source: { type: 'process', process: 'bash-1', path: '/' },
 		};
 		const agentsOf = (of: Host) => [
 			tooled('ada', of.canvas.widgetTools()),

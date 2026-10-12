@@ -68,7 +68,7 @@ export function assertCatalog(kinds: readonly WidgetKind[]): void {
 export function sourceText(source: WidgetSource): string {
 	switch (source.type) {
 		case 'process':
-			return `process ${source.handle} ${source.path}`;
+			return `process ${source.process} ${source.path}`;
 		case 'file':
 			return `file ${source.path}`;
 		case 'snapshot':
@@ -79,7 +79,7 @@ export function sourceText(source: WidgetSource): string {
 function assertSource(source: WidgetSource): void {
 	switch (source.type) {
 		case 'process':
-			assertLine('The handle of the source', source.handle, SOURCE_LIMIT);
+			assertLine('The process of the source', source.process, SOURCE_LIMIT);
 			assertLine('The path of the source', source.path, SOURCE_LIMIT);
 			if (!source.path.startsWith('/'))
 				throw refuse('The path of a process source starts with "/".');

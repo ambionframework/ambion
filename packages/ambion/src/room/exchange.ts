@@ -183,9 +183,10 @@ export function recipientsOf(
 
 /**
  * The person the last said message of the range asks, when they have said
- * nothing since. The author of the opening message asked the question, so a
- * message to them is the answer and asks nothing. A returned say has no
- * author, so in its exchange every message to a person asks.
+ * nothing since. A scheduled say is a note to its author and asks nobody, so
+ * the last said message skips it. The author of the opening message asked the
+ * question, so a message to them is the answer and asks nothing. A returned
+ * say has no author, so in its exchange every message to a person asks.
  */
 function awaitedPerson(
 	range: readonly MessageSnapshot[],
@@ -193,7 +194,7 @@ function awaitedPerson(
 	lastSaid: ReadonlyMap<string, Seq>,
 ): string | undefined {
 	const asker = range[0]?.from;
-	const last = range.findLast(isSaid);
+	const last = range.filter(isSaid).findLast((message) => message.delaySeconds === undefined);
 	const person = last?.to;
 	if (last === undefined || person === undefined || person === asker) return undefined;
 	if (!people.has(person)) return undefined;

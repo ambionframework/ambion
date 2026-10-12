@@ -22,27 +22,11 @@
  */
 
 import { type JournalOpener, namespaced } from '@ambionframework/journal';
-import { AmbionError } from '../errors.ts';
 import type { ActivationOpener, TraceOpener } from '../execution/contract.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
 import type { ScheduleLimits } from '../scheduling.ts';
 import type { ActivationEvent, AgentDefinition, Clock, TraceLogger } from '../types.ts';
 import { systemClock } from './clock.ts';
-
-/** Counts the tokens of one text. A host registers one by name in `createRuntime`. */
-type TokenEstimator = (text: string) => number;
-
-/**
- * The estimator that every runtime holds, and that an agent with a token
- * limit reads with when it names none: a length estimate of four characters
- * to one token.
- */
-const DEFAULT_ESTIMATOR = 'length';
-
-/** The built-in estimators. A host cannot register another under these names. */
-const BUILT_IN: ReadonlyMap<string, TokenEstimator> = new Map([
-	[DEFAULT_ESTIMATOR, (text: string) => Math.ceil(text.length / 4)],
-]);
 
 /** A key nobody outside this file can name. `createRuntime` is the one place that casts past it. */
 declare const RUNTIME: unique symbol;
@@ -154,8 +138,6 @@ export interface Hosting extends ExecutionHost {
 export interface RuntimeState extends Hosting {
 	/** The rooms that run in this runtime, by name. */
 	readonly running: Map<string, RunningRoom>;
-	/** The token estimators of the runtime, by name, with the built-in ones. */
-	readonly estimators: ReadonlyMap<string, TokenEstimator>;
 	/** Free the name of a room, when this run is the room that holds it. */
 	release(name: string, room: RunningRoom): void;
 }
@@ -236,12 +218,6 @@ export interface CreateRuntimeOptions {
 	logger?: TraceLogger;
 	/** Any field of any group. An omitted field keeps its default. */
 	limits?: { readonly [Group in keyof Limits]?: Partial<Limits[Group]> };
-	/**
-	 * The token estimators an agent may name in `estimateTokens`, by name.
-	 * The room runs the estimator, so a definition carries the name alone.
-	 * Every runtime also holds `length`, which a host cannot replace.
-	 */
-	estimators?: Readonly<Record<string, TokenEstimator>>;
 }
 
 export { systemClock } from './clock.ts';
@@ -323,7 +299,6 @@ export function createRuntime(options: CreateRuntimeOptions): Runtime {
 		executions: executionsOf(options.execution),
 		...(options.logger === undefined ? {} : { logger: options.logger }),
 		limits,
-		estimators: estimatorsOf(options.estimators),
 		evict(name) {
 			const room = running.get(name);
 			running.delete(name);
@@ -334,44 +309,6 @@ export function createRuntime(options: CreateRuntimeOptions): Runtime {
 		},
 	});
 	return runtime;
-}
-
-/**
- * The token window of one definition: its limit, and the estimator it names
- * from the registry of the runtime. Absent when the definition sets no limit.
- * A name the registry does not hold throws, so the room checks each
- * definition with it when a run starts.
- */
-export function tokenWindowOf(
-	agent: AgentDefinition,
-	runtime: { readonly estimators: ReadonlyMap<string, TokenEstimator> },
-): { readonly limit: number; readonly estimate: TokenEstimator } | undefined {
-	const { activationTokenLimit: limit, estimateTokens: name = DEFAULT_ESTIMATOR } = agent.executor;
-	if (limit === undefined) return undefined;
-	const estimate = runtime.estimators.get(name);
-	if (estimate === undefined)
-		throw new AmbionError(
-			'missing_definition',
-			`Agent '${agent.name}' names estimator '${name}', and the runtime holds none by that name.`,
-		);
-	return { limit, estimate };
-}
-
-/** The built-in estimators and the ones the host registers, checked once. */
-function estimatorsOf(
-	given: Readonly<Record<string, TokenEstimator>> | undefined,
-): ReadonlyMap<string, TokenEstimator> {
-	const estimators = new Map(BUILT_IN);
-	for (const [name, estimate] of Object.entries(given ?? {})) {
-		if (BUILT_IN.has(name))
-			throw new Error(
-				`Runtime estimators.${name} is built in: register the estimator under another name.`,
-			);
-		if (typeof estimate !== 'function')
-			throw new Error(`Runtime estimators.${name} must be a function.`);
-		estimators.set(name, estimate);
-	}
-	return estimators;
 }
 
 /** The executions that an option names, in order. */

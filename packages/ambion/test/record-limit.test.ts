@@ -11,7 +11,6 @@ import {
 	type CreateRuntimeOptions,
 	createRuntime,
 	type Room,
-	resumeRoom,
 	type StartRoomOptions,
 	startRoom,
 } from '../src/index.ts';
@@ -37,15 +36,15 @@ interface Page {
 	count: number;
 }
 
-/** The estimators of the test runtime: `chars` counts one token per character. */
-const estimators = { chars: (text: string) => text.length };
+/** Counts one token per character. */
+const chars = (text: string) => text.length;
 
 /** A Pi seat that counts one token per character, with this limit when one is given. */
 const limited = (name: string, activationTokenLimit?: number) =>
 	scriptedAgent(
 		name,
 		`${name}.`,
-		activationTokenLimit === undefined ? {} : { activationTokenLimit, estimateTokens: 'chars' },
+		activationTokenLimit === undefined ? {} : { activationTokenLimit, estimateTokens: chars },
 	);
 
 /**
@@ -81,7 +80,7 @@ async function watched(
 			return { ...protocol, view };
 		},
 	});
-	const runtime = createRuntime({ storage: memoryJournals(), limits, estimators, execution });
+	const runtime = createRuntime({ storage: memoryJournals(), limits, execution });
 	const started = stopAtEnd(await startRoom({ name: roomName('limit'), runtime, agents, ...room }));
 	return { room: started, pages, contexts };
 }
@@ -196,19 +195,22 @@ describe('a limit windows the record', () => {
 		expect(closings.every((text) => !text.includes('sam question'))).toBe(true);
 	});
 
-	it('fails the start and the resume of a room whose agent names an estimator the runtime lacks', async () => {
-		const reader = scriptedAgent('reader', 'reader.', {
-			activationTokenLimit: 10,
-			estimateTokens: 'words',
-		});
-		const runtime = createRuntime({ storage: memoryJournals(), estimators });
-		const name = roomName('estimator');
-		const refused = { code: 'missing_definition', message: /names estimator 'words'/ };
-		await expect(startRoom({ name, runtime, agents: [reader] })).rejects.toMatchObject(refused);
-		const room = await startRoom({ name, runtime, agents: [limited('reader', 10)] });
+	it('serves the window that the own estimator of each seat counts', async () => {
+		// Both seats carry a limit of 40. The default estimate counts four characters to one
+		// token, so its window holds the whole record. Counting one token to one character
+		// leaves the older messages out.
+		const own = limited('own', 40);
+		const byDefault = scriptedAgent('default', 'default.', { activationTokenLimit: 40 });
+		const { room, pages } = await watched([own, byDefault], (context, name, request) =>
+			name === 'own' ? answersEveryQuestion(['andrei'])(context, name, request) : quiet(),
+		);
+		await ask(room, ['alpha marker', 'omega marker']);
+
+		const served = (seat: string) => pages.filter((page) => page.seat === seat);
+		expect(served('own').some((page) => page.omitted !== undefined)).toBe(true);
+		expect(served('default').length).toBeGreaterThan(0);
+		expect(served('default').every((page) => page.omitted === undefined)).toBe(true);
 		// A name the room defines no seat for sets no token limit.
 		expect(room instanceof RoomRun && room.tokenWindow('nobody')).toBeUndefined();
-		await room.stop();
-		await expect(resumeRoom(name, { runtime, agents: [reader] })).rejects.toMatchObject(refused);
 	});
 });

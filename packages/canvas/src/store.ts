@@ -39,7 +39,7 @@ export interface CanvasRoom {
 
 /** Where the data of a widget comes from. The canvas holds the pointer and reads no source. */
 export type WidgetSource =
-	| { readonly type: 'process'; readonly handle: string; readonly path: string }
+	| { readonly type: 'process'; readonly process: string; readonly path: string }
 	| { readonly type: 'file'; readonly path: string }
 	| { readonly type: 'snapshot'; readonly ref: string };
 

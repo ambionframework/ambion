@@ -134,7 +134,7 @@ describe('the rules of a call', () => {
 			{ source: { ...statusSource, path: 'status' } },
 			/starts with "\/"/,
 		],
-		['a source text of two lines', { source: { ...statusSource, handle: 'a\nb' } }, /one line/],
+		['a source text of two lines', { source: { ...statusSource, process: 'a\nb' } }, /one line/],
 	];
 
 	it.each(bad)('refuses %s', async (_label, args, cause) => {

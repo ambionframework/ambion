@@ -551,11 +551,10 @@ export interface Executor {
 	 */
 	readonly activationTokenLimit?: number;
 	/**
-	 * The name of the estimator that counts tokens against the limit. The room
-	 * runs the estimator from the registry of its runtime, so the definition
-	 * carries the name alone. Absent names `length`.
+	 * The function that counts the tokens of one text against the limit. The
+	 * room runs it. Absent counts `Math.ceil(text.length / 4)`.
 	 */
-	readonly estimateTokens?: string;
+	readonly estimateTokens?: (text: string) => number;
 }
 
 export interface AgentDefinition {
