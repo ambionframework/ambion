@@ -47,7 +47,7 @@ export { classifyCause, failedPass, PermanentError, providerMessage } from './ex
 export { ROOM_SERVER, toolContext } from './execution/room-tools.ts';
 export { localExecution } from './execution/route.ts';
 export { AgentRunner } from './execution/runner.ts';
-export type { ConnectorRequest, Execution, ExecutionHost, SeatContext } from './host/runtime.ts';
+export type { ConnectorRequest, Execution, ExecutionHost } from './host/runtime.ts';
 export { hostingOf, runningRoom } from './host/runtime.ts';
 export type {
 	ActivationSpec,

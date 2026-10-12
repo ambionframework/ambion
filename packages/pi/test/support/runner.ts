@@ -4,6 +4,7 @@
  */
 import { type AgentDefinition, type Clock, createRuntime } from '@ambionframework/ambion';
 import {
+	type ActivationEvent,
 	AgentRunner,
 	type CommitRequest,
 	type CommitResult,
@@ -11,7 +12,6 @@ import {
 	type LeaseRequest,
 	type LeaseResponse,
 	type RoomProtocol,
-	type SeatContext,
 	type ViewResponse,
 } from '@ambionframework/ambion/hosting';
 import { fakeClock } from '@ambionframework/ambion/testing';
@@ -110,7 +110,7 @@ export interface SeatOptions {
 	readonly stream?: StreamFn;
 	readonly model?: ModelResolver;
 	readonly call?: { attempts?: number; timeout?: number };
-	readonly emit?: SeatContext['emit'];
+	readonly emit?: (event: ActivationEvent) => void;
 }
 
 /**

@@ -8,9 +8,13 @@
  */
 
 import { posix } from 'node:path';
-import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
+import {
+	type AmbionTool,
+	defineTool,
+	type ToolBundle,
+	type ToolContext,
+} from '@ambionframework/ambion';
 import { type Static, Type } from 'typebox';
-import type { Capability } from './capability.ts';
 import { randomName } from './execution-env.ts';
 import { imageMimeType } from './image-type.ts';
 import { unwrap } from './object-files.ts';
@@ -466,6 +470,6 @@ function createFetchTool(options: {
 export function fetchCapability(options: {
 	readonly processFetch: ProcessFetch;
 	readonly store: SnapshotStore;
-}): Capability {
-	return { tools: [createFetchTool(options)], notes: [FETCH_NOTE] };
+}): ToolBundle {
+	return { tools: [createFetchTool(options)], guidance: FETCH_NOTE };
 }

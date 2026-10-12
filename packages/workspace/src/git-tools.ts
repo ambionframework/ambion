@@ -19,10 +19,14 @@
  * fault and an abort reject. `docs/git.md` states the texts.
  */
 
-import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
+import {
+	type AmbionTool,
+	defineTool,
+	type ToolBundle,
+	type ToolContext,
+} from '@ambionframework/ambion';
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
-import type { Capability } from './capability.ts';
 import { runScript, shellQuote } from './execution-env.ts';
 import type { GitEnv, GitRepository } from './git-backend.ts';
 import { NAME_PATTERN } from './git-names.ts';
@@ -98,10 +102,10 @@ type ForkParams = Static<typeof forkSchema>;
 /** The git capability: `repos` and `fork`, and the git note for the workspace `workspace`. */
 export function gitCapability(
 	options: GitToolOptions & { readonly workspace: string },
-): Capability {
+): ToolBundle {
 	return {
 		tools: createGitTools(options),
-		notes: [gitToolGuidance(options.server, options.workspace)],
+		guidance: gitToolGuidance(options.server, options.workspace),
 	};
 }
 

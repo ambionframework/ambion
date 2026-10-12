@@ -44,7 +44,15 @@ by default. A host that passed `processRuntime()` in `compose: { runtime }`
 passes `quickjsRuntime()` or a `ComposeRuntime` of its own. The accepted
 risk that a compose child process outlives its host closes with the code.
 
+**`@ambionframework/ambion/hosting` exports no `SeatContext` type.** An
+executor package has no use for it. `AgentRunner` still takes the context.
+
 ### Fixes
+
+**The `schedule` tool states what a returned say opens.** The description said
+that the message opens an exchange for the person of the exchange in which the
+seat scheduled it. A returned say opens a new exchange that has no person until
+a person speaks.
 
 **A question stays open when the asker schedules a check-in.** An agent that
 asked a person and then scheduled a say to itself closed its exchange as
