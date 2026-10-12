@@ -1,7 +1,7 @@
 # @ambionframework/canvas
 
 The canvas store of an [Ambion](https://ambionframework.com) deployment.
-The store keeps one row for each room: the name, the goal, the depth, the
+The store keeps one row for each room: the name, the goal, the
 state, and what a start needs. It holds no message, no lease, and no
 exchange. The journal of each room stays the source of that room.
 
@@ -26,7 +26,6 @@ const store = sqliteCanvas(sql);
 await store.insert({
   name: 'site',
   goal: 'Plan the site.',
-  depth: 0,
   state: 'running',
   start: { kind: 'root', agents: ['planner'] },
 });

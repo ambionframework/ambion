@@ -76,6 +76,11 @@ export function startOf(row: CanvasRoom | undefined): BreakoutStart | undefined 
 	return row?.start.kind === 'breakout' ? row.start : undefined;
 }
 
+/** Whether a row is a root room. */
+export function isRoot(row: CanvasRoom): boolean {
+	return row.start.kind === 'root';
+}
+
 /** The row of a room that this opener opened in this parent, or a refusal. */
 function ownRow(port: BreakoutPort, caller: Caller, name: string): CanvasRoom {
 	const row = port.row(name);
@@ -92,7 +97,7 @@ function ownRow(port: BreakoutPort, caller: Caller, name: string): CanvasRoom {
 function assertOpenerRoom(port: BreakoutPort, caller: Caller): void {
 	const row = port.row(caller.room);
 	if (row === undefined) throw refuse(`The room "${caller.room}" is not on the canvas.`);
-	if (row.depth !== 0) throw refuse('A breakout room opens no breakout room. Its depth is one.');
+	if (!isRoot(row)) throw refuse('A breakout room opens no breakout room.');
 }
 
 function assertName(parent: string, name: string): string {
@@ -183,7 +188,6 @@ export async function openBreakout(
 		const row: CanvasRoom = {
 			name: full,
 			goal: params.goal,
-			depth: 1,
 			state: 'running',
 			start: {
 				kind: 'breakout',

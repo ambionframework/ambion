@@ -1,7 +1,7 @@
 import type { AmbionTool, Room, ToolBundle, ToolContext } from '@ambionframework/ambion';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
-import { type Capability, joinNotes, mergeReminders } from './capability.ts';
+import { joinNotes, mergeReminders } from './capability.ts';
 import { fileCapability } from './default-tools.ts';
 import { fetchCapability } from './fetch-tool.ts';
 import { workspaceFiles } from './files.ts';
@@ -187,7 +187,7 @@ interface WorkspaceBackings {
 function capabilitiesOf(
 	resource: WorkspaceResource<WorkspaceEnv>,
 	{ sql, git, processFetch, store, processes }: WorkspaceBackings,
-): readonly Capability[] {
+): readonly ToolBundle[] {
 	return [
 		fileCapability(resource.use),
 		processCapability({ bash: resource.use, processes }),
@@ -222,7 +222,7 @@ function workspaceTools(
 	const capabilities = capabilitiesOf(resource, backends);
 	const tools = capabilities.flatMap((capability) => capability.tools);
 	const notes = [
-		...capabilities.flatMap((capability) => capability.notes),
+		...capabilities.map((capability) => capability.guidance),
 		bash.guidance,
 		audit && auditGuidance(audit),
 		rooms ? roomMirrorGuidance(bash.layout.rooms) : undefined,

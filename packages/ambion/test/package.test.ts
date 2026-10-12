@@ -119,7 +119,7 @@ it('exports exactly the conformance suites, their shared parts, and the in-proce
 it('types the ports, the reads, and the visit', () => {
 	expectTypeOf<hosting.AgentPort>().toHaveProperty('wake');
 	expectTypeOf<hosting.RoomProtocol>().toHaveProperty('view');
-	expectTypeOf<hosting.SeatContext>().toHaveProperty('opener');
+	expectTypeOf<ConstructorParameters<typeof hosting.AgentRunner>[1]>().toHaveProperty('opener');
 	expectTypeOf<main.Visit['lastDeparture']>().toEqualTypeOf<Seq | undefined>();
 	expectTypeOf<
 		Extract<

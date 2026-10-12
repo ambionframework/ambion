@@ -13,7 +13,6 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS canvas_rooms (
 	position INTEGER PRIMARY KEY AUTOINCREMENT,
 	name TEXT NOT NULL UNIQUE,
 	goal TEXT NOT NULL,
-	depth INTEGER NOT NULL,
 	state TEXT NOT NULL,
 	start TEXT NOT NULL,
 	close TEXT
@@ -29,7 +28,7 @@ const REVISIONS_SCHEMA = `CREATE TABLE IF NOT EXISTS canvas_widget_revisions (
 	UNIQUE (room, name, rev)
 )`;
 
-const COLUMNS = 'name, goal, depth, state, start, close';
+const COLUMNS = 'name, goal, state, start, close';
 
 type Row = Record<string, string | number | null>;
 
@@ -37,7 +36,6 @@ function toRoom(row: Row): CanvasRoom {
 	const room = {
 		name: String(row.name),
 		goal: String(row.goal),
-		depth: Number(row.depth) === 1 ? 1 : 0,
 		state: String(row.state),
 		start: JSON.parse(String(row.start)),
 	} as CanvasRoom;
@@ -61,13 +59,12 @@ export function sqliteCanvas(sql: Sql): CanvasStore {
 			sql.all(`SELECT ${COLUMNS} FROM canvas_rooms ORDER BY position ASC`).map(toRoom),
 		insert: async (room) => {
 			const written = sql.all(
-				`INSERT INTO canvas_rooms (name, goal, depth, state, start, close)
-				 VALUES (?, ?, ?, ?, ?, ?)
+				`INSERT INTO canvas_rooms (name, goal, state, start, close)
+				 VALUES (?, ?, ?, ?, ?)
 				 ON CONFLICT (name) DO NOTHING
 				 RETURNING name`,
 				room.name,
 				room.goal,
-				room.depth,
 				room.state,
 				JSON.stringify(room.start),
 				room.close === undefined ? null : JSON.stringify(room.close),

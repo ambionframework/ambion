@@ -16,11 +16,12 @@ import {
 	type AmbionTool,
 	contentText,
 	defineTool,
+	type ToolBundle,
 	type ToolContext,
 } from '@ambionframework/ambion';
 import { type Static, Type } from 'typebox';
 import { callEnvelope } from './call-envelope.ts';
-import type { Capability } from './capability.ts';
+import { joinNotes } from './capability.ts';
 import { formatBytes } from './format-bytes.ts';
 import { markdownTable } from './markdown-table.ts';
 import type { WorkspaceResource } from './resource.ts';
@@ -125,11 +126,11 @@ function sqlToolGuidance(database: string): string {
 export function sqlCapability(
 	backend: SqlBackend,
 	resource: WorkspaceResource<SqlEnv>,
-): Capability {
+): ToolBundle {
 	const { label, guidance } = backend;
 	return {
 		tools: [createSqlTool({ sql: resource.use, database: label })],
-		notes: [sqlToolGuidance(label), guidance],
+		guidance: joinNotes([sqlToolGuidance(label), guidance]),
 	};
 }
 
