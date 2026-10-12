@@ -11,7 +11,7 @@ const importsOf = (text: string) =>
 	);
 
 it('exports the runtime, and holds the Node floor', () => {
-	expect(Object.keys(entry).sort()).toEqual(['PACKAGE_NAME', 'quickjsRuntime']);
+	expect(Object.keys(entry).sort()).toEqual(['quickjsRuntime']);
 	const manifest = JSON.parse(read('../package.json'));
 	expect(manifest.engines.node).toBe('>=22.19.0');
 });

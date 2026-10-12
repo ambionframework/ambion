@@ -8,6 +8,3 @@
 export { type ClaudeExecutor, type ClaudeOptions, type ClaudePolicy, claude } from './define.ts';
 export { claudeExecution } from './execution.ts';
 export type { ClaudeExecutionOptions } from './options.ts';
-
-/** Kept in step with package.json by a test. */
-export const PACKAGE_NAME = '@ambionframework/claude';

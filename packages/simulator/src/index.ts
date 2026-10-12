@@ -28,6 +28,3 @@ export type {
 	Simulation,
 	SimulationExchange,
 } from './types.ts';
-
-/** Kept in step with package.json by a test. */
-export const PACKAGE_NAME = '@ambionframework/simulator';

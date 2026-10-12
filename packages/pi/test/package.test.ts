@@ -16,7 +16,6 @@ const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.
 
 it('exports the executor, its execution, its services, and the test tools', () => {
 	expect(Object.keys(entry).sort()).toEqual([
-		'PACKAGE_NAME',
 		'createExecutionServices',
 		'fileCredentials',
 		'fromPiTool',

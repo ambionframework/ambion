@@ -22,7 +22,6 @@ it('holds one entry', async () => {
 it('exports the two backends, the default idle timeout, and the fingerprint helper', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'DEFAULT_IDLE_TIMEOUT_SECONDS',
-		'PACKAGE_NAME',
 		'fingerprint',
 		'workstationBackend',
 		'workstationGitBackend',
