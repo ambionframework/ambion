@@ -1,13 +1,13 @@
 /**
  * What the model reads when a compose call fails, through the real `compose`
- * tool and each real runtime: the error for a name that the call does not
+ * tool and the real runtime: the error for a name that the call does not
  * bind, and the results of the calls that completed.
  */
 import { type ComposeRuntime, defineTool, type ToolContext } from '@ambionframework/ambion';
 import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { processRuntime, quickjsRuntime } from '../src/runtime.ts';
+import { quickjsRuntime } from '../src/runtime.ts';
 
 const bash = defineTool({
 	name: 'bash',
@@ -22,9 +22,6 @@ const wait = defineTool({
 	parameters: Type.Object({ process: Type.String() }),
 	execute: () => 'done',
 });
-
-/** Node 22 has no `--allow-net`, so `processRuntime` refuses it. */
-const permitted = process.allowedNodeEnvironmentFlags.has('--allow-net');
 
 const memoryLimit = 64 * 1024 * 1024;
 
@@ -51,36 +48,30 @@ async function failure(runtime: ComposeRuntime, uses: string[], code: string): P
 	throw new Error('The compose call did not fail.');
 }
 
-describe.each([
-	['quickjsRuntime', true, () => quickjsRuntime({ memoryLimit, cpuLimit: 500 })],
-	['processRuntime', permitted, () => processRuntime({ memoryLimit })],
-])('%s in a compose call that fails', (_name, runs, runtime) => {
-	it.runIf(runs)(
-		'names the tool that the call leaves out of uses, and shows the results of the completed calls',
-		async () => {
-			const message = await failure(
-				runtime(),
-				['bash'],
-				`for (const command of ['a', 'b', 'c']) await tools.bash({ command });
+describe('quickjsRuntime in a compose call that fails', () => {
+	it('names the tool that the call leaves out of uses, and shows the results of the completed calls', async () => {
+		const message = await failure(
+			quickjsRuntime({ memoryLimit, cpuLimit: 500 }),
+			['bash'],
+			`for (const command of ['a', 'b', 'c']) await tools.bash({ command });
 				 await tools.wait({ process: 'a' });`,
-			);
-			expect(message).toBe(
-				[
-					'The compose call failed: tools.wait is not bound. This call binds bash. Add wait to uses.',
-					'Calls, in the order that the code made them:',
-					'- c1.1 bash: completed',
-					'  result: "process a"',
-					'- c1.2 bash: completed',
-					'  result: "process b"',
-					'- c1.3 bash: completed',
-					'  result: "process c"',
-					'Signatures of the tools that the failure names:',
-					'declare const tools: {',
-					'  /** Wait for a process. */',
-					'  wait(args: { process: string }): Promise<string>;',
-					'};',
-				].join('\n'),
-			);
-		},
-	);
+		);
+		expect(message).toBe(
+			[
+				'The compose call failed: tools.wait is not bound. This call binds bash. Add wait to uses.',
+				'Calls, in the order that the code made them:',
+				'- c1.1 bash: completed',
+				'  result: "process a"',
+				'- c1.2 bash: completed',
+				'  result: "process b"',
+				'- c1.3 bash: completed',
+				'  result: "process c"',
+				'Signatures of the tools that the failure names:',
+				'declare const tools: {',
+				'  /** Wait for a process. */',
+				'  wait(args: { process: string }): Promise<string>;',
+				'};',
+			].join('\n'),
+		);
+	});
 });

@@ -15,7 +15,7 @@ const GRANDFATHERED = {
 };
 
 /** Generated files carry no budget. */
-const EXEMPT = [/\.verified\.ts$/, /\.verified\.dfy/, /\.gen(\.|$)/, /\.d\.ts$/];
+const EXEMPT = [/\.verified\.ts$/, /\.d\.ts$/];
 
 /** The mechanisms of the room host. */
 const ROOM_HOST = ['room.ts', 'people.ts', 'dispatch.ts', 'waits.ts', 'control.ts'];

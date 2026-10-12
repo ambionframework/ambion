@@ -161,13 +161,6 @@ starts a new one with no attempts spent. A seat can also keep 4
 scheduled says pending at a 60 s floor. **Today:** monitor usage on the
 `ended` entries. [D1](#designs-with-a-shape) holds the design.
 
-**AR11. A compose child process can outlive its host.** `processRuntime`
-kills its children on the `exit` event of the host. A SIGTERM with no
-handler or a SIGKILL skips that event. A child in a busy loop then runs
-at full CPU with no end. Code: `compose/src/process.ts`. **Today:** use
-`quickjsRuntime`, or run the host under a supervisor that kills its
-process group.
-
 **AR12. An SFTP call that never returns stalls the workspace.** A
 workstation file call has no deadline and no abort. A `write` to a FIFO
 can block the SFTP server, and every agent waits in the one workspace

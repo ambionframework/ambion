@@ -123,12 +123,12 @@ conversion.
 
 ## 3. The generated files
 
-**Each rules file has a `.dfy.gen` and a `.dfy` beside it, and they are
-the same file.** `lsc gen` writes the `.dfy.gen`: one Dafny datatype per
-record or named union, one function per rule, and one `_ensures` lemma per
-rule that states the contract. The `.dfy` is the file Dafny verifies, and
-nothing hand-written goes in it, so `lsc regen` after an edit is a copy
-and never a merge.
+**Each rules file has a `.dfy` beside it, and the `.dfy` equals the
+generation.** `lsc gen` writes the generation to a `.dfy.gen` that git
+ignores: one Dafny datatype per record or named union, one function per
+rule, and one `_ensures` lemma per rule that states the contract. The
+committed `.dfy` is the file Dafny verifies. Nothing hand-written goes in
+it, so `pnpm rule:check` copies the fresh generation over it after an edit.
 
 **A hand-written proof goes in a `.proofs.dfy` beside the rules.** The
 generator cannot write an inductive proof. The journal's proofs file
@@ -171,8 +171,8 @@ line names that lemma.
 
 | Command                  | What it runs                                                                           | Needs Dafny |
 | ------------------------ | -------------------------------------------------------------------------------------- | ----------- |
-| `pnpm check`             | `lsc gen-check`, then `rules-fresh.sh`: fail when a `.dfy` differs from its `.dfy.gen` | No          |
-| `pnpm rule:check <file>` | Regenerate one rules file, prove it, and prove the proofs file beside it               | Yes         |
+| `pnpm check`             | `lsc gen-check`, then `rules-fresh.sh`: fail when a `.dfy` differs from its generation | No          |
+| `pnpm rule:check <file>` | Generate one rules file, copy it to the `.dfy`, prove it, and prove the proofs file    | Yes         |
 | `pnpm check:lemmascript` | `lsc check` on every listed file, then `check-extra.sh` on every proofs file           | Yes         |
 
 A stale generation fails at the desk and in CI. The proof itself runs in
@@ -193,8 +193,8 @@ flag column. `scripts/setup.sh` installs Dafny 4.11 for a desk run.
 **Edit the body and the contract together, then check the file.**
 
 1. Edit the rule in its rules file. Keep the function pure.
-2. Run `pnpm rule:check <file>`. It regenerates the Dafny, proves the
-   file, and proves the proofs file beside it. Read a failing clause as a
+2. Run `pnpm rule:check <file>`. It writes the Dafny, copies it to the
+   `.dfy`, proves the file, and proves the proofs file beside it. Read a failing clause as a
    claim the body does not make, and change one of the two.
 3. Run `pnpm check`. It fails on a stale generation, an unused export, a
    redeclared type that drifted from its public type, an exported rule

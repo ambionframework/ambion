@@ -29,6 +29,14 @@ holds `process` in place of `handle`, and takes a handle or a name. `Process`,
 `kind` field, and `ProcessKind` is gone. The text of the guidance, the
 reminder, and the state line names `wait 0`, `processes`, and `process`.
 
+**`processRuntime` is gone.** `@ambionframework/compose/runtime` exports
+`quickjsRuntime` only. The types `ProcessOptions` and `SpawnChild` go with
+`processRuntime`, and the package no longer builds a child entry. No seat
+used it: `pi()`, `claude()`, and `codex()` give every seat `quickjsRuntime()`
+by default. A host that passed `processRuntime()` in `compose: { runtime }`
+passes `quickjsRuntime()` or a `ComposeRuntime` of its own. The accepted
+risk that a compose child process outlives its host closes with the code.
+
 ### Fixes
 
 **A question stays open when the asker schedules a check-in.** An agent that

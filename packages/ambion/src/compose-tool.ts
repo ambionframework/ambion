@@ -42,7 +42,7 @@ import { bindable } from './compose-catalog.ts';
 import { bindingsText, describeTool, namedTools, signatureText } from './compose-describe.ts';
 import { assertMacros, macroGuidance } from './compose-macros.ts';
 import { type ComposeOutcome, ComposeRun } from './compose-run.ts';
-import { checkedArguments, messageOf, runToolCall } from './tool-call.ts';
+import { checkedArguments, messageOf } from './tool-call.ts';
 import type { Step } from './types.ts';
 
 const DESCRIPTION =
@@ -577,6 +577,5 @@ export async function invokeTool(
 	record?: (step: Step) => void,
 	room?: readonly RoomCall[],
 ): Promise<string | ToolResult> {
-	if (record === undefined || !ENTRIES.has(tool.invoke)) return runToolCall(tool, args, ctx);
 	return invokeChecked(tool, checkedArguments(tool, args), ctx, record, room);
 }
