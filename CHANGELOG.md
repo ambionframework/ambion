@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+**A question stays open when the asker schedules a check-in.** An agent that
+asked a person and then scheduled a say to itself closed its exchange as
+`complete`, and `awaitingFor` listed nothing. The exchange outcome now skips a
+scheduled say when it looks for the last said message, so the exchange stays
+`awaiting` the person.
+
 ## 0.8.0 (2026-10-07)
 
 <img alt="Ambion 0.8.0: trace hooks and one agent definition. A host receives the steps that a trace backend needs, and one agent definition works in a root room and in a breakout room. Trace: an input step with the system part and the record of each pass, the input policy and the inputBytes limit, a session step from the Pi executor with its model, the exchange on each step, and one Claude usage step for each model request. Breakout rooms: no worker team, one bundle of breakout, tell, archive, and report, and a root room that seats every definition. Workspace: the apply_patch tool, and read of a text file of any size through the readRange member of the port, and a process view that keeps the head and the tail of a long output. Seat prompt: respondPolicy and summaryPolicy replace every advice block, and a macro names a room tool. Dependencies: every one at its latest version. Breaking: posted is system, Canvas.workerTools() is gone, readRange is required, and respondPolicy replaces speaking." src="docs/assets/ambion-0.8.0.png" width="800">
