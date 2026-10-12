@@ -377,7 +377,7 @@ export const DISMISS = {
 export const SCHEDULE = {
 	name: 'schedule' as const,
 	description:
-		'Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text. The message then opens a new exchange that has no person until a person speaks. The result names the seq of the message; `dismiss` drops it.',
+		'Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text. When no exchange is open, the message opens a new exchange that has no person until a person speaks. The result names the seq of the message; `dismiss` drops it.',
 	parameters: Type.Object({
 		delaySeconds: Type.Integer({
 			minimum: 1,

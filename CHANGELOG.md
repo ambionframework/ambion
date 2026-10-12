@@ -51,8 +51,8 @@ executor package has no use for it. `AgentRunner` still takes the context.
 
 **The `schedule` tool states what a returned say opens.** The description said
 that the message opens an exchange for the person of the exchange in which the
-seat scheduled it. A returned say opens a new exchange that has no person until
-a person speaks.
+seat scheduled it. When no exchange is open, a returned say opens a new
+exchange that has no person until a person speaks.
 
 **A question stays open when the asker schedules a check-in.** An agent that
 asked a person and then scheduled a say to itself closed its exchange as
