@@ -181,7 +181,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			name: 'wait',
 			label: 'Wait for a process',
 			description:
-				'Wait for the first of your processes in processes to end. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the wait ends first. A process that has ended makes a wait on several processes return at once, so drop it from processes.',
+				'Wait for the first of the processes in `processes` to end. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the wait ends first. A process that has ended makes a wait on several processes return at once, so drop it from `processes`.',
 			parameters: waitSchema,
 			compose: { output: WaitOutput },
 			execute: (params: WaitParams, ctx) => waited(options, params, ctx),

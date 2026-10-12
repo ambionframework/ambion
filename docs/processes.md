@@ -98,7 +98,8 @@ with the name run and some have ended, only the running ones count. A name
 that more than one process holds fails, and the text lists the handles:
 `Two running processes are named 'tests': <handle> of <agent>, <handle> of
 <agent>. Give the handle.` One resolver, `resolveProcess`, finds the process
-for the three tools.
+for the three tools. A ref that has the shape of a handle (letters, a dash,
+12 hex digits) is a handle, so a name of that shape cannot be found by name.
 
 **`cancel` and `wait` reach the caller's own processes alone.** The table
 of an agent is the agent's own home. A handle or a name of another agent
@@ -195,9 +196,9 @@ lost when `/proc` has no directory for its pid. Shell builtins read that
 `stop` and test the directory, so the skip starts no program. A read
 costs one `exec` on every backend, and just-bash reads a table of 64
 processes in about 30 ms. `ps` and the reminder read the whole table.
-`cancel` reads the one process. `wait` reads the one process when `processes`
-holds one handle, and the whole table on each read when it holds several
-handles or a name.
+`cancel` reads the one process. `wait` lists the table once to find each
+process of `processes` that holds a name, and then polls those processes by
+handle.
 
 ## The result
 
