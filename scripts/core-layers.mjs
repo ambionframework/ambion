@@ -4,8 +4,8 @@
  * `files` holds globs relative to `packages/ambion/src`. `exclude` holds the
  * files of those globs that belong to another layer. `imports` names the
  * other layers that this layer may import. A layer may always import its own
- * layer, and every pair that no entry lists is refused. `about` is the line
- * that the layer comment of `biome.jsonc` shows.
+ * layer, and every pair that no entry lists is refused. `about` says what the layer
+ * holds.
  *
  * `scripts/import-rules.test.mjs` derives one probe for each pair of layers
  * from this table, and checks that `biome.jsonc` refuses the same pairs.

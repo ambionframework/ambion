@@ -97,28 +97,11 @@
 			}
 		},
 		// The core is laid out in layers, and an import points down only.
-		// `scripts/core-layers.mjs` holds the table, and the probe test checks
-		// these rules against it. Each line names the globs of a layer, then what
-		// the layer holds:
-		//
-		//   activation-id.ts, bodies.ts, bundle.ts, compose-catalog.ts, compose-describe.ts, compose-macros.ts, compose-run.ts, compose-tool.ts, compose.ts, define.ts, errors.ts, names.ts, record.ts, refs.ts, scheduling.ts, session-facts.ts, single-flight.ts, tool-call.ts, types.ts  the public shapes, the stored bodies, the record lines, the session facts, and the identity codec
-		//   protocol.ts  the wire shapes between the room and a seat
-		//   execution/contract.ts  the executor contract: the types between the driver and one running activation
-		//   host/**  what a host owns: the runtime value
-		//   journal/**  the room's kinds, over @ambionframework/journal
-		//   room/**  every fact and every decision, pure over the journal
-		//   answers.ts  what the room answers a seat's three calls with
-		//   execution/**  the execution side of the wire: driver, rendering, tool bodies, trace
-		//   conformance*.ts  the suites that play the room from outside the wire
-		//   testing/**  the deterministic test tools, over the vocabulary and the execution side
-		//   room-run/**  room.ts (state, phases), core.ts (shared view, no sibling), one file per mechanism
-		//   room.ts  the room facade, which composes the layers below it
-		//   index.ts, hosting.ts, testing.ts  the published entry files, which reach every layer
-		//
-		// `docs/toolchain.md` §1 names the layers; each override below refuses
-		// the imports its layer may not make. The entry files have no override
-		// of their own: the override of `packages/ambion/src/**` refuses the core
-		// bans for them.
+		// `scripts/core-layers.mjs` holds the table of layers, and the probe test
+		// checks these rules against it. `docs/toolchain.md` §1 names the layers;
+		// each override below refuses the imports its layer may not make. The
+		// entry files have no override of their own: the override of
+		// `packages/ambion/src/**` refuses the core bans for them.
 		{
 			// `protocol.ts` sits above the rest of the vocabulary: the journal reads
 			// the vocabulary without it. One override holds both, because a
