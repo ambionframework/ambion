@@ -2,7 +2,7 @@
 	"name": "@ambionframework/compose",
 	"version": "0.8.0",
 	"type": "module",
-	"description": "The runtimes of the compose tool for Ambion: quickjsRuntime() in QuickJS, and processRuntime() in a child Node process.",
+	"description": "The runtime of the compose tool for Ambion: quickjsRuntime() in QuickJS.",
 	"license": "Apache-2.0",
 	"homepage": "https://ambionframework.com",
 	"repository": {

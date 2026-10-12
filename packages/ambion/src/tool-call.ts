@@ -1,9 +1,8 @@
 /**
- * The one function that runs a tool call. It applies `prepareArguments`,
- * checks the arguments against the schema of the tool, calls `invoke`, and
- * records the two steps of a nested call. A direct call of an executor, a
- * nested call of `compose`, and the scripted executor all run through it
- * (`docs/compose.md`). The function holds no state and reads no room.
+ * The steps of a tool call. `checkedArguments` prepares the arguments and
+ * checks them against the schema of the tool. `callChecked` calls `invoke`
+ * and records the two steps of a nested call of `compose`
+ * (`docs/compose.md`). The functions hold no state and read no room.
  */
 import { Check } from 'typebox/value';
 import type { AmbionTool, ToolContext, ToolResult } from './bundle.ts';
@@ -90,18 +89,4 @@ export async function callChecked(
 		parent: nest.parent,
 	});
 	return result;
-}
-
-/**
- * Run one tool call: prepare and check the arguments, call `invoke`, and
- * return what it returned. With `nest`, record the two steps of a nested
- * call. A call that fails the check records no step.
- */
-export async function runToolCall(
-	tool: AmbionTool,
-	args: unknown,
-	ctx: ToolContext,
-	nest?: ToolCallNest,
-): Promise<string | ToolResult> {
-	return callChecked(tool, args, checkedArguments(tool, args), ctx, nest);
 }

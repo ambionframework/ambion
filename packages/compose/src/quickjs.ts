@@ -19,8 +19,46 @@ import {
 	RELEASE_SYNC,
 	Scope,
 } from 'quickjs-emscripten';
-import { configText, failureOf, valueText } from './crossing.ts';
 import { GUEST } from './guest.ts';
+
+// The JSON that crosses between the host and the code: the text of a binding
+// value, and the text of a failure that a binding raised. The code sees a
+// failure as an `Error` with the same message and `details`.
+
+/** What a rejected binding carries: the message, and the details when JSON can hold them. */
+interface Failure {
+	readonly message: string;
+	readonly details?: JsonValue;
+}
+
+/** The JSON text of a binding value. A value that JSON cannot hold throws. */
+function valueText(value: JsonValue): string {
+	return JSON.stringify(value) ?? 'null';
+}
+
+/** The message and the JSON details of what a binding rejected with. */
+function failureOf(failure: unknown): Failure {
+	if (typeof failure !== 'object' || failure === null) return { message: String(failure) };
+	const message = 'message' in failure ? String(failure.message) : String(failure);
+	if (!('details' in failure) || failure.details === undefined) return { message };
+	try {
+		const details = JSON.parse(JSON.stringify(failure.details)) as JsonValue;
+		return { message, details };
+	} catch {
+		return { message };
+	}
+}
+
+/** The setup of the context: the code, the binding names, and `unlisted` and `args` when the input has them. */
+function configText(input: ComposeRuntimeInput): string {
+	const { code, bindings, unlisted, args } = input;
+	return JSON.stringify({
+		code,
+		bindings,
+		...(unlisted === undefined ? {} : { unlisted }),
+		...(args === undefined ? {} : { args }),
+	});
+}
 
 /** The limits of one evaluation. A field that is absent keeps its default. */
 export interface QuickjsOptions {

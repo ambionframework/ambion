@@ -48,9 +48,8 @@ examples/*/demo-run.json
 # local secrets and ad-hoc end-to-end scripts
 .e2e/
 
-# LemmaScript merge scratch, left by `lsc regen` when a merge or a proof fails
-*.dfy.base
-*.dfy.merged
+# The Dafny that `lsc gen` writes. The committed `.dfy` equals it.
+*.dfy.gen
 
 # the runs of failed live evals, kept for a person to read
 **/test/live/runs/

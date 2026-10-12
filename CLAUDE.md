@@ -27,9 +27,8 @@ newer, the OpenTUI floor.
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
   library. The `claude` tests run on a fake executable. The `codex` tests run
   the real binary on a scripted model, and its live tier runs a real model.
-- `packages/compose`: the runtimes of the `compose` tool, in the `/runtime`
-  entry. `quickjsRuntime` runs the code in QuickJS, and `processRuntime`
-  runs it in a child Node process under `--permission`. Both pass
+- `packages/compose`: the runtime of the `compose` tool, in the `/runtime`
+  entry. `quickjsRuntime` runs the code in QuickJS and passes
   `composeRuntimeConformance`.
 - `packages/cloudflare`: a room as Durable Objects, one for each room and one
   for each seat. Tests run in workerd.
@@ -77,7 +76,7 @@ pnpm check              # the gate; run it, after pnpm format, before every push
 pnpm check lint types   # only the named steps
 pnpm --filter @ambionframework/<pkg> exec vitest run [file]   # one package or file
 node --test scripts/<name>.test.mjs                            # one report check
-pnpm rule:check <file>  # regenerate and prove one rules file; needs Dafny
+pnpm rule:check <file>  # generate and prove one rules file; needs Dafny
 pnpm check:lemmascript  # prove every rules and proofs file; needs Dafny
 pnpm chaos              # the failure sweeps on both storages, 200 seeds
 pnpm test:live          # a real model; costs money, see below

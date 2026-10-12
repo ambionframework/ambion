@@ -2,11 +2,9 @@ import { fileURLToPath } from 'node:url';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 /**
- * Every test runs in process or in a child Node process, with no key and no
- * network. The core resolves to its source, as it does in the other packages,
- * so the conformance suite and the types of the core are one module each.
- * `processRuntime` runs the built child entry, `dist/child.mjs`, so a run of
- * this suite needs a build first: `pnpm build`.
+ * Every test runs in process, with no key and no network. The core resolves
+ * to its source, as it does in the other packages, so the conformance suite
+ * and the types of the core are one module each.
  *
  * The debug build of QuickJS runs WebAssembly frames that are larger than
  * the frames of the release build. On arm64, a call from the code to the
