@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Breaking changes
+
+**`estimateTokens` is a function.** The executor option of `pi()`, `claude()`,
+and `codex()`, and `Executor.estimateTokens`, take a function from a text to
+a token count, and the default counts `Math.ceil(text.length / 4)`.
+`createRuntime` takes no `estimators` option, `Runtime` holds no registry,
+and `configure` of `@ambionframework/cloudflare` takes no `estimators`.
+`startRoom` and `resumeRoom` make no estimator check, so the
+`missing_definition` error for an unknown estimator name does not occur.
+`defineAgent` throws when `estimateTokens` is not a function. The room still
+computes the window of a seat room-side, from the function of the agent.
+
 ### Fixes
 
 **A question stays open when the asker schedules a check-in.** An agent that

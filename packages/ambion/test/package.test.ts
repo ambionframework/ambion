@@ -144,12 +144,13 @@ it('types the ports, the reads, and the visit', () => {
 	expectTypeOf<main.VendorSession>().toEqualTypeOf<hosting.VendorSession>();
 	expectTypeOf<hosting.ActivationSpec['resume']>().toEqualTypeOf<main.VendorSession | undefined>();
 	expectTypeOf<hosting.RunningActivation['session']>().toEqualTypeOf<string | undefined>();
-	// The room windows the record: a view names one message at most, and a seat names its estimator.
+	// The room windows the record: a view names one message at most, and a seat holds its estimator.
 	expectTypeOf<Parameters<hosting.RoomProtocol['view']>>().toEqualTypeOf<
 		[activation: string, message?: Seq]
 	>();
-	expectTypeOf<main.Executor['estimateTokens']>().toEqualTypeOf<string | undefined>();
-	expectTypeOf<main.CreateRuntimeOptions>().toHaveProperty('estimators');
+	expectTypeOf<main.Executor['estimateTokens']>().toEqualTypeOf<
+		((text: string) => number) | undefined
+	>();
 });
 
 /** The specifiers one built file imports, whatever the quote or the form. */

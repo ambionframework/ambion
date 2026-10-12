@@ -85,10 +85,10 @@ export interface ExecutorBaseOptions {
 	/** The token limit for the record one activation reads. Absent reads the whole record. */
 	readonly activationTokenLimit?: number;
 	/**
-	 * The name of the estimator that counts tokens against the limit, from the
-	 * registry of the runtime. Absent names `length`.
+	 * The function that counts the tokens of one text against the limit. The
+	 * room runs it. Absent counts `Math.ceil(text.length / 4)`.
 	 */
-	readonly estimateTokens?: string;
+	readonly estimateTokens?: (text: string) => number;
 	/**
 	 * The `compose` tool for this seat. It joins the tools of the seat into
 	 * one call, and the `describe` tool that returns the signatures of the
@@ -171,8 +171,8 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 /** The record-window fields, validated and written only when a limit is set. */
 function recordLimit(
 	activationTokenLimit: number | undefined,
-	estimateTokens: string | undefined,
-): { activationTokenLimit?: number; estimateTokens?: string } {
+	estimateTokens: ((text: string) => number) | undefined,
+): { activationTokenLimit?: number; estimateTokens?: (text: string) => number } {
 	if (activationTokenLimit === undefined) {
 		if (estimateTokens !== undefined)
 			throw new Error('An agent estimateTokens needs an activationTokenLimit.');
@@ -180,8 +180,8 @@ function recordLimit(
 	}
 	if (!Number.isSafeInteger(activationTokenLimit) || activationTokenLimit <= 0)
 		throw new Error('An agent activationTokenLimit must be a positive integer.');
-	if (estimateTokens !== undefined && (typeof estimateTokens !== 'string' || estimateTokens === ''))
-		throw new Error('An agent estimateTokens must be the name of an estimator.');
+	if (estimateTokens !== undefined && typeof estimateTokens !== 'function')
+		throw new Error('An agent estimateTokens must be a function.');
 	return {
 		activationTokenLimit,
 		...(estimateTokens === undefined ? {} : { estimateTokens }),

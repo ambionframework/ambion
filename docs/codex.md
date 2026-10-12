@@ -173,25 +173,23 @@ package. The block in `packages/codex/README.md` gets the same check.
 **`codex(options)` takes the fields of an agent and two settings of the
 model.** The executor passes each setting to `codex app-server`.
 
-| Option                 | Default                  | What it does                                                        |
-| ---------------------- | ------------------------ | ------------------------------------------------------------------- |
-| `instructions`         | Required                 | The private voice of the agent                                      |
-| `model`                | Required                 | A Codex model identifier                                            |
-| `tools`                | None                     | Tools from `defineTool`. They reach Codex as dynamic tools          |
-| `bundles`              | None                     | Tool bundles with guidance                                          |
-| `compose`              | `quickjsRuntime()`       | The `compose` and `describe` tools: a runtime and optional limits   |
-| `respondPolicy`        | `DEFAULT_RESPOND_POLICY` | The respond policy that replaces the default                        |
-| `summaryPolicy`        | `DEFAULT_SUMMARY_POLICY` | The summary policy that replaces the default                        |
-| `activationTokenLimit` | The whole record         | The token limit for the record one activation reads                 |
-| `estimateTokens`       | `'length'`               | The name of the estimator in the runtime that counts tokens         |
-| `modelReasoningEffort` | Codex default            | `minimal` up to `ultra`, as Codex lists them                        |
-| `reasoningSummary`     | `'auto'`                 | `auto`, `concise`, `detailed`, or `none`: see "Debug an activation" |
+| Option                 | Default                      | What it does                                                        |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------- |
+| `instructions`         | Required                     | The private voice of the agent                                      |
+| `model`                | Required                     | A Codex model identifier                                            |
+| `tools`                | None                         | Tools from `defineTool`. They reach Codex as dynamic tools          |
+| `bundles`              | None                         | Tool bundles with guidance                                          |
+| `compose`              | `quickjsRuntime()`           | The `compose` and `describe` tools: a runtime and optional limits   |
+| `respondPolicy`        | `DEFAULT_RESPOND_POLICY`     | The respond policy that replaces the default                        |
+| `summaryPolicy`        | `DEFAULT_SUMMARY_POLICY`     | The summary policy that replaces the default                        |
+| `activationTokenLimit` | The whole record             | The token limit for the record one activation reads                 |
+| `estimateTokens`       | `Math.ceil(text.length / 4)` | A function that counts the tokens of a text                         |
+| `modelReasoningEffort` | Codex default                | `minimal` up to `ultra`, as Codex lists them                        |
+| `reasoningSummary`     | `'auto'`                     | `auto`, `concise`, `detailed`, or `none`: see "Debug an activation" |
 
-**`estimateTokens` names an estimator in the runtime.** The room runs it
-and windows the record, so the definition carries the name alone. `length`,
-the default, counts `Math.ceil(text.length / 4)`. `createRuntime({ estimators })`
-registers other names, and a room start fails on a name the runtime does not
-hold. [History and limits](room.md#history-and-limits) states the rule.
+**`estimateTokens` is a function that the room runs.** The room windows the
+record with it. The default counts `Math.ceil(text.length / 4)`.
+[History and limits](room.md#history-and-limits) states the rule.
 
 **The executor fixes the policy of the thread.** A seat has no option for
 it. The executor sets `sandbox` to `read-only`, `approvalPolicy` to

@@ -37,7 +37,7 @@ export const checker = defineAgent({
 	executor: pi({ instructions: 'Check later.', model: 'scripted/checker' }),
 });
 
-/** A seat with a token limit that names the estimator the worker registers. */
+/** A seat with a token limit that counts one token to one character. */
 export const reader = defineAgent({
 	name: 'reader',
 	identity: 'Reads the recent record.',
@@ -45,7 +45,7 @@ export const reader = defineAgent({
 		instructions: 'Read.',
 		model: 'scripted/reader',
 		activationTokenLimit: 40,
-		estimateTokens: 'chars',
+		estimateTokens: (text: string) => text.length,
 	}),
 });
 
@@ -53,7 +53,6 @@ export const reader = defineAgent({
 export const configuration = {
 	agents: [assistant, product, slow, checker, reader],
 	stream: scripted,
-	estimators: { chars: (text: string) => text.length },
 	// Alarms fire on their own in workerd: a wake nobody takes is sent again this often,
 	// and a scheduled say may return one second after it lands.
 	limits: { port: { resend: 50 }, schedule: { minDelaySeconds: 1 } },

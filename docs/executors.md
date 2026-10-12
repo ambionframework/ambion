@@ -289,7 +289,7 @@ no `steer` step. The guide of each executor kind states the moment its executor 
 **The room applies the activation token limit.** It keeps the newest
 messages that fit `activationTokenLimit`, and keeps the open exchange
 whole, inside the view it serves. The limit counts record text through the
-estimator that `estimateTokens` names in the registry of the runtime. It
+function that `estimateTokens` holds, or the default estimate. It
 does not count the system prompt, the tool schemas, or the model output. It
 does not compare with the context window of the model. The rule holds for
 every executor kind, and one view is one call over the wire.

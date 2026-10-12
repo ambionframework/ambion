@@ -124,19 +124,19 @@ an execution.
 **`pi(options)` returns a frozen executor of kind `pi`.** The kernel
 validates the shared fields. Pi adds `model` and `compaction`.
 
-| Option                 | Required | Default                  | Meaning                                                                                                |
-| ---------------------- | -------- | ------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `instructions`         | Yes      | None                     | The private guidance of the agent.                                                                     |
-| `model`                | Yes      | None                     | A Pi model id, `provider/model-id`.                                                                    |
-| `tools`                | No       | None                     | The tools of the agent, from `defineTool` or `fromPiTool`.                                             |
-| `bundles`              | No       | None                     | Tool bundles. Their guidance joins the prompt after the respond policy.                                |
-| `compose`              | No       | `quickjsRuntime()`       | The `compose` and `describe` tools of the seat: a runtime and optional limits ([Compose](compose.md)). |
-| `respondPolicy`        | No       | `DEFAULT_RESPOND_POLICY` | The respond policy. It replaces the default.                                                           |
-| `summaryPolicy`        | No       | `DEFAULT_SUMMARY_POLICY` | The summary policy. It replaces the default.                                                           |
-| `activationTokenLimit` | No       | The whole record         | The token limit of the record one activation reads. A positive integer.                                |
-| `estimateTokens`       | No       | `'length'`               | The name of the estimator in the runtime that counts tokens. It needs the limit.                       |
-| `compaction`           | No       | The harness default      | When the harness compacts the session. A partial Pi `CompactionPolicy`.                                |
-| `thinking`             | No       | `'off'`                  | How much the model reasons before it answers. A Pi thinking level.                                     |
+| Option                 | Required | Default                      | Meaning                                                                                                |
+| ---------------------- | -------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `instructions`         | Yes      | None                         | The private guidance of the agent.                                                                     |
+| `model`                | Yes      | None                         | A Pi model id, `provider/model-id`.                                                                    |
+| `tools`                | No       | None                         | The tools of the agent, from `defineTool` or `fromPiTool`.                                             |
+| `bundles`              | No       | None                         | Tool bundles. Their guidance joins the prompt after the respond policy.                                |
+| `compose`              | No       | `quickjsRuntime()`           | The `compose` and `describe` tools of the seat: a runtime and optional limits ([Compose](compose.md)). |
+| `respondPolicy`        | No       | `DEFAULT_RESPOND_POLICY`     | The respond policy. It replaces the default.                                                           |
+| `summaryPolicy`        | No       | `DEFAULT_SUMMARY_POLICY`     | The summary policy. It replaces the default.                                                           |
+| `activationTokenLimit` | No       | The whole record             | The token limit of the record one activation reads. A positive integer.                                |
+| `estimateTokens`       | No       | `Math.ceil(text.length / 4)` | A function that counts the tokens of a text. It needs the limit.                                       |
+| `compaction`           | No       | The harness default          | When the harness compacts the session. A partial Pi `CompactionPolicy`.                                |
+| `thinking`             | No       | `'off'`                      | How much the model reasons before it answers. A Pi thinking level.                                     |
 
 **Compaction is on by default.** The harness holds the default policy. The
 executor passes `compaction` to the harness as it is, and a field that the
@@ -168,13 +168,11 @@ for its summary. It deletes the others.
 
 `pi()` throws at definition time when `estimateTokens` has no
 `activationTokenLimit`, when the limit is not a positive integer, and when
-`estimateTokens` is not a name.
+`estimateTokens` is not a function.
 
-**`estimateTokens` names an estimator in the runtime.** The room runs it, so
-the definition carries the name alone. `length`, the default, counts
-`Math.ceil(text.length / 4)`. `createRuntime({ estimators })` registers
-other names. [History and limits](room.md#history-and-limits) states the
-rule.
+**`estimateTokens` is a function that the room runs.** The default counts
+`Math.ceil(text.length / 4)`. [History and limits](room.md#history-and-limits)
+states the rule.
 
 ## Subscriptions
 
@@ -620,7 +618,6 @@ Pi seats.
 | `invalid_grant` or `Provider is not configured`                     | The provider revoked the stored sign-in, or the store holds none. Run `loginPi` again, and pass the same `credentials`. A refresh that fails on the network retries.    |
 | `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat reached a Pi executor through an execution with no kind. Pass the execution of each kind.                                                                 |
 | `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                                                                                  |
-| `Agent '...' names estimator '...', and the runtime holds none ...` | The room start found no estimator by that name. Pass it in `estimators` to `createRuntime`.                                                                             |
 | The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.                                                                    |
 | A say returns `Not delivered: the room moved`                       | The freshness rule refused a say against newer record. The model reads the new messages, then says its message again unless they already say it or make it unnecessary. |
 | A steer shows `consumed: false`                                     | No provider request held the line before the pass ended. The next delta carries the line.                                                                               |

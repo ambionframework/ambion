@@ -1,8 +1,7 @@
-import { defineAgent, startRoom } from '@ambionframework/ambion';
-import { memoryJournals } from '@ambionframework/journal';
+import { defineAgent } from '@ambionframework/ambion';
 import { pi } from '@ambionframework/pi';
 import { describe, expect, it } from 'vitest';
-import { configure, definitionOf, runtimeFor, seatExecution, seatHost } from '../src/configure.ts';
+import { configure, definitionOf, seatExecution, seatHost } from '../src/configure.ts';
 import { scripted } from './scripted.ts';
 
 const agent = (name: string) =>
@@ -53,35 +52,5 @@ describe('configure', () => {
 		configure({ agents: [agent('execution')] });
 		expect(seatHost().logger).toBeUndefined();
 		expect(seatHost().limits.call).toMatchObject({ attempts: 2 });
-	});
-
-	it('gives the runtime of an object the configured estimators', async () => {
-		const reader = defineAgent({
-			name: 'reader',
-			identity: 'reader identity',
-			executor: pi({
-				instructions: 'Read.',
-				model: 'scripted/test',
-				activationTokenLimit: 40,
-				estimateTokens: 'chars',
-			}),
-		});
-		configure({ agents: [reader], estimators: { chars: (text: string) => text.length } });
-		const room = await startRoom({
-			name: 'estimators',
-			runtime: runtimeFor({ storage: memoryJournals() }),
-			agents: [reader],
-		});
-		await room.stop();
-		configure({ agents: [reader] });
-		await expect(
-			startRoom({
-				name: 'estimators',
-				runtime: runtimeFor({ storage: memoryJournals() }),
-				agents: [reader],
-			}),
-		).rejects.toThrow(
-			"Agent 'reader' names estimator 'chars', and the runtime holds none by that name.",
-		);
 	});
 });
