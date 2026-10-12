@@ -4,6 +4,13 @@
 
 ### Breaking changes
 
+**A canvas room row has no `depth`.** `CanvasRoom` holds no `depth` field, and
+`start.kind` says whether a room is a root room or a breakout room. The table
+`canvas_rooms` of `sqliteCanvas` has no `depth` column, so a database that an
+earlier build created needs a new `canvas_rooms` table. The refusal of a
+breakout call from a breakout room reads "A breakout room opens no breakout
+room."
+
 **`estimateTokens` is a function.** The executor option of `pi()`, `claude()`,
 and `codex()`, and `Executor.estimateTokens`, take a function from a text to
 a token count, and the default counts `Math.ceil(text.length / 4)`.

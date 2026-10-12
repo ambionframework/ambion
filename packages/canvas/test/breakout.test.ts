@@ -19,7 +19,6 @@ import {
 const rootRow = (): CanvasRoom => ({
 	name: 'site',
 	goal: 'Plan.',
-	depth: 0,
 	state: 'running',
 	start: { kind: 'root' },
 });
@@ -110,10 +109,9 @@ describe('breakout', () => {
 			{ text: 'Survey it.', key: 'breakout-start:site-survey' },
 		]);
 		expect(await store.list()).toMatchObject([
-			{ name: 'site', depth: 0 },
+			{ name: 'site' },
 			{
 				name: 'site-survey',
-				depth: 1,
 				state: 'running',
 				start: { kind: 'breakout', parent: 'site', opener: 'ada', agents: ['cy'] },
 			},
@@ -204,14 +202,14 @@ describe('breakout', () => {
 			status: 'rejected',
 			reason: { code: 'refused', message: expect.stringMatching(/perOpener is 1/) },
 		});
-		expect((await store.list()).filter((row) => row.depth === 1)).toHaveLength(1);
+		expect((await store.list()).filter((row) => row.start.kind === 'breakout')).toHaveLength(1);
 	});
 
 	it('refuses a call from a breakout room, from an unknown room, and with no room', async () => {
 		const { open, call } = await lab();
 		await open();
 		const args = { name: 'deeper', goal: 'G', message: 'M', agents: ['cy'] };
-		await refusal(call('ada', 'breakout', args, 'site-survey'), /depth is one/);
+		await refusal(call('ada', 'breakout', args, 'site-survey'), /opens no breakout room/);
 		await refusal(call('ada', 'breakout', args, 'elsewhere'), /not on the canvas/);
 		await refusal(call('ada', 'breakout', args, 'site', { room: undefined }), /no room/);
 	});

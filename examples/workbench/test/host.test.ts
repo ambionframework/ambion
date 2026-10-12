@@ -139,11 +139,11 @@ describe('Workbench host', () => {
 		const database = new DatabaseSync(joinPath(directory, 'rooms.db'));
 		onTestFinished(() => database.close());
 		const rows = database
-			.prepare('SELECT name, depth, state, start FROM canvas_rooms ORDER BY position')
-			.all() as { name: string; depth: number; state: string; start: string }[];
-		expect(rows.map((row) => [row.name, row.depth, row.state])).toEqual([
-			...scenarios.map((scenario) => [scenario.name, 0, 'running']),
-			['motors', 0, 'running'],
+			.prepare('SELECT name, state, start FROM canvas_rooms ORDER BY position')
+			.all() as { name: string; state: string; start: string }[];
+		expect(rows.map((row) => [row.name, row.state])).toEqual([
+			...scenarios.map((scenario) => [scenario.name, 'running']),
+			['motors', 'running'],
 		]);
 		expect(JSON.parse(rows[0]?.start ?? '{}')).toMatchObject({
 			kind: 'root',
