@@ -270,9 +270,7 @@ const cases: readonly Case[] = [
 		args: { path: 'f.txt', edits: [edit('beta', 'BETA')] },
 		content: replaced(1),
 		details: {
-			diff: ' 1 alpha\n-2 beta\n+2 BETA\n 3 gamma',
 			patch: '--- f.txt\n+++ f.txt\n@@ -1,3 +1,3 @@\n alpha\n-beta\n+BETA\n gamma\n',
-			firstChangedLine: 2,
 		},
 		after: { 'f.txt': 'alpha\nBETA\ngamma\n' },
 	},
@@ -286,30 +284,6 @@ const cases: readonly Case[] = [
 		},
 		content: replaced(2),
 		details: {
-			diff: [
-				'  1 line 1',
-				'  2 line 2',
-				'  3 line 3',
-				'  4 line 4',
-				'- 5 line 5',
-				'+ 5 five',
-				'  6 line 6',
-				'  7 line 7',
-				'  8 line 8',
-				'  9 line 9',
-				'    ...',
-				' 31 line 31',
-				' 32 line 32',
-				' 33 line 33',
-				' 34 line 34',
-				'-35 line 35',
-				'+35 thirty-five',
-				' 36 line 36',
-				' 37 line 37',
-				' 38 line 38',
-				' 39 line 39',
-				'    ...',
-			].join('\n'),
 			patch: `--- f.txt\n+++ f.txt\n@@ -1,9 +1,9 @@\n${[
 				...numbered(4),
 				'-line 5',
@@ -325,7 +299,6 @@ const cases: readonly Case[] = [
 			]
 				.map((line) => (/^[-+]/.test(line) ? line : ` ${line}`))
 				.join('\n')}\n`,
-			firstChangedLine: 5,
 		},
 		after: {
 			'f.txt': `${[...numbered(4), 'five', ...numbered(29, 6), 'thirty-five', ...numbered(5, 36)].join('\n')}\n`,
@@ -338,9 +311,7 @@ const cases: readonly Case[] = [
 		args: { path: 'f.txt', oldText: 'alpha', newText: 'ALPHA' },
 		content: replaced(1),
 		details: {
-			diff: '-1 alpha\n+1 ALPHA\n 2 beta',
 			patch: '--- f.txt\n+++ f.txt\n@@ -1,2 +1,2 @@\n-alpha\n+ALPHA\n beta\n',
-			firstChangedLine: 1,
 		},
 		after: { 'f.txt': 'ALPHA\nbeta\n' },
 	},
@@ -351,9 +322,7 @@ const cases: readonly Case[] = [
 		args: { path: 'f.txt', edits: [edit('alpha', 'A')], oldText: 'beta', newText: 'B' },
 		content: replaced(2),
 		details: {
-			diff: '-1 alpha\n-2 beta\n+1 A\n+2 B',
 			patch: '--- f.txt\n+++ f.txt\n@@ -1,2 +1,2 @@\n-alpha\n-beta\n+A\n+B\n',
-			firstChangedLine: 1,
 		},
 		after: { 'f.txt': 'A\nB\n' },
 	},
@@ -364,9 +333,7 @@ const cases: readonly Case[] = [
 		args: { path: 'f.txt', edits: '[{"oldText":"alpha","newText":"A"}]' },
 		content: replaced(1),
 		details: {
-			diff: '-1 alpha\n+1 A\n 2 beta',
 			patch: '--- f.txt\n+++ f.txt\n@@ -1,2 +1,2 @@\n-alpha\n+A\n beta\n',
-			firstChangedLine: 1,
 		},
 		after: { 'f.txt': 'A\nbeta\n' },
 	},
@@ -377,9 +344,7 @@ const cases: readonly Case[] = [
 		args: { path: 'f.txt', edits: '{"oldText":"beta","newText":"B"}' },
 		content: replaced(1),
 		details: {
-			diff: ' 1 alpha\n-2 beta\n+2 B',
 			patch: '--- f.txt\n+++ f.txt\n@@ -1,2 +1,2 @@\n alpha\n-beta\n+B\n',
-			firstChangedLine: 2,
 		},
 		after: { 'f.txt': 'alpha\nB\n' },
 	},
@@ -390,9 +355,7 @@ const cases: readonly Case[] = [
 		args: { path: 'f.txt', edits: edit('beta', 'B') },
 		content: replaced(1),
 		details: {
-			diff: ' 1 alpha\n-2 beta\n+2 B',
 			patch: '--- f.txt\n+++ f.txt\n@@ -1,2 +1,2 @@\n alpha\n-beta\n+B\n',
-			firstChangedLine: 2,
 		},
 		after: { 'f.txt': 'alpha\nB\n' },
 	},
@@ -469,9 +432,7 @@ const cases: readonly Case[] = [
 		args: { path: 'f.txt', edits: [edit('a\nb', 'x\ny\nz')] },
 		content: replaced(1),
 		details: {
-			diff: '-1 a\n-2 b\n+1 x\n+2 y\n+3 z\n 3 c',
 			patch: '--- f.txt\n+++ f.txt\n@@ -1,3 +1,4 @@\n-a\n-b\n+x\n+y\n+z\n c\n',
-			firstChangedLine: 1,
 		},
 		after: { 'f.txt': 'x\r\ny\r\nz\r\nc\r\n' },
 	},
@@ -482,10 +443,8 @@ const cases: readonly Case[] = [
 		args: { path: 'f.txt', edits: [edit('say "hi"', 'say "bye"')] },
 		content: replaced(1),
 		details: {
-			diff: '-1 say “hi”  \n+1 say "bye"\n 2 next — line\n 3 last',
 			patch:
 				'--- f.txt\n+++ f.txt\n@@ -1,3 +1,3 @@\n-say “hi”  \n+say "bye"\n next — line\n last\n',
-			firstChangedLine: 1,
 		},
 		after: { 'f.txt': 'say "bye"\nnext — line\nlast\n' },
 	},
@@ -496,10 +455,8 @@ const cases: readonly Case[] = [
 		args: { path: 'f.txt', edits: [edit("it's one", 'ONE'), edit('it’s two', 'TWO')] },
 		content: replaced(2),
 		details: {
-			diff: ' 1 keep  \n-2 it’s one\n+2 ONE\n 3 keep2  \n-4 it’s two\n+4 TWO',
 			patch:
 				'--- f.txt\n+++ f.txt\n@@ -1,4 +1,4 @@\n keep  \n-it’s one\n+ONE\n keep2  \n-it’s two\n+TWO\n',
-			firstChangedLine: 2,
 		},
 		after: { 'f.txt': 'keep  \nONE\nkeep2  \nTWO\n' },
 	},
