@@ -294,8 +294,9 @@ not shown.`
 read takes the first 50 KB of the new part, without the partial line at its
 end. The second read takes the last 50 KB. Each read uses `readRange` of
 the workspace port. One script counts the newlines in the bytes before the
-cursor and in the bytes up to the end, with `head -c <size> | wc -l`. The counts give the line numbers of the marker. A new
-part of at most 50 KB makes one read. Any cut view makes the count.
+cursor and in the bytes up to the end, with `head -c <size> | wc -l`. The
+counts give the line numbers of the marker. A new part of at most 50 KB
+makes one read. Any cut view makes the count.
 
 **`details.omitted` holds the lines between the two ends.** It has
 `offset` and `limit`, the arguments that `read` takes for those lines.
