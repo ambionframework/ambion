@@ -1,26 +1,19 @@
 # Compose
 
-**Status: the current contract of 0.8.0.** Every Pi, Claude, and Codex seat
-has the `compose` tool and the `describe` tool, with `quickjsRuntime()` by
-default. A seat cannot turn them off. The main entry exports the types of the
-option and `COMPOSE_GUIDANCE`.
-Skill [macros](macros.md) run by name. The package
-`@ambionframework/compose/runtime` holds `quickjsRuntime`, which passes
-`composeRuntimeConformance`.
+Every Pi, Claude, and Codex seat has the `compose` tool and the `describe`
+tool, with `quickjsRuntime()` by default. A seat cannot turn them off. The
+main entry exports the types of the option and `COMPOSE_GUIDANCE`. The
+package `@ambionframework/compose/runtime` holds `quickjsRuntime`, which
+passes `composeRuntimeConformance`.
 
 **Macros are the main use of `compose`.** A skill stores a procedure as a
-[macro](macros.md), and the model runs it by name with arguments. The model
-writes no code, and it reads only the value that the macro returns. In the
-live runs, the seats of Claude and Codex ran the macro with no code and no
-exploration calls.
+[macro](skills.md#macros), and the model runs it by name with arguments. The
+model writes no code, and it reads only the value that the macro returns.
 
 **Free code serves precision and chains of typed tools.** The agent calls
 `compose` with the tools that it uses and short code. The code passes the
 result of one tool into the next, and returns one value to the model. The
-data between the calls stays out of the context of the model. The live runs
-measured no token saving for free code. The full catalog and the exploration
-calls of the seat cost more input tokens than the data that the call kept
-out of the context. The description of `compose` now holds a compact list,
+data between the calls stays out of the context of the model. The description of `compose` holds a compact list,
 and `describe` gives the signatures on demand ([Catalog](#the-catalog)).
 
 **Code with no tools calculates and transforms data.** `compose` runs on a
@@ -49,7 +42,7 @@ return { runs: drift.count, refs };
 
 **The model reads the returned value alone.** Here that is a count and the
 snapshot refs. The rows and the paths stay in the compose call. The agent
-then cites the refs in a `say`, as it does today.
+then cites the refs in a `say`.
 
 **The tools stay the same tools.** Each nested call runs the ordinary
 tool, with its schema, its checks, its authority, and its provenance. A
@@ -151,22 +144,7 @@ return { done };
 
 **A completed compose call returns a tool result.** `content` holds the
 rendered value, and a line for each nested call that settled after the
-code returned. `details` holds a `ComposeResult`:
-
-```ts
-interface ComposeResult {
-  readonly status: 'completed' | 'failed' | 'cancelled';
-  readonly value?: JsonValue;
-  readonly error?: { readonly message: string; readonly call?: string };
-  readonly calls: readonly LedgerEntry[];
-}
-
-interface LedgerEntry {
-  readonly call: string; // The id of the nested call.
-  readonly tool: string;
-  readonly status: 'completed' | 'failed' | 'pending';
-}
-```
+code returned. `details` holds a `ComposeResult`.
 
 **A failed or cancelled compose call throws.** Its message renders the error
 and the ledger, and the signatures of the tools that the failure names
@@ -206,55 +184,6 @@ a `BoundTool`, and a `BoundTool` keeps the content alone
 ([Executors](executors.md#the-room-tools)). The `ComposeResult` of a
 completed call reaches a Pi seat in `details`, and the trace keeps it. On
 Claude and Codex, the model and the trace read the rendered content.
-
-## Limitations
-
-**This section gathers what `compose` cannot do.** Each point links to the
-section that states it in full.
-
-- **Some tools never bind.** `compose` and `describe` do not bind
-  themselves, and a tool with `compose: false` does not bind. A summary activation has no
-  `compose` or `describe` tool ([What a compose call binds](#what-a-compose-call-binds)).
-- **A room tool binds only in an activation.** A direct `invoke` of the
-  `compose` tool refuses a call that uses a room tool
-  ([What a compose call binds](#what-a-compose-call-binds)).
-- **The say calls of one compose call run one after another.** The room
-  refuses a say that starts before the previous say lands
-  ([Parallel calls](#parallel-calls)).
-- **Four limits bound a compose call.** The defaults are 64 nested calls,
-  8 calls at a time, 65,536 bytes of returned JSON, and 120,000 ms of wall
-  time. The activation deadline ends a call sooner. The description of
-  `compose` shows the values of the seat ([Limits](#limits)).
-- **The runtime adds limits of its own.** `quickjsRuntime` limits the
-  heap to 64 MiB and the code to 10,000 ms of CPU. The description of
-  `compose` does not state them ([The runtime](#the-runtime)).
-- **The code has no ambient authority.** It has no clock, no random
-  source, no timer, no import, and no I/O except through tools
-  ([The runtime](#the-runtime)).
-- **The runtime is not a security boundary.** Hostile code can pass the
-  limits of its names ([Trust](trust.md#what-the-kernel-does-not-defend)).
-- **A completed nested call keeps its effect.** A failure or a cut undoes
-  nothing, and a rejected call cancels no sibling
-  ([Failure, cancellation, and effects](#failure-cancellation-and-effects),
-  [Parallel calls](#parallel-calls)).
-- **Image parts of a result do not reach the code.** A binding gives
-  `details`, or the text of `content` ([Bindings](#bindings)).
-- **A tool without a declared output binds as text.** The code parses the
-  string ([Bindings](#bindings)).
-- **A harness hook does not see a nested call.** Only the `approve` hook
-  of the `compose` option sees the compose call ([Approval](#approval)).
-- **Free code saved no tokens in the live runs.** The runs held a chain
-  task and a fan-out task. The full catalog and the exploration calls cost
-  more input tokens than the data that the code kept out of the context. A
-  macro runs by name with no code and no exploration, so it is the main
-  use ([Catalog](#the-catalog)).
-- **The description of `compose` shows no signature.** It lists each tool
-  with a typed result by the name of its result type. The model calls
-  `describe` for the signatures, and a failed compose call shows the signature of the tools
-  that it names ([Catalog](#the-catalog)).
-- **A compose call fails in workerd until a runtime for workerd
-  exists.** A worker seat has both tools
-  ([The runtime](#the-runtime)).
 
 ## The catalog
 
@@ -378,17 +307,6 @@ array, a union, a literal, and the primitive types each have a TypeScript
 form. A schema with no form renders as `unknown`. The input schema stays
 the authority: `compose` checks every argument against it.
 
-**The compact list keeps the cost of an unused `compose` small.** One
-provider request repeats the whole tool list, and the live runs made 3 to 6
-requests for each activation. The full catalog of a workspace seat with files,
-processes, snapshots, SQL, and git held about 14,000 characters in the
-description of `compose`. The compact list of the same seat holds about 1,200
-characters with the contract and the limits, and `describe` holds about 200.
-The first live runs measured the full catalog at 9,000 to 26,000 input tokens
-more for each activation. A model
-that composes pays one more call to `describe`, or reads the signature in a
-failure.
-
 ## Guidance
 
 **The model decides when to compose.** The name of the tool gives little
@@ -409,40 +327,7 @@ entry exports it. `ComposeOptions.guidance` replaces it and the process
 paragraph, as the `respondPolicy` option replaces `DEFAULT_RESPOND_POLICY`. The text tells the model to plan
 first, to compose when a result feeds a later call or the model needs a
 part of a large result, and to call `describe` for a tool whose result has
-fields that the code reads. The text follows:
-
-```text
-Plan the tool calls of a task before you make the first call. Use one
-compose call when a result feeds a later call, or when you need a part of
-a large result. This includes say and the other room tools. Make a call
-directly when it stands alone, or when you must judge its result before
-the next call.
-
-To write a compose call, call describe for each tool whose result has
-fields that you read. Put the tools in uses, and the body of an async
-function in code. Each tool is tools.<name>. Read the fields of each
-result, and do not parse text.
-
-Use compose also to explore. To learn the size or the shape of data,
-return a count, a few fields, or a short sample from code. Do not read
-large results one direct call at a time. Code with uses: [] calculates,
-sorts, groups, and reshapes data that you already hold.
-
-The say calls of one compose call run one after another. When the room
-refuses a say because the record moved, the binding rejects, and the
-compose result shows the new lines. Read them before you speak again.
-A seat that starts before a say in one Promise.all lands first, and the
-room refuses the say. Await the seat, then say.
-
-When the task expects a tool to fail, catch the failure with
-.catch((error) => error.details) and read the details.
-
-Return only the values that you need to read. The code has no clock,
-no random source, and no I/O except through tools. A failed compose
-call lists each call, its outcome, and the result of each completed
-call. A completed call can have had an effect, so read the list before
-you call a tool again.
-```
+fields that the code reads.
 
 **The guidance follows the tools of the seat.** `describeExecutor` builds
 the text once, from the tools that the definition holds, so the tool list
@@ -484,28 +369,14 @@ of the seat holds them.
 ## Macros
 
 **`compose` runs a macro by name.** A call that gives `macro` and `args`
-runs the code that a skill stores, under the `uses` of that file. The call
-checks `args` against the schema of the macro, and asks `approve` with the
-name, the hash, and the `args`. From the evaluation on, it is an ordinary
-compose call. [Macros](macros.md) states the format, the steps, and the
-limits.
-
-**The trace records the call of a macro without its hash.** The
-`tool_call` step of the `compose` call holds the input of the model:
-`{ macro, args }`. The hash goes to `approve` alone. The `approval` step
-holds the call id and the answer.
+runs the code that a skill stores, under the `uses` of that file. From the
+evaluation on, it is an ordinary compose call. [Skills](skills.md#macros)
+states the format, the steps, and the review.
 
 ## Bindings
 
 **A binding returns the declared output of its tool.** A tool declares the
-output with a TypeBox schema:
-
-```ts
-interface AmbionTool {
-  // The existing fields stay the same.
-  readonly compose?: false | { readonly output: TSchema };
-}
-```
+output with a TypeBox schema.
 
 | `compose`            | The binding                                                          |
 | -------------------- | -------------------------------------------------------------------- |
@@ -542,28 +413,15 @@ the runtime builds the `Error` from it.
 **`compose` sets `ToolContext.composeCall` on each nested call.**
 [Definitions and tools](agent.md#tools) states the field.
 
-```ts
-interface ToolContext {
-  // The existing fields stay the same.
-  readonly composeCall?: string;
-}
-```
-
-**The workspace tools declare their outputs.** `sql`, `snapshot`, `read`,
-`restore`, `bash`, `cancel`, `wait`, `ps`, `repos`, `fork`,
-and `fetch` set `compose: { output }`, and each output has an
-`$id` that names its type. `write`, `edit`, and
-`apply_patch` bind as text, because the code needs only their success or
-their rejection. [Workspace](workspace.md#declared-outputs) states
-the shape of each output.
+**The workspace tools declare their outputs.** [Workspace](workspace.md#declared-outputs)
+lists the tools that declare one and the type of each.
 
 ## Typing a declared output
 
 **`defineTool` ties the return type of `execute` to the declared output.**
-[Definitions and tools](agent.md#declared-outputs) states the two overloads
-and `ToolResult<TDetails>`. A string, a missing field, or a value of the
-wrong type fails `tsc`. [Definitions and tools](agent.md#declared-outputs) states the runtime check
-of each call.
+A string, a missing field, or a value of the wrong type fails `tsc`.
+[Definitions and tools](agent.md#declared-outputs) states the two overloads,
+`ToolResult<TDetails>`, and the runtime check of each call.
 
 ```ts
 const Order = Type.Object({
@@ -741,21 +599,12 @@ tool of either name while it flattens the tools of the options, before the
 two tools are appended. The check of the agent tools runs later, and its duplicate rule
 refuses a second `compose`.
 
-**Six files of the vocabulary layer hold the tools.** `compose.ts` holds
-the types, the checks, and `COMPOSE_GUIDANCE`. `compose-tool.ts` holds the
-tool and the hosting exports. `compose-run.ts` holds the run of one compose
-call. `compose-catalog.ts` renders the catalog, `compose-describe.ts`
-holds the `describe` tool, and `compose-macros.ts` checks the macros.
-`tool-call.ts` holds the argument check and the call of a nested tool. The file list of the layer in `biome.jsonc` names each file
-([Toolchain](toolchain.md)).
-
 **Every executor kind hosts `compose` as one more tool.** Pi builds its
 tools from the definition. Claude and Codex host `pass.tools`, which holds
 each tool of the definition as a `BoundTool`. The `invoke` of `compose`
 closes over the other tools of the definition. It runs each nested call
 through `tool-call.ts`. A Codex
-seat gets `compose` through the same `agentTools` path as a Claude seat,
-and no test of `compose` runs on a Codex seat.
+seat gets `compose` through the same `agentTools` path as a Claude seat.
 
 **`compose` runs each nested call as Pi runs a tool.** It takes these
 actions in this order:
@@ -848,53 +697,22 @@ denial fails the compose call with no ledger and no effect. A hook that
 throws counts as a denial. With no hook, `compose` allows every compose call
 of the catalog, and records no `approval` step.
 
-```ts
-interface ComposeOptions {
-  readonly runtime: ComposeRuntime;
-  readonly approve?: (
-    request: ComposeRequest,
-    ctx: ToolContext,
-  ) => Promise<'allow' | 'deny'> | 'allow' | 'deny';
-  /** Replaces `COMPOSE_GUIDANCE` ([Guidance](#guidance)). */
-  readonly guidance?: string;
-  /** Absent fields keep their defaults ([Limits](#limits)). */
-  readonly limits?: Partial<ComposeLimits>;
-}
+**A hook can allow a macro and deny free code.** A host that denies free
+code runs only code that it wrote. The in-process runtime is not a
+security boundary, so this limits what it runs. The authority stays the
+same, because `compose` binds only tools that the seat holds. A host can also
+allow the hash of a reviewed macro file alone
+([Review a macro](skills.md#review-a-macro)).
 
-type ComposeRequest =
-  | { readonly uses: readonly string[]; readonly code: string }
-  | { readonly macro: string; readonly hash: string; readonly args: JsonValue };
-
-interface ComposeLimits {
-  readonly calls: number;
-  readonly concurrent: number;
-  readonly bytes: number;
-  readonly time: number;
-}
-```
+**The trace records the call of the model, and no hash.** The `tool_call`
+step of `compose` holds `{ macro, args }` as the model wrote them, and the
+`approval` step holds the answer. Only `approve` reads the hash.
 
 ## The runtime
 
 **The runtime evaluates code against a set of bindings.** It holds no
 tool, no room, and no `ToolContext`. `compose` gives it the code, the
 names, one function to call a binding, and the abort signal.
-
-```ts
-interface ComposeRuntime {
-  evaluate(input: ComposeRuntimeInput, signal: AbortSignal): Promise<JsonValue | undefined>;
-}
-
-interface ComposeRuntimeInput {
-  readonly code: string;
-  readonly bindings: readonly string[];
-  /** The tools of the seat that the call does not bind. It sharpens the error for an unbound name. */
-  readonly unlisted?: readonly string[];
-  /** The checked arguments of a macro. Absent for free code. */
-  readonly args?: JsonValue;
-  /** Calls one binding. It resolves to the binding value, or rejects with `{ message, details? }`. */
-  call(name: string, args: JsonValue): Promise<JsonValue>;
-}
-```
 
 **The runtime gives code no ambient authority.** The global scope holds
 `tools` and the ECMAScript built-ins, except those that read the clock or
@@ -938,10 +756,8 @@ host files outside the sandbox ([Codex](codex.md#the-trust-boundary)).
 The Codex executor keeps it off in every seat. A Codex seat uses the `compose` tool,
 as every seat does.
 
-**A seat has `quickjsRuntime()` by default.** The executor options take a
-`compose` option. With no option, the seat has the `compose` and `describe`
-tools with `quickjsRuntime()`. A host passes its own `compose` object to
-choose another runtime, an approval hook, guidance, or limits.
+**A host passes a `compose` object to change the defaults.** It chooses
+another runtime, an approval hook, guidance, or limits.
 
 ```ts
 import { quickjsRuntime } from '@ambionframework/compose/runtime';
@@ -968,11 +784,13 @@ definition by name in the worker, so no function crosses a wire.
 **`@ambionframework/compose/runtime` holds `quickjsRuntime`.** It passes
 one conformance suite, `composeRuntimeConformance`, which
 `@ambionframework/ambion/conformance` exports beside the other suites of
-the kernel. A runtime of a host passes the same suite.
+the kernel. A runtime of a host passes the same suite. The
+[package README](../packages/compose/README.md) states the options and the
+defaults of `quickjsRuntime`.
 
-| ComposeRuntime     | Runs the code                                           | Memory and CPU                                                                                                                         | Isolation                                                                         |
-| ------------------ | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `quickjsRuntime()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit on the QuickJS heap (64 MiB), and a CPU limit on the time of the code (10,000 ms). A cut ends the run between stretches | A fresh QuickJS runtime for each compose call. It shares the process of the host. |
+| ComposeRuntime     | Runs the code                                           | Memory and CPU                                                                                                    | Isolation                                                                         |
+| ------------------ | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `quickjsRuntime()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit on the QuickJS heap, and a CPU limit on the time of the code. A cut ends the run between stretches | A fresh QuickJS runtime for each compose call. It shares the process of the host. |
 
 **`quickjsRuntime` uses the synchronous QuickJS build.** The asyncify
 build of `quickjs-emscripten` runs one host call at a time, so
@@ -980,17 +798,9 @@ build of `quickjs-emscripten` runs one host call at a time, so
 build binds each tool as a host function that returns `ctx.newPromise()`.
 The host settles that promise when the nested call settles, then runs
 `runtime.executePendingJobs()`. Several nested calls then run together.
-`setMemoryLimit` and a WebAssembly memory of its own bound the heap. The
-CPU limit sums the time of the code over every stretch between two settled
-calls, and the wait for a call does not count. The interrupt handler ends
-code that runs past the limit. The host thread cannot see the signal while
-code runs, so a cut takes effect between two stretches of code.
-The runtime disposes each promise and each value handle that it makes.
-QuickJS aborts the process when it frees a runtime that still holds one.
-The package is MIT, it has no native part, and the lockfile already holds
-it through `just-bash`.
+`setMemoryLimit` and a WebAssembly memory of its own bound the heap.
 
-**Cloudflare has no compose runtime in the first version.** A worker cannot
+**Cloudflare has no compose runtime.** A worker cannot
 start a process, and a worker loads WebAssembly only from its bundle. The
 import of `quickjsRuntime` works in workerd, and an evaluation fails
 there. `quickjsRuntime` catches the failure to load the module and throws
@@ -1072,53 +882,3 @@ the status `failed`, and the ledger marks each call that has not settled
 records two steps, and they count against `limits.trace.stepsPerPass`.
 Each output counts against `limits.trace.toolOutputBytes`
 ([Limits and fold cost](limits.md#the-limits)). The trace can cut a nested output.
-
-## Acceptance
-
-**The scripted executor runs the acceptance.** It gives a tool call a
-signal and the deadline. It hands the step sink to `compose` through
-`invokeTool`, so `settled(room)` waits for a deterministic compose call. A
-test reads the nested steps. The scripted executor records the text of a
-result, so a room test reads the status and the ledger from the rendered
-content. A unit test of the `invoke` of `compose` reads the `ComposeResult`.
-Items 1, 6, and 7 add a live run.
-
-1. **The tools compose unchanged.** Each of Pi, Claude, and Codex hosts
-   `compose` as one more definition tool. A workspace test binds `sql` and
-   `snapshot` through `invokeTool`, and a macro test runs them on the
-   scripted executor. A Pi seat on a scripted stream and a Claude seat on a
-   fake executable run `compose` over a test tool. Each nested call keeps its
-   preparation, its checks, its provenance, its deadline, and its steps.
-2. **The data stays out of the context.** A test passes a large result
-   from one tool into another. The model receives only the returned value,
-   and the trace holds the nested calls with their `parent`.
-3. **The runtime passes the conformance suite.** `quickjsRuntime()`
-   passes `composeRuntimeConformance`, with no change to a tool. The suite covers the globals table, a memory limit, a cut,
-   concurrent binding calls, and JSON at each crossing.
-4. **Failure keeps its facts.** An error, a cut, a limit, a denial, an
-   invalid declared output, and a call that outlives the code each give
-   the stated status and ledger. No nested call counts as delivered to the
-   model, and no nested step gives its id to a direct call.
-5. **Parallel calls keep their facts.** Code that starts more calls than
-   `compose.limits.concurrent` runs the cap at a time. A `sequential` tool
-   runs one call at a time. A failed call in `Promise.all` leaves its
-   siblings to settle, and the ledger holds the outcome of each.
-6. **Processes carry parallel work.** A compose call starts several
-   processes with `bash` and waits for each. The wall time stays near the
-   time of the slowest process. Only the live run measures the wall time.
-7. **The guidance steers the choice.** The live comparison holds two cases
-   on each executor kind. In the first, the result of one tool feeds
-   another, and the seat calls `compose`. In the second, the seat must
-   read a result before it decides, and the result decides what it does.
-   Code that branches on the result is a valid compose call too. So the
-   run records whether the seat called the tool directly. In the live run,
-   the second case passed on each kind. With the earlier guidance, the
-   first case failed on each kind: the seat called `sql` and `snapshot`
-   directly. With the current guidance, the first case passed on Codex at
-   the efforts medium and high. It failed on Pi and Claude with
-   `claude-sonnet-5`. A later run passed on Pi and failed on Claude, so
-   the choice of `claude-sonnet-5` changes from run to run. A fan-out
-   case reads many logs and snapshots a few. With `compose`, the seat
-   cost more input tokens on Pi and Claude, because it made many direct
-   calls before it composed. Codex failed the fan-out case with and
-   without `compose`: it omitted a filter of the task.

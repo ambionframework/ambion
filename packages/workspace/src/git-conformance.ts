@@ -97,7 +97,10 @@ export interface GitConformanceBackend<
 	B extends GitBackend = GitBackend,
 > extends ConformanceFixture<GitConformanceStore<B>> {
 	readonly name: string;
-	/** The shortest `credentialTtl`, in seconds, that the backend takes. */
+	/**
+	 * The shortest `credentialTtl`, in seconds, that the backend takes. The
+	 * expiry case skips when this is above 5.
+	 */
 	readonly shortestCredentialTtl: number;
 	/** Issue the credentials of `agent`, the way its bash backend asks for them. Rejects for a reserved name. */
 	issueCredentials(pair: GitConformancePair<B>, agent: WorkspaceAgent): Promise<void>;

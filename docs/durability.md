@@ -112,9 +112,9 @@ write appears in a later read, and a resumed run replays the full record before
 answering. `subscribe()` is the push view of the same facts: one `message`
 notification per message seen by that run, with no historical replay.
 
-To recover a client, subscribe first, read with an exclusive `after` position,
-merge overlap by `seq`, and advance the cursor only after consumption. Recreate
-subscriptions after restart.
+[Deployment](deployment.md#restore-client-reads-and-exchange-handles) states
+how a client recovers its reads: subscribe first, read after a saved cursor,
+and merge by `seq`.
 
 ## 4. What a lease promises
 
@@ -156,10 +156,13 @@ transient cause is a rate limit, a server error, or a lost connection.
 - **A seat that no execution serves fails every activation as
   permanent.** The error code is `no_execution`. The room does not send
   the wake again.
-- **The Pi executor reads a status only from a provider diagnostic.** It
-  treats 400, 401, 402, 403, 404, 405, and 422 as permanent, and credit,
-  quota, usage-limit, authentication, or login text as permanent. It never reads a status from free error
-  text, because a rate limit names a token count that looks like a 400.
+- **The kernel classifier reads a status only from a provider diagnostic.**
+  Each executor brings its own source of the status. The classifier
+  (`execution/failure.ts`) treats 400, 401, 402, 403, 404, 405, and 422 as
+  permanent, and credit, quota, usage-limit, authentication, or login text
+  as permanent. It never reads a status from
+  free error text, because a rate limit names a token count that looks like
+  a 400.
   Every uncertain failure is transient.
 
 Section 5 states which ends carry usage.
@@ -167,9 +170,8 @@ Section 5 states which ends carry usage.
 ### Executor calls and unclaimed work
 
 **A local timeout leaves the remote result unknown.** Executor calls to the room
-use `hostingOf(runtime).limits.call.timeout`, in milliseconds, with a default
-of 10,000. Claims and releases retry up to
-`hostingOf(runtime).limits.call.attempts`, which defaults to two. Retries
+use `hostingOf(runtime).limits.call.timeout`. Claims and releases retry up to
+`hostingOf(runtime).limits.call.attempts`. Retries
 keep the activation identity. A timeout
 neither revokes a lease nor reverses a contribution that the journal already
 accepted.
@@ -237,6 +239,12 @@ Completion needs a confirmed journal read with no execution obligations left.
   [`scheduled-say.test.ts`](../packages/ambion/test/scheduled-say.test.ts)
   finds one returned say after each.
 
+**Concurrent `stop()` calls wait for the same shutdown operation.** If a
+durable revocation or departure fails, callers observe that failure and may
+retry the stop. Admission remains closed and the runtime releases the room
+name even on failure. If another run resumes the room, its journal fence
+prevents the old run's retry from changing the new run's presence or work.
+
 [`deployment.md`](deployment.md) holds the host steps.
 
 ## Journal format
@@ -282,7 +290,9 @@ lost.
 
 The room does not promise exactly-once model execution or external side effects.
 Provider calls and tools may repeat after timeout, expiry, or cancellation;
-applications own effect idempotency and transaction rules. It also does not
+applications own effect idempotency and transaction rules. An exchange close
+certifies a discussion boundary; it does not certify the correctness of each
+contribution. The room also does not
 repair torn storage, reconcile disagreeing clocks, or coordinate two live hosts
 over storage without conditional append.
 
@@ -300,48 +310,5 @@ the host.
 
 ## 6. What a host must do
 
-After a process failure:
-
-1. Resume with `resumeRoom(name, { runtime, agents })`, supplying executable
-   definitions for every recorded agent name.
-2. Recreate authenticated visits and preserve recorded presence until the host
-   confirms departure.
-3. Recreate subscriptions before reading `room.read({ messages: { after } })`; merge by `seq`.
-4. Reacquire exchange handles with `room.exchange(from)` and recreate waits.
-5. Reconnect remote runners to the current room host. Preserve unexpired leases;
-   let expired leases follow normal retry policy.
-
-Evict a dead in-memory room before another host takes its name. Treat
-`superseded` like eviction: discard its answers and resume the name. A failed
-resume may be retried; its fence is the first write of the new run.
-
-## 7. How it is proved
-
-The scripted suite uses a fake clock, scripted model, serialized ports, and
-memory and SQLite storage. The failure matrix and process tests are linked here
-for the claims that need more than a unit test:
-
-| Claim                                                                                                                                                   | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stop cleanup across expiry, storage failure, and restart                                                                                                | [`stop-work.test.ts`](../packages/ambion/test/stop-work.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| A permanent failure abandons in one attempt; a rate-limit token count is not a status; a transient failure retries to the cap                           | [`permanent-failure.test.ts`](../packages/ambion/test/permanent-failure.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                          |
-| A lost commit retries under its key and speaks once; an unknown outcome ends the activation without a second say                                        | [`commit-retry.test.ts`](../packages/ambion/test/commit-retry.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Atomic cancellation, retry, and restart                                                                                                                 | [`cancellation.test.ts`](../packages/ambion/test/cancellation.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Ordered publication and recovery after submission faults                                                                                                | [`submission.test.ts`](../packages/ambion/test/submission.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Golden journals replay to the committed fold, and a body schema refuses a malformed body                                                                | [`golden.test.ts`](../packages/ambion/test/golden.test.ts), [`journal-validation.test.ts`](../packages/ambion/test/journal-validation.test.ts)                                                                                                                                                                                                                                                                                                                                            |
-| Crash before/after every append, then same-key retry                                                                                                    | [`chaos.test.ts`](../packages/ambion/test/chaos.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Host handover and lease retry under load                                                                                                                | [`hosts.test.ts`](../packages/ambion/test/hosts.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Child-process kill and SQLite recovery                                                                                                                  | [`reconnect-process.test.ts`](../packages/ambion/test/reconnect-process.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Invocation/outcome history against the record                                                                                                           | [`consistency.test.ts`](../packages/ambion/test/consistency.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Stale host loses after a fence                                                                                                                          | [`split.test.ts`](../packages/ambion/test/split.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| The activation lifecycle and the exchange lifecycle: the lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | [`room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| The fence as a state machine, the key, the seq counter, and the cursor                                                                                  | [`journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)                                                                                                                                                                                                                                                                                                                                                                                                              |
-| How a rule is proven, how the gate runs the proofs, and the constructs a rule may use                                                                   | [`formal.md`](formal.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Every verified rule runs on the path its contract describes                                                                                             | [`journal/test/binding.test.ts`](../packages/journal/test/binding.test.ts), [`ambion/test/binding.test.ts`](../packages/ambion/test/binding.test.ts)                                                                                                                                                                                                                                                                                                                                      |
-| A storage and a port hold the published contract: the storage cases, and the wake, steer, cut, and room calls of a seat                                 | [`journal/src/conformance.ts`](../packages/journal/src/conformance.ts), [`ambion/src/conformance.ts`](../packages/ambion/src/conformance.ts), run by [`journal/test/storage.test.ts`](../packages/journal/test/storage.test.ts), [`ambion/test/port-conformance.test.ts`](../packages/ambion/test/port-conformance.test.ts), [`cloudflare/test/storage.test.ts`](../packages/cloudflare/test/storage.test.ts), [`cloudflare/test/port.test.ts`](../packages/cloudflare/test/port.test.ts) |
-
-Run the process-boundary scenario without provider credentials:
-
-```sh
-pnpm --filter @ambionframework/ambion exec vitest run test/reconnect-process.test.ts
-```
+[Deployment](deployment.md#persistent-node) holds the host recovery
+procedure, including eviction and supersession.

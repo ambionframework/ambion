@@ -7,11 +7,11 @@ contract. LemmaScript turns the contract into Dafny obligations, Dafny
 proves them, and the gate fails when a proof breaks or a generated file is
 stale. Three files hold every rule:
 
-| File                                                                                                    | Concern                                                                                                                                                | Obligations                   |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
-| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)                   | The fence, the key, the seq counter, the cursor                                                                                                        | 12, and 23 in its proofs file |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)           | The lease fold, the admissions, the grant, the retry, the unread lines of a commit, the opening question, the verdict, the close, the scheduled return | 79, and 39 in its proofs file |
-| [`packages/ambion/src/execution/rules.verified.ts`](../packages/ambion/src/execution/rules.verified.ts) | The read position after an own seating, unseating, or dismissal                                                                                        | 2                             |
+| File                                                                                                    | Concern                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)                   | The fence, the key, the seq counter, the cursor                                                                                                        |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)           | The lease fold, the admissions, the grant, the retry, the unread lines of a commit, the opening question, the verdict, the close, the scheduled return |
+| [`packages/ambion/src/execution/rules.verified.ts`](../packages/ambion/src/execution/rules.verified.ts) | The read position after an own seating, unseating, or dismissal                                                                                        |
 
 **Everything else is ordinary TypeScript under the scripted and chaos
 suites.** Routing, presence, the roster, addressing, seating changes,
@@ -75,7 +75,7 @@ site.
 **A rules file declares the types it reads.** LemmaScript lowers only the
 types in its own file. A rules file therefore declares the string unions
 and records its rules read, such as `LeaseEndReason` beside `EndReason`.
-`rules.test.ts` in each package pins every copy to the public type with
+`rules.test.ts` in `packages/ambion` pins every copy to the public type with
 `expectTypeOf`, so the two cannot drift without a compile error.
 
 **A helper a contract names is a rule too.** `stoodDown` exists so that
@@ -87,7 +87,7 @@ imports, so a rule the runtime does not run cannot stay exported.
 
 **The proof is about the code the runtime runs.** A rule proves nothing
 about the room until the room runs its body on the path the contract
-describes. Three things hold that binding.
+describes. Two things hold that binding.
 
 1. **The caller runs the rule.** `transition.ts` decides an end with
    `mayEnd`, `fold.ts` applies a lease change with `applyChange`, and
@@ -175,7 +175,10 @@ line names that lemma.
 | `pnpm rule:check <file>` | Generate one rules file, copy it to the `.dfy`, prove it, and prove the proofs file    | Yes         |
 | `pnpm check:lemmascript` | `lsc check` on every listed file, then `check-extra.sh` on every proofs file           | Yes         |
 
-A stale generation fails at the desk and in CI. The proof itself runs in
+`lsc gen-check` passes a `.dfy` that only adds lines to the generation, so
+[`scripts/rules-fresh.sh`](../scripts/rules-fresh.sh) compares each listed
+`.dfy` with the generation that `lsc gen-check` just wrote and names the
+stale file. A stale generation fails at the desk and in CI. The proof itself runs in
 the `lemmascript` job of `.github/workflows/ci.yml`, which calls the
 LemmaScript reusable workflow at a pinned reference that names the
 `lemmascript` version in `package.json`; that workflow runs
@@ -186,7 +189,9 @@ fifteen seconds, and a rule edit re-proves only its own file.
 `path [timeout] [dafny flags]`. A timeout above 60 turns the batch check
 into a generation check with no proof, so every timeout stays at 60 or
 below. A rule that calls `filter` needs `--standard-libraries` in the
-flag column. `scripts/setup.sh` installs Dafny 4.11 for a desk run.
+flag column. A desk run needs Dafny on
+`PATH`, and `scripts/setup.sh` installs it
+([Toolchain](toolchain.md#6-script-contract)).
 
 ## 5. Change a rule
 
@@ -225,7 +230,7 @@ pinned in both.
 no importer, so a rule that lost its caller fails the gate until it is
 made internal or deleted.
 
-## 6. What LemmaScript 0.6.1 lowers
+## 6. What the pinned LemmaScript lowers
 
 **The table states which constructs LemmaScript can verify.** Each row
 was checked with `lsc gen` and `dafny verify` on this repository.
@@ -287,7 +292,7 @@ does not prove the projection at the call site is the right one. The
 scripted suites and the chaos sweeps hold the projections, as they did
 before the rules existed.
 
-## 8. Why each room rule is a rule
+## 8. Which rules stay in the verified files
 
 **Every exported room rule but `exchangeOutcome` gates a write.** A rule stays in
 `room/rules.verified.ts` when a fault in it loses or duplicates the
@@ -295,38 +300,6 @@ record: it decides an entry, an admission, the `due` list that
 `admitsLease` reads, or the read position that the say lock reads. A rule
 that only shapes a read leaves the file, and it lives beside its caller
 with an ordinary test.
-
-| Rule                   | The write it gates                                                           |
-| ---------------------- | ---------------------------------------------------------------------------- |
-| `applyChange`          | The lease that the fold holds after each lease entry                         |
-| `cancelHold`           | The lease that the fold holds after a cancellation                           |
-| `mayEnd`               | An end entry for a lease                                                     |
-| `leaseExpiry`          | The expiry that a claim entry or a renewal entry stores                      |
-| `onRecord`             | The read position that a claim, a renewal, or an end may carry               |
-| `admitsLease`          | A claim entry or a renewal entry                                             |
-| `isExpired`            | An expiry entry that a pass writes                                           |
-| `isLive`               | A commit, a claim, a renewal, a release, and the seats that a pass routes to |
-| `endingOf`             | A revocation entry or an expiry entry that a pass writes                     |
-| `wellFormed`           | The ids that a claim, a renewal, a commit, and a release may carry           |
-| `nextActivationId`     | The id that each claim carries                                               |
-| `coversAttempt`        | The leases that answer a wake, so the due activations that the room owes     |
-| `wakeAnswered`         | The due activations that the room owes                                       |
-| `countsAgainst`        | The attempt number in the next id, and the attempt limit                     |
-| `summarizesClose`      | The attempt number of a summary attempt, and the summary verdict             |
-| `survivesCancellation` | The grants and the owed summaries that a cancellation leaves                 |
-| `closeFor`             | The grant of a summary activation                                            |
-| `activationGrant`      | A claim entry, a renewal entry, a commit entry, and a release entry          |
-| `speechFreshness`      | A message entry that an activation writes                                    |
-| `stampedSummary`       | The recipient and the range of a summary entry                               |
-| `owesSummary`          | The summary writer that a close entry names                                  |
-| `coversExchange`       | A second summary entry, and the summaries that the room owes                 |
-| `summaryVerdict`       | The summaries that the room owes                                             |
-| `openingQuestion`      | The open exchange that a close entry closes                                  |
-| `returnable`           | The returned post that the planner selects and the commit writes             |
-| `exchangeLive`         | A close entry                                                                |
-| `closeAdmission`       | A close entry                                                                |
-| `unreadBy`             | The unread lines of a commit answer, and so the read position of a say       |
-| `exchangeOutcome`      | None; it shapes the outcome that a read reports                              |
 
 **One rule decides on the seat side.** `execution/` cannot import `room/`,
 so `ownEntryAfter` lives in `execution/rules.verified.ts`. It gates the read

@@ -1,25 +1,16 @@
 # The workspace
 
-> **`fetch` is available when the bash backend has endpoints.** It reads a
-> path of a running process that listens on `$PORT`, with GET. The workspace
-> keeps the body as a snapshot. An image reaches the model as an image, and
-> the text of the result names its export path. The host reads a process with
-> `workspace.fetch`.
-
 **The workspace is a resource that holds files and a shell.** The optional
 `@ambionframework/workspace` package provides a workspace resource and its
 tools. The package `@ambionframework/just-bash` provides the memory and
-directory backends over just-bash. A workspace has one bash backend,
-and it can have one SQL backend
-([Query the shared database](#query-the-shared-database)) and one git
-backend ([Git](git.md)). Agents receive access through
+directory backends over just-bash. Agents receive access through
 ordinary tool bundles. Workspace files remain separate from the
 collaboration journal. [Resources](resources.md) states the resource contract,
 tool bundles, and the rules for references and provenance.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-capabilities-dark.svg">
-  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. Every Pi, Claude, and Codex seat has compose and describe from its executor. compose joins the tools of the agent in one call. describe gives their signatures. The workspace gives an agent five capabilities. Two are built in, and three are optional. Processes are built in. bash starts a process that outlives the activation. ps lists it, wait reads it, and cancel stops it. At the start of each activation, a reminder lists the seat's processes. A process can serve HTTP on $PORT. The optional fetch reads it, and the workspace keeps the body as a snapshot. Optional tables add sql: agents pass work in a table or a view. Optional repositories add repos and fork: an agent forks a template, then pushes. Files and objects are built in. read, write, and edit reach the files. snapshot puts the bytes of a file in a folder or an S3 bucket, and restore gives them back. Optional skills add macros. Each agent reads its skills from ~/.skills. A skill stores macros, and compose runs a macro by name. The five share the homes and the snapshots. Each agent has a home. A snapshot ref names bytes. An opt-in audit log holds tool calls. An opt-in room mirror holds messages. A message cites any of it with a ref. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists processes, cancels one, and hears each start and end. Each one posts a message to the room. A message cites a file with a ref. A restart replays the entries." src="assets/ambion-capabilities.svg">
+  <img alt="A room and its workspace, by capability. A room activates an agent, and the agent calls the tools of a workspace. The workspace gives an agent five capabilities: processes, optional fetch of a process, optional tables, optional repositories, and files and objects. Optional skills add macros that compose runs by name. The five share the homes and the snapshots. An opt-in audit log holds tool calls, and an opt-in room mirror holds messages. A message cites any of it with a ref. A person and the host steer the room." src="assets/ambion-capabilities.svg">
 </picture>
 
 ## Open one resource
@@ -35,13 +26,25 @@ const drive = openWorkspace({ name: 'team-site', backend: { bash: memoryBackend(
 creates one workspace for each shared filesystem it intends agents to share.
 The package does not coordinate separate workspaces or processes.
 
+**The `backend` option holds the backends by kind.** The type is
+`WorkspaceBackends`. `backend.bash` is a `BashBackend`, and every workspace has
+one. `backend.sql` is an optional `SqlBackend`: a shared database that need not
+live on the filesystem of the bash backend ([SQL](sql.md)).
+`backend.objects` is an optional `ObjectBackend` for the bytes of each snapshot
+([Snapshots](snapshots.md#the-object-backend)). `backend.bash.git` is an
+optional `GitBackend` ([Git](git.md)). The bash backend takes it as an option
+of its own package, so a wrong pair is a compile error
+([The contract](git.md#the-contract)).
+
 **Each backend has its own resource.** `openWorkspace` opens a bash resource
 with `WorkspaceEnv` and an object resource with `ObjectEnv` for snapshots.
 It opens a SQL resource with `SqlEnv` when `backend.sql` is set, and a git
 resource with `GitEnv` when `backend.bash.git` is set. The resources share
 [the resource contract](resources.md#the-resource-contract). `workspace.use`
-reaches the bash resource; `workspace.sql` and `workspace.git` expose the
-optional resources. The snapshot methods use the object resource.
+reaches the bash resource; `workspace.sql`, `workspace.objects`, and
+`workspace.git` expose the others, for host code. Each resource orders its
+own operations, so a `bash` call and a `sql` call from two agents can finish
+in either order. A long `bash` command does not delay a query.
 
 ```ts
 await drive.use(
@@ -53,6 +56,58 @@ await drive.use(
   signal,
 );
 ```
+
+## Backends and limits
+
+**Both deployments provide the core workspace tools.** A backend with
+endpoints also provides `fetch`.
+
+| What an agent gets             | One node: `@ambionframework/just-bash`                               | A remote server: `@ambionframework/workstation`            |
+| ------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Where the files are            | In the host's memory, or in a directory on the host                  | On the server                                              |
+| Isolation between agents       | None: every agent reads and writes every home                        | One Unix account for each agent, and a private home        |
+| Network                        | None                                                                 | The server's network                                       |
+| Commands                       | A simulated shell with a fixed set                                   | A real bash with the server's commands                     |
+| Output of a running process    | Shows when the process ends                                          | Shows while the process runs                               |
+| Output after cancel or timeout | The file stays empty                                                 | The file keeps the output so far                           |
+| Work after a host restart      | Memory: none. Directory: the files; earlier processes read as failed | The files, and the processes that still run                |
+| Repositories                   | In the host's process, with `justGitBackend`                         | In one account on the server, with `workstationGitBackend` |
+| Reading a process over HTTP    | No endpoints, so no `fetch` tool and no `workspace.fetch`            | Loopback forwarding over SSH gives both                    |
+
+`memoryBackend()` keeps files in process. Its optional seed writes files
+before the first use, and `readFiles()` supports host inspection. Disposal
+releases its cached filesystem, so a disposed resource does not recreate a
+seeded filesystem.
+
+`directoryBackend(root)` operates on a real directory. It creates the root
+when a backend operation needs it. Disposal releases the filesystem handle
+and keeps the root directory and its files.
+
+Both backends use just-bash, and the package `@ambionframework/just-bash`
+holds them. The workspace package does not depend on just-bash, so a host
+that uses another backend installs no just-bash. The backends provide a
+virtual Unix filesystem and shell for tools, with JavaScript and Python
+execution available. Network commands are absent. Each shell also runs `git`
+from just-git, with the agent's name as the locked author and no network
+access. The just-bash backends give no operating-system isolation between
+agents ([Trust](trust.md#what-the-kernel-does-not-defend)). Hosts own
+credentials and authorization for external services.
+
+Backends perform raw filesystem I/O below the resource. They do not keep a
+second operation queue. [Build a bash backend](#build-a-bash-backend) states
+the implementation requirements and the shared helpers.
+
+### The null device
+
+**`/dev/null` discards writes and reads empty on both backends.** A
+redirect to it, and a `write` tool call on it, change nothing. The device
+lives in a layer above the filesystem, so the directory backend writes no
+`dev` entry under its root and the memory backend holds no `/dev` file.
+
+**The standard devices are present on both backends.** `/dev/zero`,
+`/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd` exist and read
+empty. `/dev/zero` does not stream bytes. `ls /dev` lists the same names on
+each backend.
 
 ## The layout and the host identity
 
@@ -82,33 +137,28 @@ console.log(drive.mirrorAgent); // { name: 'town-host' }
 
 ## Give the resource to an agent
 
-`workspace.tools()` returns an ordinary Ambion `ToolBundle`. The neutral layer
-binds four file tools first: `read`, `write`, `edit`, and `apply_patch`. The four process
-tools come next: `bash`, `ps`, `wait`, and `cancel`. `bash` starts
-each command as a background process and returns its handle
-([Processes](processes.md)). The bundle reminds each seat of its processes.
-`snapshot`
-and `restore` come next:
-one freezes files and gives the refs that cite them, and the other puts the
-bytes of a cited snapshot in the agent's files
-([Snapshot a file](#snapshot-a-file)).
-A backend with `endpoints` adds `fetch`, which reads a path of a running
-process with GET and keeps the body as a snapshot
-([Read a process with fetch](#read-a-process-with-fetch)). Network requests
-run outside the bash resource. Only process checks and export writes use it.
-`fetch` returns each image as an image part and names its export path in
-the text of the result. `read` of an image returns the image part and a text
-part, `Image path: <path>`. A format that the tool does not attach, such as
-BMP, returns the text part alone. A model that cannot read images still learns
-where the file is. `fetch` keeps the image bytes in the exports and
-snapshots, and `read` leaves its source file unchanged.
-A workspace with a SQL backend adds `sql`
-([Query the shared database](#query-the-shared-database)). A workspace with
-no SQL backend has no `sql` tool. The bash backend adds its own guidance
-about its own shell, if it has any. Tools use the resources for storage
-operations; process waits and `fetch` requests run outside those
-operations. The bundle keeps one stable identity. Pass it in an executor's
-`bundles` field ([Tool bundles](resources.md#tool-bundles)).
+**`workspace.tools()` returns an ordinary Ambion `ToolBundle`.** Pass it in an
+executor's `bundles` field ([Tool bundles](resources.md#tool-bundles)). The
+bundle keeps one stable identity. It holds the tools of this table and the
+guidance of the bash backend about its own shell, if it has any.
+
+| Tools                                  | Present                          | Page                                                    |
+| -------------------------------------- | -------------------------------- | ------------------------------------------------------- |
+| `read`, `write`, `edit`, `apply_patch` | Always                           | This page ([Apply a patch](#apply-a-patch))             |
+| `bash`, `ps`, `wait`, `cancel`         | Always                           | [Processes](processes.md)                               |
+| `snapshot`, `restore`                  | Always                           | [Snapshots](snapshots.md)                               |
+| `fetch`                                | The bash backend has `endpoints` | [Read a process with fetch](#read-a-process-with-fetch) |
+| `sql`                                  | `backend.sql` is set             | [SQL](sql.md)                                           |
+| `repos`, `fork`                        | `backend.bash.git` is set        | [Git](git.md)                                           |
+| The skills and macros of an agent      | `tools({ skills })`              | [Skills](skills.md)                                     |
+
+**`read` of an image returns the image part and a text part,
+`Image path: <path>`.** A format that the tool does not attach, such as BMP,
+returns the text part alone. A model that cannot read images still learns
+where the file is. `read` leaves its source file unchanged.
+
+**The tools use the resources for storage operations.** Process waits and
+`fetch` requests run outside those operations.
 
 **A failure is an error, and every result tells the agent what to do.**
 The workspace tools share these rules:
@@ -129,6 +179,7 @@ The workspace tools share these rules:
 
 ```ts
 import { defineAgent, defineTool } from '@ambionframework/ambion';
+import { pi } from '@ambionframework/pi';
 
 const surveyor = defineAgent({
   name: 'surveyor',
@@ -226,18 +277,6 @@ entry for each operation: `path`, `action` (`add`, `update`, `delete`, or
 change. A failure names the file as the patch gives it, the operation, and the
 reason. It states that nothing was written.
 
-## Give an agent skills
-
-**`workspace.tools({ skills })` gives one agent a fixed set of skills.**
-`loadSkills` reads the set once on the host. The guidance of the bundle
-lists the skills, and each respond activation copies their files into
-`~/.skills` in the agent's home. [Skills](skills.md) holds the contract.
-
-```ts
-const skills = await loadSkills(fromDirectory('./agents/surveyor/skills'));
-const bundles = [drive.tools({ skills })];
-```
-
 ## Write an append-only log
 
 **`openLog` writes JSON Lines to one absolute path, and rotates it by
@@ -257,16 +296,11 @@ const journal = openLog({ path: '/var/log/room/journal.jsonl' });
 await drive.use(host, (env) => journal.append(env, { kind: 'said', text: 'hi' }));
 ```
 
-**A log names one absolute path, not a directory.** `path` must be
-absolute: a relative path would resolve against whichever agent's home
-connects first, splitting the log one way for that agent and another way
-for every other. `path` must also be normalized, with no trailing slash. A
-doubled slash, a `.` or `..` segment, or a trailing slash can name one file
-on one backend and a different file on another. `openLog` and the audit log
-refuse each of these at open. A caller scopes two logs apart by giving
-them two paths; a room's full record, an audit trail, and a metrics feed
-each open one log at its own path, over one shared workspace, with no
-collision.
+**A log names one absolute file path.** The path is normalized and has no
+trailing slash, and `openLog` refuses any other form. A caller scopes two logs
+apart by giving them two paths. A room's full record, an audit trail, and a
+metrics feed each open one log at its own path, over one shared workspace,
+with no collision.
 
 **A log carries no state of its own.** `openLog` does no I/O and holds no
 count: every fact rotation needs — whether the active file exists, and how
@@ -275,9 +309,7 @@ call. Opening a log again after a restart, or opening a second handle to the
 same path, needs no recovery step, because there is nothing to recover.
 
 **`rotateBytes` sets the byte threshold, and the default is 8 MiB.**
-Rotation runs after a write, never before: the record that first pushes the
-file past the threshold stays in the file it landed in, and the next record
-starts the fresh one. A log does not delete a rotated file; a host that
+A log does not delete a rotated file; a host that
 wants retention lists the directory and prunes its own way.
 
 **`append` must run one call at a time over one log.** Two calls that race
@@ -327,19 +359,10 @@ and its entry. The entry is an operation on the one bash resource (see
 decisions stay serialized. `audited` in `src/tools.ts` applies the rule to a
 tool, and `workspaceTools` applies it once to every tool of the bundle.
 
-**A call with invalid arguments has an entry.** The tool refuses the call
-before it runs. The entry holds the arguments of the call as the tool
-received them, and the validation error.
-
 **A call that ends after `dispose` starts leaves no entry.** The bash
 resource refuses the record of that call, the same as any operation queued after
 `dispose`. The call keeps its own result, and its other effects stay.
 The log's `onError` receives an error that names the tool and the call id.
-
-**A cut or aborted call is still recorded.** The record runs after the call
-ends, whatever ended it, with no abort signal. It does not
-depend on the caller's abort signal. A room that cuts an activation mid-call
-still leaves a trace of what that call was doing.
 
 **An entry too large for the backend to hold falls back to a short notice.**
 A `write` call whose content the filesystem has no room for still leaves one
@@ -355,11 +378,6 @@ caught inside the log, so it never reaches the tool call's own outcome.
 **Only a call through `workspace.tools()` is recorded.** A direct
 `workspace.use` call reaches the backend with no entry. It is host code, and
 the guidance the log describes speaks to the model alone.
-
-**The log shares the workspace's boundary.** just-bash gives no wall between
-one agent's home and another's (see [Backends and limits](#backends-and-limits)),
-and the log is no exception: any agent's `bash` or `write` call can alter or
-remove it, the same as any other file on the workspace.
 
 ## Mirror a room's messages
 
@@ -446,10 +464,11 @@ the backfill would then skip it as already written. A restart neither
 misses a message nor writes one twice; a message seen from both the live
 subscription and the backfill is written once.
 
-**A room's name is not validated at the kernel today.** This is the first
-place a room name turns into a filesystem path. A name holding `..` or an
-extra `/` would resolve outside `layout.rooms`; `mirror()` refuses that name
-and writes nothing.
+**The mirror checks the room name as a second guard.** The room accepts
+only lowercase, alphanumeric names with dashes. This is the first place a
+room name turns into a filesystem path. A name holding `..` or an extra `/`
+would resolve outside `layout.rooms`; `mirror()` refuses that name and
+writes nothing.
 
 **The guidance names the room mirror when the host sets `rooms: true`.**
 `openWorkspace` takes `rooms`, which defaults to `false`. The file exists
@@ -460,246 +479,6 @@ names the backend's actual `layout.rooms`, and says that the file can hold
 messages that the context of the seat trimmed or folded. The option changes
 the guidance alone. `mirror()` works with or without it.
 
-**Directory-per-room organizes the data; it does not wall it off.** Every
-room sharing one workspace shares its filesystem boundary (see
-[Backends and limits](#backends-and-limits)). An agent seated in one room
-reads another room's `messages.jsonl` the same way, with the same `seq`
-and `jq` filter it uses on its own.
-
-## Snapshot a file
-
-**A snapshot freezes the bytes of a file and gives a ref that names them.**
-A path names a file that can change after a message cites it. A snapshot
-ref names the bytes that the file held at the snapshot:
-
-```text
-ambion://workspace/<workspace name>/snapshot/<sha256 of the bytes>/<absolute path>
-```
-
-The kernel owns the form ([Definitions and tools](agent.md)). The workspace
-makes the snapshot, and its object backend keeps the bytes
-([The object backend](#the-object-backend)).
-
-**`workspace.snapshot(paths)` gives one ref for each path, in order.** The
-host calls it. `options.agent` names the agent that reads the files, and the
-default is `workspace.mirrorAgent`. A relative path resolves against the working
-directory of that agent. `workspace.readSnapshot(ref)` gives the bytes back.
-
-```ts
-const [report] = await drive.snapshot(['/home/analyst/report.md'], {
-  agent: { name: 'analyst' },
-});
-await visit.send({ text: 'The report for review.', refs: [report] });
-const bytes = await drive.readSnapshot(report);
-```
-
-**The `snapshot` tool gives an agent the same refs.** It reads the files as
-the calling agent, and its result lists one ref for each path. The `refs` field
-of `say` and the description of `snapshot` tell every agent to cite a file
-with a snapshot ref. The audit log records each call.
-
-| Step | Resource | What happens                                                                                 |
-| ---- | -------- | -------------------------------------------------------------------------------------------- |
-| 1    | bash     | The agent that reads finds every file. A path that is not one readable file fails the call.  |
-| 2    | bash     | For each file in turn, the agent that reads reads the bytes.                                 |
-| 3    | —        | The workspace hashes the bytes with SHA-256.                                                 |
-| 4    | object   | The host agent, `<name>-host`, puts the bytes under their digest. Then the next file starts. |
-| 5    | —        | The workspace gives the refs.                                                                |
-
-**The `restore` tool puts the bytes of a cited snapshot in an agent's files.**
-It takes `ref` and an optional `path`. The default path is
-`~/snapshots/<digest>/<name>`, where `<name>` is the last part of the path
-in the ref. The host agent gets the object on the object resource, and the
-workspace checks it. The calling agent then writes the file on the bash
-resource and reads it with `read` or `bash`. No agent holds a credential of
-the object store.
-
-| Outcome | The result                                                                                     |
-| ------- | ---------------------------------------------------------------------------------------------- |
-| Written | `Wrote the <n> bytes of <ref> to <path>.`, and `details` with `ref`, `path`, and `bytes`       |
-| Refused | A tool error: not a snapshot ref, a ref of another workspace, no object, or bytes that changed |
-
-**The same bytes give the same ref.** An object has its digest as its key,
-so a second snapshot of the same bytes at the same path gives the same ref
-and stores nothing new. The same bytes at two paths give two refs and one
-object.
-
-**A later change to the file does not change a ref.** The object holds the
-bytes of the snapshot. A new snapshot of the changed file gives a new ref.
-The object outlasts a restart of the host when its store does. Nothing
-removes an object today.
-
-**`readSnapshot` and `restore` check the bytes against the digest.** Each
-refuses a ref of another workspace, a missing object, and bytes whose
-SHA-256 differs from the digest. The check holds on every object backend,
-so a backend promises storage alone.
-
-**The limits.** One call takes 1 to 16 paths, the count of refs one message
-carries. One file holds at most what one object holds: 5 GiB, the limit of
-one S3 PutObject ([The object backend](#the-object-backend)).
-`SNAPSHOT_LIMITS` holds both. A ref longer than 2048 characters is refused.
-The call finds every file first. A path that is not a file stores nothing.
-A file that is too large, has too long a ref, or has a second path in the
-call also stores nothing. The call then reads, hashes, and puts one file at
-a time, so it holds one file in memory. A call that fails while it puts can
-leave an object with no ref. The object is harmless, and a later snapshot
-of the same bytes uses it.
-
-**A bash backend can read less than an object holds.** The limits above are
-the object store's. The just-bash directory backend reads at most 10 MiB of
-one file. The memory backend holds 128 MiB in all. On those backends, a
-larger file fails with the backend's own error. The workstation reads at
-most 10 MiB of one regular file. A larger file, a device file, and a FIFO
-fail with `invalid`. These limits apply to a whole-file read: `readBinaryFile`
-and `readTextFile`, and the tools that use them. The `read` tool of a text
-file reads byte ranges with `readRange`, which has no size limit. A range
-read of a device file or a FIFO fails with `invalid` on the workstation.
-
-## The object backend
-
-**`backend.objects` names where the bytes of each snapshot live.** It is an
-`ObjectBackend`. When it is absent, `openWorkspace` opens a file store at
-`layout.snapshots` on the bash backend. So every workspace has `snapshot`
-and `restore`, and the bytes have one path.
-
-```ts
-interface ObjectEnv extends ResourceEnv {
-  /** Store `bytes` under `digest`. A put of a digest the store holds writes nothing. */
-  put(digest: ObjectDigest, bytes: Uint8Array, signal?: AbortSignal): Promise<void>;
-  /** The bytes under `digest`, or `undefined` when the store has none. */
-  get(digest: ObjectDigest, signal?: AbortSignal): Promise<Uint8Array | undefined>;
-}
-
-interface ObjectBackend extends ResourceBackend<ObjectEnv> {
-  /** The label that errors use for the store, with no credential: a folder or a bucket URL. */
-  readonly label: string;
-}
-```
-
-**The workspace gives the key.** It hashes the bytes and passes the digest,
-64 lowercase hex digits of SHA-256. A backend refuses any other key with a
-`RangeError`, forms its own key from the digest, and refuses an object past
-5 GiB. No metadata travels with an object: the path and the provenance live
-in the ref and in the message that cites it.
-
-**The limits are the limits of S3.** R2 and MinIO hold the same, so a store
-of any kind takes what S3 takes. One object holds at most 5 GiB, the limit
-of one PutObject. The ports pass whole buffers, and no backend makes a
-multipart upload. One key holds at most 1024 bytes. The digest takes 64,
-so an S3 prefix holds at most 960. `SNAPSHOT_LIMITS.bytes` is
-the object limit. No bash backend sets a limit of the store.
-
-| Backend                    | Entry                           | Where the bytes live                                              |
-| -------------------------- | ------------------------------- | ----------------------------------------------------------------- |
-| The default file store     | none: `openWorkspace` opens it  | One file per digest at `layout.snapshots`, on the bash backend    |
-| `s3ObjectBackend(options)` | `@ambionframework/workspace/s3` | One object per digest at `<bucket>/<prefix><digest>` on an S3 API |
-
-**The default file store writes through the bash resource as the host
-agent.** A put writes a temporary file beside the target, then renames it,
-and it writes nothing when the file exists. On `memoryBackend` the bytes
-live in process, on `directoryBackend` in the directory, and on a
-workstation in a folder that only the host account writes
-([Workstation](workstation.md#the-layout-on-a-server)). just-bash has no
-wall between accounts, so an agent can change a file of the store; the
-digest check then refuses it.
-
-**`s3ObjectBackend` stores the bytes in a bucket of an S3 API.** It serves
-Amazon S3, Cloudflare R2, and MinIO. `aws4fetch` signs each request with
-SigV4 over the global `fetch`, and the entry loads no other library.
-
-```ts
-import { s3ObjectBackend } from '@ambionframework/workspace/s3';
-
-const lab = openWorkspace({
-  name: 'lab',
-  backend: {
-    bash: directoryBackend('./data/lab'),
-    objects: s3ObjectBackend({
-      endpoint: 'http://127.0.0.1:9000',
-      region: 'us-east-1',
-      bucket: 'ambion-snapshots',
-      prefix: 'lab/',
-      accessKeyId: process.env.S3_KEY ?? '',
-      secretAccessKey: process.env.S3_SECRET ?? '',
-    }),
-  },
-});
-```
-
-| Option                                           | Meaning                                                                     |
-| ------------------------------------------------ | --------------------------------------------------------------------------- |
-| `endpoint`, `region`, `bucket`                   | The S3 API. `region` is `us-east-1` for MinIO and `auto` for R2             |
-| `prefix`                                         | A key prefix, so one bucket serves more than one workspace: one prefix each |
-| `accessKeyId`, `secretAccessKey`, `sessionToken` | The credential of the host. No agent holds it                               |
-| `pathStyle`                                      | The bucket in the path. The default is `true`, which MinIO needs            |
-| `retries`                                        | Runs again of a request that failed with a 5xx or a 429. The default is 2   |
-
-**A put never rewrites an object.** It reads the head first and writes
-nothing when the object exists. Otherwise it sends the bytes with
-`If-None-Match: *`. A 412 means that a concurrent put stored the same bytes
-first. A 409 means that a concurrent put is in progress, so the put reads
-the head again and sends again, at most three times. The put also sends
-`x-amz-checksum-sha256`, so the store refuses bytes that changed on the
-way. A `get` refuses an object past 5 GiB before its bytes enter memory.
-`s3ObjectBackend` refuses a prefix past 960 bytes, and a prefix with a
-character outside the ones S3 calls safe: `A-Z a-z 0-9 ! - _ . * ' ( )`
-and `/`. A response that is not
-a success rejects with the status and the S3 error code.
-
-**Grant the host credential `s3:GetObject`, `s3:PutObject`, and
-`s3:ListBucket`.** Without `s3:ListBucket`, S3 gives 403 for a missing
-object. A put then sends the bytes, and the conditional put decides. A
-`get` of a missing object then rejects with the 403.
-
-**Give each workspace its own prefix or bucket.** Two workspaces that share
-a prefix share their objects. A ref names its workspace, and `readSnapshot`
-refuses a ref of another workspace. But the host of either workspace can
-read every object under the prefix.
-
-**The object backend has its own resource.** `Workspace.objects` exposes it
-for host code. An object operation may wait on the bash resource, since the
-default store writes through it. No bash operation waits on the object
-resource: `snapshot` reads on the bash resource and then puts on the object
-resource, and `restore` gets on the object resource and then writes on the
-bash resource. `dispose` drains the SQL resource, the bash resource, the
-object resource, and the git resource, in that order, so a use that starts
-after `dispose` is refused at once.
-
-**A new object backend passes `objectConformance`** from
-`@ambionframework/workspace/conformance`. A
-`ConformanceFixture<ObjectConformanceStore>` opens a store and gives the
-backend. A fixture that can open the same store again gives `reopen`.
-
-- `put` then `get` gives the same bytes: 1 byte, bytes with zeros, 0 bytes,
-  and 1 MiB.
-- `get` of an unknown digest gives `undefined`.
-- A second `put` of one digest succeeds and keeps the bytes, and two puts
-  of one digest at once both succeed.
-- Every agent reaches one store.
-- `put` and `get` refuse a key that is not a SHA-256 digest.
-- A `put` with an aborted signal rejects and stores nothing.
-- The bytes outlast `dispose`, when the store can open again.
-
-The workspace package runs the cases on the default file store over
-`memoryBackend` and `directoryBackend`. The S3 tier runs them on MinIO.
-
-**The S3 tier runs against MinIO in Docker.** `test/s3/setup.sh` starts the
-server and writes the file that `AMBION_S3` names; without that variable,
-every test of the tier skips. `pnpm --filter @ambionframework/workspace run
-test:s3` runs it, and the `object-store` CI job runs it on each push. The
-official `minio/minio` image no longer exists on Docker Hub. The script
-runs Chainguard's build, `cgr.dev/chainguard/minio`, pinned by digest,
-since only its `latest` tag is free. The container keeps `/data` on a tmpfs
-that the image's user owns. The tier proves what only a real server can:
-
-- The server accepts the SigV4 signature.
-- A bad credential fails with `SignatureDoesNotMatch`.
-- The conditional put keeps the first bytes.
-- A workspace over S3 keeps no copy of a snapshot on its bash filesystem.
-
-A local HTTP server in the unit tests gives the two answers that MinIO does
-not: a 403 head and a 409 put.
-
 ## Read a process with fetch
 
 **`fetch` reads one path of a running process with GET.** The process
@@ -708,11 +487,6 @@ The workspace keeps the body as a snapshot, writes it to `~/.fetch`, and
 returns the ref. The tool is present when the bash backend has `endpoints`.
 That fact does not change in a session, so the tool list of a seat stays the
 same, and the `bash` schema is the same on every backend.
-
-| Parameter | Type   | Rule                                                         |
-| --------- | ------ | ------------------------------------------------------------ |
-| `process` | string | The name or the handle of a running process                  |
-| `path`    | string | `^/[^\s#]*$`, at most 2048 characters, with its query string |
 
 **The tool refuses any other parameter.** It has no URL, no host, no port,
 no method, and no header. It reaches the port of a running process and
@@ -732,6 +506,14 @@ nothing else.
 6. Keep the bytes: resolve `~/.fetch/<process>/`, put the bytes on the
    object resource, and write the export file.
 7. Render the result.
+
+**Step 1 reads the tables of this run.** A handle that the table holds live
+resolves from memory, with no read of files. A name uses the same list as
+`workspace.processes.list` with `running: true`. An agent joins that list when
+it first acts in this run. After a restart of the host, `fetch` finds a process
+of an agent once that agent has called a process tool or received a reminder,
+or once the host has called `workspace.processes.list({ agent })` for that
+agent.
 
 **The export has a name from its content.** The file is
 `~/.fetch/<process>/<sha12>.<ext>`, where `<sha12>` is the first 12 digits of
@@ -763,28 +545,6 @@ byte limits of `read` is cut, and the result adds `The full body is at
 where the full body is. An image part appears when the header type is PNG,
 JPEG, GIF, or WebP, the bytes agree with the type, and the body is at most
 5 MiB.
-
-**The declared output is the same for every call.**
-
-| Field                | Meaning                                                   |
-| -------------------- | --------------------------------------------------------- |
-| `process`            | The name of the process, or its handle when it has none   |
-| `handle`, `owner`    | The handle at the read, and the agent that started it     |
-| `path`, `status`     | The path that the call read, and the HTTP status          |
-| `mediaType`, `bytes` | The media type in lower case, and the size of the body    |
-| `sha256`             | The digest of the body                                    |
-| `ref`, `file`        | The snapshot ref to cite, and the absolute export path    |
-| `json`, `text`       | The parsed JSON body, or the whole text body, up to 4 MiB |
-
-**The limits are constants.** The host cannot change them.
-
-| Limit                           | Value  |
-| ------------------------------- | ------ |
-| The body of one call            | 64 MiB |
-| JSON and text in the output     | 4 MiB  |
-| An image part                   | 5 MiB  |
-| The body shown for a bad status | 2 KiB  |
-| The request                     | 60 s   |
 
 **Each failure is a tool error that states the next step.**
 
@@ -824,389 +584,28 @@ The audit log wraps `fetch` as it wraps every tool.
 returns a `Response`, and it keeps nothing. It exists when the bash backend
 has `endpoints`.
 
-## Query the shared database
-
-**A workspace has one bash backend, and it can have one SQL backend.**
-The `backend` option holds the backends by kind, as `WorkspaceBackends`.
-`backend.bash` is a `BashBackend`, and every workspace has one.
-`backend.sql` is an optional `SqlBackend`: a shared database that need not
-live on the filesystem of the bash backend. `backend.bash.git` is an optional
-`GitBackend`: the repositories of the workspace, which [Git](git.md)
-describes. The bash backend takes it as an option of its own package, so a
-wrong pair is a compile error
-([The contract](git.md#the-contract)). With no SQL backend, the
-workspace has no `sql` tool.
-
-**`sqliteBackend` from `@ambionframework/workspace/sqlite` is the default
-SQL backend.** It opens one SQLite database through `node:sqlite`, at a
-host path or at `:memory:`. The file lives beside the bash backend's
-filesystem, so the shell does not reach it. The first call creates the
-file and its directory. `dispose()` closes the database and keeps the file.
-
-```ts
-import { openWorkspace } from '@ambionframework/workspace';
-import { directoryBackend } from '@ambionframework/just-bash';
-import { sqliteBackend } from '@ambionframework/workspace/sqlite';
-
-const lab = openWorkspace({
-  name: 'lab',
-  backend: { bash: directoryBackend('./data/lab'), sql: sqliteBackend('./data/lab.db') },
-});
-```
-
-**The `sql` tool runs statements on the shared database.** Every agent
-queries this one database, so a table or a view one agent creates is data
-another agent reads at once. The tool takes these parameters:
-
-| Parameter | Meaning                                                            |
-| --------- | ------------------------------------------------------------------ |
-| `sql`     | One or more statements. The last query gives the preview.          |
-| `export`  | A path in the workspace for the full result as CSV.                |
-| `import`  | A path in the workspace of a CSV file, as the table `import.rows`. |
-| `params`  | Values for the `?` placeholders of one statement, in order.        |
-| `rows`    | How many rows the preview shows, up to 1000. The default is 50.    |
-
-**`params` binds values to a statement.** Write `?` in the statement and
-list the values in `params`: text, a number, or `null`. The backend binds
-each value, so a quote or a keyword in a value cannot change the statement.
-A whole number binds as an integer. Use `1` or `0` for a boolean. A call with a
-non-empty `params` holds one statement. A call with more fails before it
-runs any.
-A skill [macro](macros.md#write-a-macro) passes each argument that came from the
-model through `params`.
-
-**The preview stays in context and writes nothing to disk.** The tool shows
-the last query's result as a Markdown table, capped at `rows`. It keeps
-the data in the database. An agent reads the result and continues. A
-statement that the database refuses fails the call. The error text names
-the database and the fault, and asks the agent to correct the statement.
-
-**Share through a table or a view.** The data stays in the shared database, so
-no agent copies a file. A view holds its own query and reflects the current
-tables. `sqlite_master` holds each view's definition, so an agent reads how a
-shared view was built before the agent trusts its data. Prefer a view or a
-table for every hand-off between agents.
-
-**`export` writes the full result into the filesystem of the bash backend,
-and the tool returns a preview.** Set it when a script or another tool needs the
-rows. The SQL backend streams every row as CSV to the calling agent's
-files through `WorkspaceFiles`, and gives back the first `maxRows` rows and
-the row count. The tool shows the head of the file. A failed query leaves
-an existing file unchanged. A NULL value reads as a bare `\N`, and the
-text `\N` reads as `"\N"`. A blob reads as hex.
-
-**A result never enters memory whole.** The backend keeps the first
-`maxRows` rows and counts the rest. An export streams in chunks.
-
-**`import` reads a CSV file of the workspace into the table `import.rows`
-for one call.** The backend reads the file through `WorkspaceFiles`, as
-the calling agent, before the first statement runs. The statements then
-copy what they need into the shared tables. The backend drops the table
-after the call. The first line of the report names the file and counts its rows.
-
-```text
-sql:    CREATE TABLE sweep (step INTEGER, ohms REAL, ma REAL);
-        INSERT INTO sweep
-          SELECT CAST(step AS INTEGER), CAST(ohms AS REAL), CAST(ma AS REAL)
-          FROM import.rows;
-import: sweep/results.csv
-```
-
-- **SQL decides what lands.** The import only parses. The statements
-  choose the columns, CAST each value, and handle a duplicate with the
-  dialect's own `INSERT`.
-- **The CSV is the one that `export` writes.** RFC 4180, a header first,
-  and a bare `\N` for NULL. A quoted `"\N"` is the text `\N`. A line
-  ends with LF, CRLF, or CR, and a byte order mark is skipped.
-- **Every other value is text.** A column of `import.rows` has no type,
-  so a number reads back as text until a CAST. A blob that an export
-  wrote as hex stays hex text. Text and NULL read back as they were.
-- **The header names the columns.** Each column needs a name with no NUL
-  character, and no two names match without regard to case. A header
-  over the column limit of the database gives the database's message.
-- **A malformed file runs no statement.** A missing file, a directory, a
-  row with the wrong count of values, and a quoted value with no end give
-  an `ok: false` outcome that names the file. No statement of the call
-  runs.
-- **An import reads at most 32 MiB.** The file enters memory whole, so
-  `WorkspaceFiles` checks its size before it reads. The rows go to the
-  table in batches, and the import yields to the event loop between
-  batches, so an abort and the time limit can fire during the staging.
-- **A process can still write the file.** Wait for the process that
-  writes the file before the import. The guidance of the tool says so.
-
-### The SQLite backend
-
-- **The dialect is SQLite.** Dates are functions, `||` joins text, and a
-  column type is an affinity. The backend's guidance states this.
-- **`ATTACH` opens `:memory:` alone.** A private scratch database lives for
-  one call, and one statement joins it with the shared tables. After each
-  call the backend detaches every attached database, so no other call reads
-  it. SQLite reads `:memory:` in lower case alone, so the backend compares
-  it exactly.
-- **No statement opens another host file.** The backend refuses an
-  `ATTACH` of anything but `':memory:'` and a `VACUUM INTO`, and runs no
-  later statement of the call. A check of each statement's text holds on
-  every supported Node, and skips what SQLite skips: whitespace, comments,
-  an empty `;`, and a comment that runs to the end. SQL that holds a NUL
-  character gives an `ok: false` outcome. A Node whose `node:sqlite` has `setAuthorizer` also
-  refuses an `ATTACH` in the engine. `node:sqlite` loads no extension.
-- **An import is a scratch database.** The backend attaches `:memory:`
-  as `import` and stages the rows there, so the detach after each call
-  drops it. With `import`, an `ATTACH ... AS import` in the same call
-  fails.
-- **A call commits its own transaction.** Every agent shares one handle. A
-  call that leaves a transaction open gets it rolled back and an `ok: false`
-  outcome, so no write from a later call lands inside it.
-- **The backend runs one call at a time.** A call waits for the call
-  before it, also when two workspaces share one backend. So a call keeps
-  its transaction and its provenance to itself.
-- **A result keeps one value per column name.** A last statement with two
-  columns of one name gives an `ok: false` outcome that asks for `AS`.
-- **A call stops between statements and between rows.** `sqlResult` yields
-  to the event loop every 256 rows, so an abort and the time limit can
-  fire, and other rooms keep running. A call stops after 30 seconds; set
-  `timeout` in `sqliteBackend(location, { timeout })` to change it, to a
-  value above 0 and at most 2147483. A timeout is an `ok: false` outcome,
-  and an abort rejects. A stopped export removes its temporary file and
-  leaves the target unchanged.
-- **A call does not stop while it waits for the bash resource.** An export
-  and an import wait for the running shell operation to end. The time
-  limit applies when the wait ends, and the SQL resource stays held for the
-  wait.
-- **One statement that gives no rows runs to its end.** `node:sqlite` has no
-  hook to stop a statement, so the backend cannot stop such a statement
-  early. For example, an aggregate over an unbounded recursive query does
-  not return.
-
-### Records: append-only tables with provenance
-
-**Three options make the database hold records.** A record is a row that
-no agent changes after it lands, with the agent, the room, the
-activation, and the exchange that wrote it.
-
-```ts
-const sql = sqliteBackend('./data/lab.db', {
-  schema:
-    'CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY, label TEXT, agent TEXT, activation TEXT, at TEXT)',
-  appendOnly: ['runs'],
-  provenance: true,
-});
-```
-
-| Option       | Meaning                                                               |
-| ------------ | --------------------------------------------------------------------- |
-| `schema`     | Statements that run at each open: tables, views, and seed rows        |
-| `appendOnly` | The tables that accept INSERT alone. Each must exist after the schema |
-| `provenance` | Fill the provenance columns of each append-only table from the call   |
-
-- **The schema runs at each open.** Write it to run again, with
-  `CREATE TABLE IF NOT EXISTS` and `INSERT OR IGNORE`. A failure of the
-  schema, or an append-only table that does not exist, rejects the call
-  that opens the database, and the next call opens it again. The backend
-  finds an append-only table by its name in any case, as SQLite does.
-- **An append-only table accepts INSERT alone.** An UPDATE, a DELETE, a
-  REPLACE, and an upsert that changes a row fail. Temporary triggers on
-  the one connection hold the rule, and `recursive_triggers` is on, so a
-  REPLACE fires the delete trigger.
-- **The backend refuses the statements that lift the guard.** It refuses
-  a DROP or an ALTER of an append-only table, a DROP of its triggers, and
-  a PRAGMA of `recursive_triggers`, `writable_schema`, or `query_only`.
-  The flag `query_only` would stop the writes of every agent on the
-  database. The backend reads a name as the SQLite tokenizer does. It
-  refuses a DROP, an ALTER, or a PRAGMA whose target it cannot read, for
-  example one with a comment inside it. The call stops at that statement.
-  A statement outside this list can still lift the guard, for example
-  `PRAGMA temp_store`. [Trust](trust.md) states the limit, and backlog
-  item F1 holds the allow-list that closes it.
-- **The backend also checks the engine.** SQLite changes a flag PRAGMA
-  when it compiles the statement, also under `EXPLAIN`. So after each
-  compile the backend reads `recursive_triggers`, `writable_schema`, and
-  `query_only`, sets back a flag that changed, and refuses the statement.
-- **No temporary table hides an append-only table.** SQLite reads an
-  unqualified name in `temp` first. After each statement the backend
-  drops a temporary table or view with the name of an append-only table,
-  and refuses the statement.
-- **No call creates a trigger.** A trigger runs in the call of the agent
-  that fires it. So a trigger of one agent could insert a row under the
-  provenance of another agent, or skip the stamp. With `appendOnly`, the
-  backend refuses `CREATE TRIGGER` and `CREATE TEMP TRIGGER`, also the
-  `INSTEAD OF` trigger of a view. The text check reads the keywords with
-  white space or comments between them. On a Node whose `node:sqlite` has
-  `setAuthorizer`, the engine also denies each trigger. On Node 22 the text
-  check holds alone. The `schema` can create a trigger, because it runs
-  before the guard. That trigger runs in each call.
-- **The guard triggers alone call the guard functions.** The stamp calls
-  `ambion_provenance`, `ambion_stamp`, and `ambion_stamped`. The backend
-  refuses a statement that names one of them, in any quotes. The engine
-  also denies a call outside a guard trigger, where Node has an authorizer.
-- **Provenance fills the columns that a table declares.** The columns are
-  `agent`, `room`, `activation`, `exchange_person`, `exchange_from`, and
-  `at`. The `sql` tool passes the provenance of each tool call in
-  `SqlRunOptions.provenance`, and a guard trigger after each INSERT writes
-  it. An INSERT that sets one of these columns fails. An exchange with no
-  person leaves `exchange_person` NULL. A host call with no provenance
-  leaves them all NULL. A RETURNING clause gives the row before the
-  stamp fills it, so a caller reads the provenance with a SELECT.
-- **Provenance needs a table that the stamp can fill.** The stamp finds
-  the new row by its rowid, so the backend refuses a table WITHOUT ROWID
-  when it opens the database. SQLite writes a DEFAULT before the guard
-  reads the new row, so the backend also refuses a provenance column with
-  a DEFAULT other than NULL. The message names the table or the column.
-- **The stamp fills only the row that its INSERT added.** The guard lets
-  the UPDATE of the stamp through: it sets each provenance column from
-  NULL to the value of the running call. The stamp marks its row before
-  the UPDATE, and the guard refuses an UPDATE of a row with no mark. The
-  backend clears the marks before each statement.
-- **Only the host writes a row with no provenance.** A seed row of the
-  schema and a row of a host call with no provenance keep NULL in each
-  provenance column. A row of an agent keeps NULL only where its call has
-  no value, such as `exchange_person`. No later call fills a NULL, and no
-  UPDATE changes a data column.
-- **One agent can stop the writes of every agent.** The guard keeps the
-  rows. It does not keep the database open for writes. For example,
-  `CREATE UNIQUE INDEX one ON runs ((1))` refuses each INSERT after the
-  first row. `PRAGMA foreign_keys = ON` stays on for later calls, and on a
-  schema with `REFERENCES` it refuses an INSERT with no parent row. Another
-  agent can drop the index or set the PRAGMA back. The refusal of
-  `CREATE TRIGGER` also removes a trigger that denies with `RAISE(ABORT)`.
-- **The backend does not deduplicate.** A retried activation that inserts
-  again inserts again. Give the table a UNIQUE constraint when a row must
-  appear once.
-- **The records share no journal transaction.** A crash between an INSERT
-  and the journal write of the activation can leave a row for an
-  activation that the journal never committed. The journal stays the
-  record of the room.
-- **The guidance names the append-only tables and the provenance
-  columns,** so an agent leaves those columns out of an INSERT.
-
-### The SqlBackend interface
-
-**`SqlBackend` holds four properties, and `SqlEnv` holds two.** A new SQL
-backend, such as a database server with one account for each agent,
-implements them.
-
-| Property                            | Meaning                                                                |
-| ----------------------------------- | ---------------------------------------------------------------------- |
-| `connect(agent, files, signal?)`    | An `SqlEnv` for one agent. A backend with accounts connects as it      |
-| `dispose()`                         | Optional. Release local handles, and keep the data                     |
-| `label`                             | The name the tool reports and the guidance states, with no credential  |
-| `guidance`                          | Optional. The dialect and the limits of the database                   |
-| `SqlEnv.run(sql, options, signal?)` | Run the statements in order, and give a preview of the last one's rows |
-| `SqlEnv.cleanup()`                  | The resource calls it after each operation                             |
-
-**`files` is the agent's view of the bash backend.** `WorkspaceFiles` has
-two methods. Each call is one operation on the bash resource, as the calling
-agent, and each resolves `~` and a relative path under the agent's home.
-
-- **`writeFile(path, chunks, signal?)`** creates missing directories, and
-  writes the chunks to a temporary file beside `path`, which it then
-  renames onto `path`. The rename stays in one folder, so it stays on one
-  filesystem. It gives the absolute path.
-- **`readFile(path, maxBytes, signal?)`** follows a symbolic link, checks
-  the size of the file, and then reads its UTF-8 text. A missing file, a
-  path that is not a file, a file that the agent cannot read, and a file
-  over `maxBytes` give `{ ok: false, message }`. An abort rejects.
-
-**`run` takes `maxRows`, an optional `export` path, an optional `import`
-path, optional `params`, and an optional `provenance`.** With `params`, the
-text holds one statement. The backend binds the values to its `?`
-placeholders in order, and fails the run when the text holds more than one
-statement. An empty list binds nothing. A backend with provenance writes
-`provenance` on each row that the run inserts into an append-only table.
-An `ok` outcome holds the last statement's `columns`, its first `maxRows`
-rows, its `rowCount`, the absolute `export` path when the options named
-one, and the `import` path and row count when the options named one. A
-statement that the database or the backend refuses gives
-`{ ok: false, message }`, and the run stops there. A call past the
-backend's time limit gives the same. A fault of the connection or of
-`WorkspaceFiles`, and an abort by the caller, reject.
-
-**`sqlResult` does the preview, the count, and the export for a backend.**
-The root entry exports it. A backend passes the last statement's columns,
-a row iterator, the options, and `files`. It reads the rows once, and
-streams the CSV to `files` in chunks. A backend with a native export writes
-through `files` itself.
-
-**`sqlImport` does the import for a backend.** The root entry exports it.
-A backend passes the path, `files`, and a `SqlImportTable`: `create`
-makes the table with the columns of the header, and `insert` adds one
-batch of rows. `sqlImport` reads the file, parses it, and gives back the
-path and the row count, or `{ ok: false, message }`. The table must be
-`import.rows` to the statements of the call, and the backend drops it
-after the call.
-A backend with a native import, such as `COPY`, reads through `files`
-itself.
-
-**Each backend gets its own resource.** A long `bash` command does not
-delay a query. A process runs off the bash resource, so it does not delay a
-file tool either ([Processes](processes.md#a-process)). `workspace.use` and
-`mirror()` reach the bash resource. `workspace.sql` is the SQL resource, for
-host code.
-
-**A SQL operation may wait on the bash resource, and a bash operation never
-waits on the SQL resource.** An export and an import wait for the running
-shell operation to end. Do not await `workspace.sql.use` inside a callback of
-`workspace.use`: that callback holds the bash resource. `dispose()` disposes
-the SQL resource first, so an export in progress still reaches the bash
-resource, and then the bash resource.
-
-**Two resources give no total order across the backends.** Each resource
-orders its own operations. A `bash` call and a `sql` call from two agents can
-finish in either order.
-
-**The audit log stays on the filesystem of the bash backend.** A `sql` call
-runs on the SQL resource. Its entry is an operation on the bash resource, by
-the one rule of
-[Record every tool call](#record-every-tool-call).
-
-**The SQL cases run on `sqliteBackend` alone.** They live in the SQLite
-tests (`packages/workspace/test/support/sql-cases.ts`) until a second SQL
-backend exists. That backend moves them back to the conformance entry
-(see [The conformance suite](#the-conformance-suite)).
-
 ## Declared outputs
 
 **Eleven tools declare their output for `compose`.** Each sets
 `compose: { output }` with a TypeBox schema. A `compose` call binds the tool
 as its `details` and checks them against the schema at every call
-([Compose](compose.md#bindings)). A tool that is not in the table declares
-none, so `compose` binds it as text. `write`, `edit`, and
-`apply_patch` declare none, because code needs only their success or their rejection.
+([Compose](compose.md#bindings)). The other tools declare none, so `compose`
+binds them as text. `write`, `edit`, and `apply_patch` declare none, because
+code needs only their success or their rejection.
 
-**Each output has a named type.** The schema carries an `$id`, which is the
-name in the `Type` column. The description of `compose` lists `name -> Type`
-for each tool, and `describe` renders the type once for all tools that
-share it ([Compose](compose.md#the-catalog)). `wait` gives `WaitResult`, a
-union of `ProcessResult` and `WaitedResult`. `Process` and `Truncation` are the named types
-inside them.
-
-| Tool       | Type             | Declared output                                                                                                      |
-| ---------- | ---------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `sql`      | `SqlResult`      | `database`, `count`, `columns`, `rows`, and `export`, `import`, and `imported` when the call sets them.              |
-| `snapshot` | `SnapshotResult` | `refs`: one ref for each path, in order.                                                                             |
-| `restore`  | `RestoreResult`  | `ref`, `path` of the file, and `bytes`.                                                                              |
-| `read`     | `ReadResult`     | `path`, `text`, and the lines `from`, `to`, `lines`, and `next` and `truncation` when they apply.                    |
-| `bash`     | `ProcessResult`  | `process`, `text`, `read`, and `truncation` and `omitted` when the result cut the output.                            |
-| `cancel`   | `ProcessResult`  | The same facts as `bash`.                                                                                            |
-| `ps`       | `PsResult`       | `processes`: the facts of each process of the caller.                                                                |
-| `wait`     | `WaitResult`     | On one process, the facts of `bash`. On several, `processes` and `ended`.                                            |
-| `repos`    | `ReposResult`    | `server`, and `repositories` with the id, branches, and clone URL of each.                                           |
-| `fork`     | `ForkResult`     | `repository`, `source`, `url`, and `clone` when the call made a working copy.                                        |
-| `fetch`    | `FetchResult`    | `process`, `handle`, `owner`, `path`, `status`, `mediaType`, `bytes`, `sha256`, `ref`, `file`, and `json` or `text`. |
+**Each output has a named type.** The schema carries an `$id`. The description
+of `compose` lists `name -> Type` for each tool, and `describe` renders the type
+once for all tools that share it ([Compose](compose.md#the-catalog)). The types
+are `sql` to `SqlResult`, `snapshot` to `SnapshotResult`, `restore` to
+`RestoreResult`, `read` to `ReadResult`, `bash` and `cancel` to
+`ProcessResult`, `ps` to `PsResult`, `wait` to `WaitResult`, `repos` to
+`ReposResult`, `fork` to `ForkResult`, and `fetch` to `FetchResult`.
+`WaitResult` is a union of `ProcessResult` and `WaitedResult`. `Process` and
+`Truncation` are the named types inside them.
 
 **The `read` details give the text with no notice.** `text` holds the lines
 that the result shows, and the notice lines of a direct call stay out of it.
-`from` and `to` are the first and the last line of `text`, counted from 1.
-`lines` is the count of lines in the file. It is present when the scan
-reached the end of the file, and absent when the view ended before it.
-`next` is the offset that continues the read. It is present when lines
-remain after a `limit` or after the cut at 2000 lines or 50 KB.
-`truncation` is present with that cut. Its totals count the lines and the
-bytes that the scan saw. When the first line alone exceeds 50 KB, `text` is
-empty, and `truncation.firstLineExceedsLimit` is true. For an image, `text`
-is empty, `image.mimeType` names the format, and the other line fields are
-absent. The `text` of a `read` and of a process tool is also in the content
+The `text` of a `read` and of a process tool is also in the content
 of the result, so a record that keeps both with `toolOutput: 'full'` holds
 the shown output twice.
 
@@ -1221,77 +620,33 @@ under 1 MiB is scanned to its end, so its result has `lines` and the line
 count in each notice. An image still reads whole, and the limit of the
 backend applies to it.
 
-**The git, snapshot, and fetch tools declare the facts that they already
-report.** `repos` gives `repositories` as data, with the branches and the
-hash of each, so code reads no table. `restore` gives the
-absolute path that it wrote. `fetch` gives the status, the digest, the ref,
-and the export path, and it gives the JSON body parsed.
-
-**The `sql` details hold the rows that the tool already reads.** `count` is
-the count of every row of the last statement. `columns` names its columns.
-`rows` holds the preview rows, up to the limit `rows`, one object for each
-row. A row value is text, a number, or `null`. A blob is its bytes as
+**The `sql` details hold the rows that the tool already reads.** A row value is text, a number, or `null`. A blob is its bytes as
 lowercase hex, as the CSV export writes it. A `bigint` is its decimal digits
 as text, and a number that is not finite is its text.
 
-**The process facts come from the process table
-([Processes](processes.md)).** `process` holds the handle, the
-state, the command, and the times of one process. `text` holds the new
-output that the result shows, with no bracketed line. `read` holds the
-`from` and `to` of those bytes as offsets in the output file. `wait` on
-several processes gives `processes`, with every state in the order of the
-refs, and `ended`, with the details of each process that ended. A call
-that fails on a process that ended badly throws a `ToolFailure` with
-the same facts in `details`. A binding copies them to `error.details`. The
-`bash` description states this rule for the model.
-
-**The schema is the one source of the type.** The details type of each tool is
-`Static` of its schema, so the schema and the type cannot drift. The schema of
-`truncation` lists the fields of `ShellOutputTruncation`, and a type test pins
-that the two stay assignable. A schema with an `$id` renders once as a
-named type in the catalog of `compose`: `Process`, `ProcessResult`,
-and `Truncation`. A `Static` type holds mutable arrays, so a tool
-copies a readonly array into its details.
-
 ## Build a bash backend
 
-`BashBackend` uses [the resource contract](resources.md#the-resource-contract).
-
-The memory and directory backends export from the package
-`@ambionframework/just-bash`, which depends on the workspace. The root entry
-names `WorkspaceEnv`, the port of a bash backend ([The port](#the-port)).
-`BashBackend` extends `ResourceBackend<WorkspaceEnv>` and adds
-optional guidance about the backend's own shell and a required `layout` (see
-[The layout and the host identity](#the-layout-and-the-host-identity)).
-The workspace binds its tools over every backend.
-`openWorkspace` opens the bash resource, builds the four file tools, and
-binds them to its `use` method. It also opens
-the process table and builds the four process tools over it
-([Processes](processes.md)). `workspace.processes` gives the host the
-processes of this run ([The host's view](processes.md#the-hosts-view)).
-`Workspace` adds `tools()`, `mirrorAgent`, and `mirror()` to the resource surface.
-Direct file operations and file tool calls use the bash resource.
+**`BashBackend` extends `ResourceBackend<WorkspaceEnv>`** ([the resource
+contract](resources.md#the-resource-contract)). It adds optional guidance about
+the backend's own shell and a required `layout` (see
+[The layout and the host identity](#the-layout-and-the-host-identity)). The
+root entry names `WorkspaceEnv`, the port of a bash backend
+([The port](#the-port)). The workspace binds its tools over every backend.
 
 **A new backend implements `connect()` and `WorkspaceEnv`.** Use the
 shared helpers below and name the backend's `layout`. Supply guidance for
 its shell and pass `@ambionframework/workspace/conformance`. The backend
-loads no just-bash.
+loads no just-bash. The memory and directory backends export from the package
+`@ambionframework/just-bash`, which depends on the workspace.
 
 **The root entry also exports the environment helpers a new `WorkspaceEnv`
 backend needs.** The just-bash backends and the workstation both build on
-them.
-
-| Helper                       | What it does                                                             |
-| ---------------------------- | ------------------------------------------------------------------------ |
-| `resolvePath`                | Holds the `~` and relative path rule                                     |
-| `HomeEnv`                    | A base class: the file methods, over `FileOperations` and `classify`     |
-| `Deadline`, `withDeadline`   | Tell an abort apart from a timeout; turn a thrown error into `unknown`   |
-| `DEFAULT_TIMEOUT_SECONDS`    | The 30 seconds a command gets when its caller names no timeout           |
-| `MAX_TIMER_SECONDS`          | The 2,147,483 seconds a timer holds: the ceiling of each timeout         |
-| `boundedView`, `deliverView` | Build the bounded output view, and hand it to `onUpdate` with the result |
-| `randomName`                 | Names a temporary file beside its target                                 |
-| `runScript`                  | Runs one script, and gives its exit code and its output as text          |
-| `shellQuote`                 | Puts one word in single quotes for `bash`                                |
+them, and they import no just-bash. The helpers are `resolvePath`, `HomeEnv`,
+`Deadline` and `withDeadline`, `boundedView` and `deliverView`, `randomName`,
+`runScript`, and `shellQuote`. The constant `DEFAULT_TIMEOUT_SECONDS` is the 30
+seconds that a command gets when its caller names no timeout, and
+`MAX_TIMER_SECONDS` is the 2,147,483 seconds that a timer holds. The TSDoc of
+each helper states its contract.
 
 **`HomeEnv` implements the file methods once.** A backend supplies two
 abstract properties: `files`, a `FileOperations` with one throwing storage
@@ -1306,9 +661,6 @@ operation. `HomeEnv` also implements `cwd` and `absolutePath`.
 **A backend writes no spill file.** Every `bash` call writes its whole
 output to a process file ([Processes](processes.md)). A backend keeps the
 bounded view of an output and no more.
-
-These helpers import no just-bash, so a backend over any filesystem builds
-a `WorkspaceEnv` on them.
 
 ## The port
 
@@ -1328,22 +680,6 @@ gives `Result<T, FileError>`, and `exec` gives
 **Every operation takes an optional `AbortSignal` as its last argument.** An
 aborted signal ends the operation with the code `aborted`. `cleanup` takes no
 signal. A caller that has no signal passes none.
-
-| Name                                | What it does                                                   |
-| ----------------------------------- | -------------------------------------------------------------- |
-| `cwd`                               | The home of the agent, and the directory of a relative path    |
-| `absolutePath`, `canonicalPath`     | The absolute path, and the path with every link resolved       |
-| `readTextFile`, `readBinaryFile`    | Read a file as text or as bytes                                |
-| `readRange(path, start, length)`    | Read at most `length` bytes from the byte `start`, at any size |
-| `writeFile`, `appendFile`           | Create or extend a file, and create each missing parent        |
-| `renameFile`, `remove`, `createDir` | Move a path, remove a path, and make a directory               |
-| `fileInfo`, `listDir`, `exists`     | The facts of a path, the children of a directory, and presence |
-| `exec(command, options, signal?)`   | Run a command, and give the exit code and the truncation       |
-| `cleanup()`                         | Release what the operation held                                |
-
-`exec` options are `cwd`, `env`, `timeout`, `grace`, `capture`, and
-`onUpdate`. `capture.limits` bounds the output view. `onUpdate` receives
-the one `ShellOutputView` after the command ends and before `exec` resolves.
 
 **The port holds only what the repository calls.** It has no `joinPath`,
 `readTextLines`, `openTextLineReader`, `createTempDir`, or `createTempFile`.
@@ -1381,19 +717,7 @@ condition fails. The entries `@ambionframework/journal/conformance`,
 `@ambionframework/ambion/conformance`, and
 `@ambionframework/workspace/conformance` export the three.
 
-The memory and directory backends run the suite first
-(`packages/just-bash/test/conformance.test.ts`). A new backend runs it
-before it takes on tool-specific tests of its own. The workspace package
-runs the suite on the memory backend to test the suite itself
-(`packages/workspace/test/conformance.test.ts`).
-
-**The SQL cases of a `SqlBackend` run in the SQLite tests.** A fixture
-has the same shape, with an `open()` that returns a fresh `SqlBackend`.
-The cases check the rows of the last statement, NULL as `null`, a last
-statement with no result, a refused statement as an outcome that stops
-the run, one database for every agent, and an abort before the first
-statement. `sqliteBackend` in memory and on a file runs them
-(`packages/workspace/test/sqlite.test.ts`).
+A new backend runs the suite before it takes on tool-specific tests of its own.
 
 ## Dispose of a resource
 
@@ -1410,58 +734,3 @@ follows [the disposal contract](resources.md#the-resource-contract).
 **Disposal keeps the persisted workspace.** A directory backend keeps its
 files. A memory backend releases its cached filesystem. The host owns
 removal of the data.
-
-## Backends and limits
-
-**Both deployments provide the core workspace tools.** A backend with
-endpoints also provides `fetch`.
-
-| What an agent gets             | One node: `@ambionframework/just-bash`                               | A remote server: `@ambionframework/workstation`            |
-| ------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Where the files are            | In the host's memory, or in a directory on the host                  | On the server                                              |
-| Isolation between agents       | None: every agent reads and writes every home                        | One Unix account for each agent, and a private home        |
-| Network                        | None                                                                 | The server's network                                       |
-| Commands                       | A simulated shell with a fixed set                                   | A real bash with the server's commands                     |
-| Output of a running process    | Shows when the process ends                                          | Shows while the process runs                               |
-| Output after cancel or timeout | The file stays empty                                                 | The file keeps the output so far                           |
-| Work after a host restart      | Memory: none. Directory: the files; earlier processes read as failed | The files, and the processes that still run                |
-| Repositories                   | In the host's process, with `justGitBackend`                         | In one account on the server, with `workstationGitBackend` |
-| Reading a process over HTTP    | No endpoints, so no `fetch` tool and no `workspace.fetch`            | Loopback forwarding over SSH gives both                    |
-
-`memoryBackend()` keeps files in process. Its optional seed writes files
-before the first use, and `readFiles()` supports host inspection. Disposal
-releases its cached filesystem, so a disposed resource does not recreate a
-seeded filesystem.
-
-`directoryBackend(root)` operates on a real directory. It creates the root
-when a backend operation needs it. Disposal releases the filesystem handle
-and keeps the root directory and its files.
-
-Both backends use just-bash, and the package `@ambionframework/just-bash`
-holds them. The workspace package does not depend on just-bash, so a host
-that uses another backend installs no just-bash. The backends provide a
-virtual Unix filesystem and shell
-for tools, with JavaScript and Python execution available. Network commands
-are absent. Each shell also runs `git` from just-git, with the agent's name as
-the locked author and no network access. just-bash is single-user: agents sharing one resource can read
-each other's homes. The default workspace does not provide operating-system isolation between
-agents or distributed ownership of a shared directory. Hosts own credentials
-and authorization for external services.
-
-Backends perform raw filesystem I/O below the resource. They do not keep a
-second operation queue.
-
-[Build a bash backend](#build-a-bash-backend) states the implementation
-requirements and the shared helpers.
-
-### The null device
-
-**`/dev/null` discards writes and reads empty on both backends.** A
-redirect to it, and a `write` tool call on it, change nothing. The device
-lives in a layer above the filesystem, so the directory backend writes no
-`dev` entry under its root and the memory backend holds no `/dev` file.
-
-**The standard devices are present on both backends.** `/dev/zero`,
-`/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd` exist and read
-empty. `/dev/zero` does not stream bytes. `ls /dev` lists the same names on
-each backend.

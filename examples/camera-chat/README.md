@@ -71,9 +71,7 @@ second with no audio. Preview polling alone makes no model requests. Scene
 questions send a sampled frame to Codex; they do not send a continuous video
 stream.
 
-**Capture costs CPU and bandwidth.** On the owner's Mac at 1280 × 720, Node
-uses about 30% of one core for PNG encoding and FFmpeg uses about 8%. One
-frame is a PNG of about 700 KB. The host tells the agent to start the server
+The host tells the agent to start the server
 with a `bash` timeout of 86400 seconds. `bash` ends the process after that
 timeout, so capture stops after 24 hours. Ask the agent to start the server
 again. The camera server accepts `--framerate <n>` for the
@@ -133,19 +131,13 @@ process for that camera.
 
 **The preview keeps one binding for each shown `frame` widget** of the room
 `camera`, four at most. The preview lists a further widget in the status line
-and does not bind it. A binding checks once that the process of the widget, a handle or a name, is a running process of the
-author of its widget, then reads the path of that process by handle. The
-preview reads the widgets again on the `started` event of the room and on each
-`widget` event. An adopted process keeps its handle, so a restart finds the
-widgets in their rows and binds the cameras that still run from an earlier
-host run. A `show` with another process binds the new process.
-
+and does not bind it. [Widgets](../../docs/widgets.md) states the binding contract. A binding
+checks once that the process of the widget, a handle or a name, is a running
+process of the author of its widget.
 A timer of each binding reads five times each second. Each read calls
 `workspace.fetch` for the path of the widget and then for the frame at
 `/files/<digest>`, with no retention. A body over 16 MiB is a failed read. A
-failed read shows "Camera starting" with the name of the camera. The `ended`
-event of the bound process clears the preview of that widget alone, and the
-widget stays until a new `show`. A `hide` of a widget
+failed read shows "Camera starting" with the name of the camera. A `hide` of a widget
 removes the preview of that name alone. While the person hides the previews
 with Escape or Ctrl+P, all timers stop and no read runs. Preview frames are
 temporary display data; the agent's `fetch` retains evidence independently in
@@ -183,9 +175,9 @@ and draws nothing. "Start front again" starts a new process, then calls `show`
 with its new handle as the process. Ask about a scene by naming the camera. With several
 cameras and no name, the agent asks which one or describes each. A
 host restart resumes the room from its canvas row and its journal. The
-previews bind the widget rows again by handle against the processes of
-`observer`, so they show the cameras that still run from the earlier host run before the
-agent acts.
+previews bind again, as [Widgets](../../docs/widgets.md) states, so they
+show the cameras that still run from the earlier host run before the agent
+acts.
 
 The standalone [camera template](templates/camera/README.md) documents runtime,
 validation, device selection, `$PORT`, Git source metadata, replacement, and
@@ -210,22 +202,7 @@ The room SQLite file holds the journal and the canvas row of the room.
 The Codex home, audit, checkouts, and snapshots stay under the selected
 data directory. The Codex home and snapshots can contain image data.
 
-## Code and validation
-
-| File                      | Responsibility                                 |
-| ------------------------- | ---------------------------------------------- |
-| `src/main.ts`             | CLI, Codex login check, room startup, cleanup  |
-| `src/host.ts`             | Canvas, durable room, Codex seat, workspace    |
-| `src/login.ts`            | Find the Codex login of the host               |
-| `src/demo.ts`             | Scripted seat for `--demo`                     |
-| `src/preview.ts`          | One binding for each frame widget, polling     |
-| `src/reference-images.ts` | Resolve retained images cited by messages      |
-| `src/tui.ts`              | Workbench transcript, previews, and actions    |
-| `src/terminal.ts`         | Native graphics requirement                    |
-| `src/local-bash.ts`       | Local shell backend and loopback ports         |
-| `src/local-env.ts`        | Local files and `bash` on the workspace port   |
-| `src/local-git.ts`        | Template seeding and local repositories        |
-| `templates/camera/`       | Independently runnable, forkable camera server |
+## Validation
 
 ```sh
 pnpm check:types

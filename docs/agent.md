@@ -52,26 +52,27 @@ are private model guidance. `model` names a model of that executor kind. `tools`
 and `bundles` supply the agent's domain tools. The `compose` tool joins
 those tools in one call, and the `describe` tool returns their signatures.
 `pi()`, `claude()`, and `codex()` add both to every seat ([Compose](compose.md)).
-`activationTokenLimit`
-bounds the record one activation reads. Without a limit, an activation reads
-the whole record the room serves. See `limits.context.messages` in
-[History and limits](room.md#history-and-limits). `trace` sets what the
-trace keeps of the agent's work; see
+`trace` sets what the trace keeps of the agent's work; see
 [the step vocabulary](executors.md#the-step-vocabulary).
 
-**The room runs the token estimator.** `estimateTokens` is a function from
-a text to a token count. The default counts `Math.ceil(text.length / 4)`.
-The definition holds the function, and the room calls it. The room applies
-the limit inside the view, so a seat on another host reads the same window.
-`defineAgent` throws when `estimateTokens` is not a function.
+**`activationTokenLimit` bounds the record that one activation reads.**
+Without a limit, an activation reads the whole record that the room serves.
+`limits.context.messages` caps that record for every seat
+([History and limits](room.md#history-and-limits)). The limit must be a
+positive integer.
+
+**`estimateTokens` counts the tokens against the limit.** It is a function
+from a text to a token count. The default counts `Math.ceil(text.length / 4)`.
+The definition holds the function, and the room calls it inside the view, so a
+seat on another host reads the same window. `defineAgent` throws when
+`estimateTokens` is not a function, and when it is set with no
+`activationTokenLimit`. [Limits](limits.md#the-limits) lists both options with
+the limits of the runtime.
 
 `summaryWriter` is an optional name from `agents`. It names the ordinary
-agent that runs summary activations. `assistant` accepts an ordinary agent
-definition and supplies its registration, broadcast seat, and summary
-writer. The optional
-`@ambionframework/assistant` package supplies a default definition factory.
-The shorthand introduces no separate role or tool set. See
-[Default assistant](assistant.md) for configuration and behavior.
+agent that runs summary activations. The `assistant` option supplies a
+definition, its seat, and its summary writer in one step
+([Default assistant](assistant.md)).
 
 Definitions are values, captured for one run. On resume, the host supplies
 executable definitions for every recorded agent name. The new run may use
@@ -97,13 +98,10 @@ const lookup = defineTool({
 property path and the rule it breaks, such as `processes must not have fewer
 than 1 items`. The model reads this text as a tool error.
 
-Every respond activation receives `say`, `schedule`, `unseat`, `dismiss`, and
-`recall`, plus the tools from its definition. It receives `seat` only when
-the reserve held an agent as the room composed. The list does not change
-between activations of one seat. When the host starts the room with
-`seating: false`, it receives neither `seat` nor `unseat`
-([Roster](roster.md#seating-operations)). A summary activation receives
-only `say`. `say` accepts `{ text, to?, refs? }`.
+Every respond activation receives `say`, `schedule`, `dismiss`, and
+`recall`, plus the tools from its definition. [Roster](roster.md#seating-operations)
+states when it also receives `seat` and `unseat`. A summary activation
+receives only `say`. `say` accepts `{ text, to?, refs? }`.
 `schedule` accepts `{ delaySeconds, text, refs? }` and writes a scheduled say
 ([Exchange](exchange.md#6-a-scheduled-say)). The room stamps the author,
 activation, time, and routing facts. `seat` and `unseat` accept an agent name.
@@ -140,11 +138,11 @@ whitespace-only human messages, agent messages, and summaries before writing.
 A refusal does not reserve the request key. Direct calls preserve accepted
 text exactly; `say` trims its input. An agent can finish silently without `say`.
 
-**A message has a size limit.** `limits.message.bytes` sets the most UTF-8
-bytes one human message, agent message, or summary text carries. The default
-is unbounded. The room refuses a longer text with the code `message_too_large`
-before it writes. An agent reads the refusal as a tool error and can say a
-shorter text. The limit counts `text` only.
+**A message has a size limit.** `limits.message.bytes`
+([Limits](limits.md#the-limits)) bounds the UTF-8 bytes of one human message,
+agent message, or summary text. The room refuses a longer text with the code
+`message_too_large` before it writes. An agent reads the refusal as a tool
+error and can say a shorter text. The limit counts `text` only.
 
 **A ref is one absolute URI that a message cites.** A ref has a scheme, at
 most 2048 characters, and no whitespace. A message carries at most 16 refs
@@ -179,7 +177,7 @@ that `snapshotUri` writes, so one file and one digest have one ref. No
 decoded part of a path, a branch, or a tag holds a control character, so a
 ref never carries a newline or a terminal escape. A workspace makes a
 snapshot and keeps its bytes
-([Snapshot a file](workspace.md#snapshot-a-file)).
+([Snapshots](snapshots.md)).
 
 **A commit ref names one commit.** `<hash>` is the full hash, 40 or 64
 lowercase hex digits. `branch` or `tag` records the name that pointed at

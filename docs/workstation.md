@@ -16,10 +16,9 @@ files apart from another's. The just-bash backends have no such boundary
 
 ## The name and the protocol
 
-**The name is the concept, and SSH is the v1 protocol.** The package
+**The protocol is SSH.** The package
 `@ambionframework/workstation` exports `workstationBackend(options)`. It
-returns a `BashBackend`, the one backend kind that every workspace has. A
-later protocol joins the same package under the same name.
+returns a `BashBackend`, the one backend kind that every workspace has.
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -64,37 +63,13 @@ and no `node:sqlite`. The workstation does not depend on
 workspace supplies everything that holds on every backend
 ([Build a bash backend](workspace.md#build-a-bash-backend)).
 
-| Part                                        | Owner                                                           |
-| ------------------------------------------- | --------------------------------------------------------------- |
-| `connect()` and `dispose()`                 | The workstation                                                 |
-| `SshEnv`, the transport of each call        | The workstation                                                 |
-| `layout`: the audit log, rooms, snapshots   | The workstation, from its options                               |
-| `guidance` about the shell                  | The workstation                                                 |
-| `endpoints.forward()` for loopback services | The workstation                                                 |
-| `read`, `write`, `edit`, `apply_patch`      | The workspace: the four file tools                              |
-| `bash`, `ps`, `wait`, `cancel`              | The workspace: the process tools ([Processes](processes.md))    |
-| `snapshot`, `restore`                       | The workspace ([Snapshot a file](workspace.md#snapshot-a-file)) |
-| `sql`                                       | The workspace, when `backend.sql` is set                        |
-| Path rule, deadline, output view            | The workspace: the environment helpers                          |
-| Audit log, room mirror, snapshot copies     | The workspace, at the paths that `layout` names                 |
-
 **The workstation adds no tools.** The file tools and the process tools cover
 every file and shell operation on a server.
 
 ## The SSH client
 
-**`ssh2` carries the protocol.** Of the candidates below, it alone runs
-SFTP and `exec` over one connection. Version 1.17.0 has two dependencies,
-`asn1` and `bcrypt-pbkdf`, and the MIT license. It also ships an SSH
-server, which the scripted tests use (see [Tests](#tests)).
-
-| Candidate                             | SFTP                         | Decision                                                                 |
-| ------------------------------------- | ---------------------------- | ------------------------------------------------------------------------ |
-| `ssh2`                                | Yes, with OpenSSH extensions | Use it directly                                                          |
-| `node-ssh`                            | Through `ssh2`               | Skip: a promise layer with six more dependencies                         |
-| `ssh2-sftp-client`                    | Through `ssh2`               | Skip: it owns its connection, so SFTP and `exec` cannot share one client |
-| `@microsoft/dev-tunnels-ssh`          | No                           | Skip: every file call would become an `exec`                             |
-| The system `ssh` with `ControlMaster` | Through `sftp -b`            | Fallback: it needs the key on disk, and errors arrive as stderr text     |
+**`ssh2` carries the protocol.** It runs SFTP and `exec` over one
+connection. It also ships an SSH server, which the scripted tests use.
 
 **The optional native build stays off.** The `ssh2` install script runs
 `node-gyp` for a crypto binding, and `cpu-features` is optional too. The
@@ -102,12 +77,11 @@ workspace skips dependency build scripts, so `ssh2` runs its JavaScript
 ciphers. The ciphers run slower, and nothing else changes.
 
 **`ssh2` is a CommonJS package with no `exports` map.** The backend
-imports its default export. The types come from `@types/ssh2`, at 1.15.6
-when this page was written.
+imports its default export. The types come from `@types/ssh2`.
 
 **The package runs on Node only.** `ssh2` opens its socket through
 `node:net`, so a bundle for workerd cannot hold it. The Cloudflare
-adapter gets no workstation in v1.
+adapter gets no workstation.
 
 ## Credentials
 
@@ -116,9 +90,9 @@ states the rule for every backend: the host owns credentials for external
 services. The bash backend takes one resolver and holds no credential of
 its own.
 
-**The git backend owns the git key of each agent.** It issues the key,
-rotates it, and the key works only on the server until it expires
-([A git backend](#a-git-backend)).
+**The git backend owns the git key of each agent.**
+[Workstation git](workstation-git.md#keys) states how it issues and
+rotates the key.
 
 ```ts
 import type { WorkspaceLayout } from '@ambionframework/workspace';
@@ -169,7 +143,7 @@ system `ssh` client is the fallback.
 **The address is fixed at construction.** Only the account changes from
 agent to agent. A workspace across two or more servers needs a resolver
 that also names the server. It also needs a client cache keyed by server
-and agent. V1 has neither.
+and agent. The package has neither.
 
 **The account's home is the working directory.** The just-bash backends
 make `/home/<name>` on the first connection. A workstation account has a
@@ -183,6 +157,12 @@ a `setsid` that has the `--wait` option. A new run of the host adopts a
 live process through the `ps` of procps
 ([Processes](processes.md#backends)). Each account needs a login shell
 that runs a command, so `nologin` does not serve.
+
+**The server permits local forwards to its loopback.** `endpoints.forward()`
+opens a forwarded channel to `127.0.0.1` on the server. The configuration
+of `sshd` for each account sets `AllowTcpForwarding local` and
+`PermitOpen 127.0.0.1:*`. The backend reports an error when `sshd` refuses
+a forward.
 
 ## The layout on a server
 
@@ -228,19 +208,6 @@ entry's helpers supply the rest:
 - `Deadline`, which tells an abort apart from a timeout
 - `boundedView` for the output view
 
-**SFTP needs seven adjustments.** `workspaceConformance` checks most rows,
-and the package's own tests check the rest.
-
-| Method                                        | SFTP gap                                                                                          | `SshEnv` does                                                                                                                                                                                             |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Every file method                             | OpenSSH answers `ENOTDIR` as `NO_SUCH_FILE`, and `EISDIR`, `EEXIST`, and `ENOTEMPTY` as `FAILURE` | On either status, one `lstat` picks the code of the port, as the next paragraph states                                                                                                                    |
-| `readTextFile`, `readBinaryFile`, `readRange` | An open of a FIFO blocks the SFTP server, and a file can grow while it is read                    | One `stat` runs first: a directory gives `is_directory`, and a file that is not regular gives `invalid`. A whole-file read stops at 10 MiB. A range read asks for 256 KiB at a time and has no size limit |
-| `renameFile`                                  | SFTP v3 refuses to rename onto a file                                                             | Calls `posix-rename@openssh.com`; a server without it gets a plain `RENAME`                                                                                                                               |
-| `createDir`                                   | SFTP makes one directory per request, and an existing one answers `FAILURE`                       | Makes each missing component in order; `lstat` finds a directory that exists                                                                                                                              |
-| `writeFile`, `appendFile`                     | SFTP creates no parent folder                                                                     | Makes each missing parent first                                                                                                                                                                           |
-| `remove`                                      | SFTP removes one entry per request                                                                | Runs `rm -rf --` through `exec` for a recursive call                                                                                                                                                      |
-| `fileInfo`, `listDir`                         | SFTP gives `mtime` in seconds                                                                     | Multiplies it by 1000 for `mtimeMs`; `readdir` gives each entry's attributes                                                                                                                              |
-
 **One `lstat` classifies a coarse status by the operation.** A file
 operation on a directory gives `is_directory`. A directory operation on a
 path that is not a directory gives `not_directory`. A path that does not
@@ -259,54 +226,26 @@ one folder.
 the working directory, which follows a symbolic link. When the directory
 does not exist, it returns `spawn_error` and opens no channel.
 
-**`exec` sends the script on standard input.** `sshd` drops an `env`
-request unless `AcceptEnv` names the variable. `SshEnv` runs
-`exec setsid --wait bash -s` on the channel and writes the script to its
-standard input:
-
-1. `printf 'AMBION_PGID=%s\n' "$$" >&2`, which gives the process group
-   ID.
-2. `trap : TERM`, which keeps the script's shell alive through the
-   `SIGTERM` of a stop. The shell waits for the command, so the channel
-   reports the command's exit status. The handler resets to the default in
-   the command.
-3. `cd -- '<dir>' || exit 1`, which stops the script when the directory
-   went away after the check.
-4. One `export NAME='value'` for each variable, with each value quoted
-   for the shell.
-5. The command as the body of a quoted heredoc, passed to `bash -c` with
-   standard input from `/dev/null` and its stderr joined to its stdout:
-
-   ```sh
-   bash -c "$(cat <<'AMBION_7f3a9c'
-   <command>
-   AMBION_7f3a9c
-   )" </dev/null 2>&1
-   ```
-
-   The command runs as `bash -c <command>`, and it reads an empty
-   standard input. `SshEnv` picks
-   a random delimiter that no line of the command equals.
-
-**The output arrives in the order the command wrote it.** The command's
-stderr joins its stdout, so the channel's stdout carries the whole output.
-The channel's stderr carries only the script's own lines. `SshEnv` reads
-the `AMBION_PGID=` line from it and keeps that line out of the view. It
-also removes the line that `setsid` writes after a group kill.
-
-**`SshEnv` writes no spill file.** The view holds the output within the
-caller's limits. The `bash` tool keeps the whole output in a process file
-on the server ([Processes](processes.md)).
-
 **No value reaches a command line.** `ps` on the server shows no variable
 of one agent to another account.
 
 ## Commands and aborts
 
 **Each command runs in its own process group.** `setsid --wait` makes `bash` the leader of a new group and waits for it,
-so the channel reports the exit status of the command. An abort that
-comes before the `AMBION_PGID=` line waits for that line, which is the
-first thing the script prints.
+so the channel reports the exit status of the command.
+
+**The command is a script on the standard input of `bash -s`.** The script
+prints the `AMBION_PGID=` line first, and an abort that comes before that
+line waits for it. The script then changes to the directory and writes one
+`export` line for each variable, because `sshd` drops an `env` request
+unless `AcceptEnv` names the variable. The command runs as `bash -c`, with
+an empty standard input. Its stderr joins its stdout, so the output keeps
+the order in which the command wrote it.
+
+**A login shell can write lines before the script.** `sshd` runs the
+command through the account's login shell, so the output of `~/.bashrc`
+can show in the view. It does not stop an abort, which looks for the
+`AMBION_PGID=` line among the others.
 
 **An abort stops the group with `SIGTERM`, a grace, and `SIGKILL`.** The
 `grace` field of `WorkspaceExecOptions` gives the seconds between the two
@@ -338,28 +277,10 @@ seconds after the time of the `SIGKILL` at the latest. The times of the
 signals count from the `AMBION_PGID=` line. Until that line comes, the
 channel closes after the grace and 2 seconds.
 
-**A login shell can write lines before the script's first line.**
-`sshd` runs the command through the account's login shell, and Debian's
-bash reads `~/.bashrc` for it. The script prints a newline before the
-`AMBION_PGID=` line, so the line stands alone after output with no newline
-at its end. `SshEnv` looks for the line among the others, past the 64 KiB
-that the view keeps of them. A `.bashrc` that writes to stderr does not
-stop the kill, and the view shows its lines.
-
-**The SSH signal request cannot do this alone.** OpenSSH 7.9 added signal
-delivery to `sshd`. It sends a subset of signals, and only to a login or a
-command session. A forced command gets none. The signal reaches the
-session's own child, and a pipeline's other processes keep running.
-
 **A deadline takes the same path and reports `timeout`.** `Deadline`
 tells an abort apart from a timeout, and a command with no timeout gets
 30 seconds. `SshEnv` supplies the same signals and the same grace for
 both.
-
-**`SshEnv` hands one view to `onUpdate`.** The conformance suite expects
-one update for each command, the same as the just-bash backends give.
-`SshEnv` builds the view when the command ends, and hands it on through the
-workspace's `deliverView`.
 
 **The Ambion host holds a bounded window of the output.** A command can
 write gigabytes, and every agent's workspace runs in the host's process.
@@ -370,15 +291,7 @@ With no `maxBytes`, the window is 8 MiB.
 **A child that keeps the output open does not hold the result.** The
 server sends the exit status when the command exits, and the output it
 still holds after it. `SshEnv` closes the channel 1 second after the last
-output, and 5 seconds after the exit status at most. A wait of 100 ms fits a
-local pipe, and over a slow link it cuts the output that waits on a
-window adjustment.
-
-**A stall of the host does not count as a quiet channel.** When the
-1-second timer fires more than half a second late, the process stalled,
-and output can wait unread behind the stall. `SshEnv` then waits one more
-second. The 5-second limit still ends the wait. A wait that ends with no
-output after the stall adds no drain notice to the view.
+output, and 5 seconds after the exit status at most.
 
 **A command that exits before its deadline gives its exit status.** A
 background child that keeps writing after the command exits holds the
@@ -468,7 +381,7 @@ assumes that a kill channel closes within 5 seconds, the time after which
 the queue releases an entry.
 
 **The bash resource serializes every agent's file work and the start of each
-process.** A workstation keeps one queue in v1, and each operation now waits
+process.** A workstation keeps one queue, and each operation waits
 on the network. A `bash` process runs off the bash resource, so a long command
 delays no file tool of another agent ([Processes](processes.md#a-process)). A
 query runs on the SQL resource, so a command delays no query.
@@ -477,10 +390,10 @@ query runs on the SQL resource, so a command delays no query.
 
 **The workstation adds no SQL backend.** The `sql` tool runs on
 `backend.sql`, a backend kind apart from the bash backend
-([Query the shared database](workspace.md#query-the-shared-database)). A
+([Query the shared database](sql.md#query-the-shared-database)). A
 workspace on a workstation sets it as any workspace does.
 
-**`sqliteBackend` is the v1 pairing.** Its database lives on the Ambion
+**`sqliteBackend` is the pairing.** Its database lives on the Ambion
 host, beside the workstation, so no agent reaches the file through
 `bash`. The workstation needs no `sqlite3` for the `sql` tool.
 
@@ -493,32 +406,15 @@ path the agent names, with that account's permissions.
 reads the CSV file over SFTP as that account. An agent imports only a file
 that its account reads.
 
-**No SQL backend over a database server exists yet.** Such a backend
-would connect as each agent with its own database credential, so the
-server would enforce the grants. `sqliteBackend` gives every agent one handle and one
-set of grants.
-
 ## A git backend
 
 **`workstationGitBackend` keeps the repositories of the workspace on the
 server.** One more account, such as `lab-git`, owns every repository, and
-the host reaches it with its own key. [Workstation git](workstation-git.md)
-describes the backend.
-
-**The bash backend takes the git backend in its `git` option.** The option
-has the type `WorkstationGitBackend`. At each `connect`, the bash backend
-asks `identityFor` of its access for the agent's key. It writes the key, a
-`known_hosts` file, and an ssh configuration for the alias into the
-agent's `~/.ssh` with mode `0600`, and it makes `Include ambion-git.conf`
-the first line of `~/.ssh/config`. A failure of either step fails the
+the host reaches it with its own key. The bash backend takes the backend in
+its `git` option, which has the type `WorkstationGitBackend`.
+[Workstation git](workstation-git.md) states the account, the keys, and the
+files that the bash backend writes into the agent's `~/.ssh` at each
 `connect`.
-
-**Each agent key works only on the server, until it expires.** Its line
-in `authorized_keys.ambion` of the git account holds `from` for the
-loopback address, `expiry-time`, and the forced command `serve`. The git
-backend issues a new key at a `connect` when the old key has 10 minutes
-or half of its life left, whichever is less. A restart of the host issues
-new keys.
 
 ## Guidance
 
@@ -530,9 +426,11 @@ no hostname and no port, because the seat is logged in already.
 
 ## Trust
 
-**`docs/trust.md` holds a row for the workstation.** An agent on a
-workstation has a real shell and network access. The account permissions
-on the server contain it. The kernel does not.
+**A process that serves HTTP runs supplied server code.** The deployment
+trusts that workstation and code. The device access of the process follows
+the process account, and a read-only HTTP API does not restrict its shell.
+Any agent of the workspace can read any running process with GET, because
+the loopback network of a workstation is shared.
 
 **The live exclusivity test covers the just-bash backends only.** It
 shows that a seat cannot read `/etc/hosts`
@@ -547,94 +445,3 @@ file. An agent can edit or remove earlier entries through `bash`.
 account writes `layout.rooms` and `layout.snapshots`, and the agents read
 them through the group. A snapshot reads each file as the agent that asks,
 so the host account never reads a home.
-
-## Tests
-
-**Both tiers run `workspaceConformance`.** A
-`ConformanceFixture<WorkspaceConformanceStore>` opens a fresh
-`workstationBackend` and disposes of it. The cases check the `WorkspaceEnv`
-rules that the file tools and the process tools need. The scripted fixture
-starts an `ssh2` server for each case
-(`packages/workstation/test/conformance.test.ts`).
-
-```ts
-import type {
-  ConformanceFixture,
-  WorkspaceConformanceStore,
-} from '@ambionframework/workspace/conformance';
-import { workspaceConformance } from '@ambionframework/workspace/conformance';
-import { workstationBackend } from '@ambionframework/workstation';
-import { describe, it } from 'vitest';
-import { startSshServer } from './support/server.ts';
-
-const fixture: ConformanceFixture<WorkspaceConformanceStore> = {
-  name: 'workstation',
-  async open() {
-    const server = await startSshServer(['conformance']);
-    const backend = workstationBackend(server.options);
-    return {
-      backend,
-      dispose: async () => {
-        await backend.dispose?.();
-        await server.stop();
-      },
-    };
-  },
-};
-
-describe(fixture.name, () => {
-  for (const c of workspaceConformance(fixture)) it(c.name, c.run);
-});
-```
-
-**The scripted tier serves a temporary directory over SFTP.** The test
-starts an `ssh2` `Server` in its own process. Its SFTP handlers read and
-write a temporary directory on the local disk, and each `exec` runs `sh -c`
-in that directory. The tier needs no container and no network, and
-`pnpm check` runs it. It needs `setsid` from util-linux, so it runs on
-Linux and skips on a machine without `setsid`, such as macOS.
-
-- **It tests the plain `RENAME` path.** The `ssh2` server announces no
-  SFTP extension, so `SshEnv` falls back. The handler replaces an existing
-  target, as `rename(2)` does.
-- **It tests no permission.** Every account maps to the one user that
-  runs the test.
-
-**The integration tier runs in a CI job of its own.** Only root creates
-the accounts, and only an `sshd` that runs as root logs in as more than
-one user. `pnpm check` runs without root. The `workstation` job runs
-`test/sshd/setup.sh` with `sudo` on its runner. The script adds one
-account for each agent of the tier, the git account `lab-git`, and one
-group, makes the three layout folders, and starts `sshd` on
-port 2222. The tier runs only when `AMBION_WORKSTATION_SSHD` names the file
-the script writes. It proves what only OpenSSH can:
-
-- the conformance cases, with the replacing rename and the group kill
-- the error classification against the status codes of OpenSSH
-- the channel count under `MaxSessions` over many commands and timeouts
-- that one account cannot read another account's home
-- that a large output stays within the view, with no spill file
-- that a file one agent creates in the audit folder stays writable for
-  the other agent, across a rotation
-- that an agent cannot write under `layout.rooms` or `layout.snapshots`
-- that a snapshot reads a file of a home as its agent, and that every agent
-  reads the copy and no agent changes it
-- that the audit log records each agent's tool call as that agent
-
-**The same job runs the tier of the git backend.** It runs
-`gitConformance` on the same server, and
-[Workstation git](workstation-git.md#tests) lists its other checks.
-
-## Out of v1
-
-- A SQL backend over a database server, or over the server's own
-  `sqlite3`.
-- OpenSSH certificates.
-- A workspace across two or more servers.
-- A workstation under workerd.
-- Concurrent operations on the bash resource.
-
-Sources for the client facts: the published `ssh2` 1.17.0 and
-`@microsoft/dev-tunnels-ssh` 3.12.42 packages, the
-[OpenSSH 7.9 release notes](https://www.openssh.org/txt/release-7.9), and
-`sftp-server.c` in OpenSSH for the status codes and the umask.

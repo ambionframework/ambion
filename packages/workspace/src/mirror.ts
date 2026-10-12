@@ -66,9 +66,9 @@ export function roomMirrorGuidance(root: string): string {
 
 /**
  * The path one room's message record lives at under `root`, or a thrown
- * error naming the room. A room's name is not validated at the kernel
- * today, and this is the first place one turns into a filesystem path: a
- * name holding `..` or an extra `/` must not resolve outside `root`.
+ * error naming the room. The room accepts only lowercase alphanumeric
+ * names with dashes; this check is a second guard that keeps a name holding
+ * `..` or an extra `/` from resolving outside `root`.
  */
 export function roomMirrorPath(root: string, roomName: string): string {
 	const path = `${root}/${roomName}/messages.jsonl`;

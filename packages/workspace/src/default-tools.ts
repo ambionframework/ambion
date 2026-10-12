@@ -3,8 +3,7 @@
  *
  * Every workspace gets these four tools, the four process tools
  * (`./process-tools.ts`: bash, ps, wait and cancel), and `snapshot`
- * and `restore` (`./snapshots.ts`) before any tool its bash backend adds of
- * its own. A workspace with a SQL backend also gets
+ * and `restore` (`./snapshots.ts`). A workspace with a SQL backend also gets
  * `sql` (`./sql-tool.ts`), and one with a git backend gets `repos`
  * and `fork` (`./git-tools.ts`). The file tools run over the port of the bash
  * backend alone, so this module names no just-bash type.

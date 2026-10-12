@@ -21,12 +21,11 @@ const room = await startRoom({
 });
 ```
 
-**The default seating puts every defined agent at `broadcast`.** If `seats`
-is omitted, every defined agent starts seated at `broadcast`.
-An empty map starts every defined agent in the reserve. `summaryWriter` names one
-defined agent that may receive closing work. It does not create a separate
-seating type. `summaryWriter` must name an agent in `seats`. A room start
-rejects a `summaryWriter` name that is not seated.
+**Omitting `seats` seats every defined agent at `broadcast`.** An empty map
+starts every defined agent in the reserve. `summaryWriter` names one defined
+agent that may receive closing work. It creates no separate seating type.
+The name must be seated, and a room start rejects a `summaryWriter` name that
+is not.
 
 A `seats` entry takes an attention value, or a `SeatOptions` object with
 `attention` and `fixed`. Use the object form to set `fixed` at start:
@@ -54,8 +53,9 @@ Attention controls which events wake an idle seat.
 | `broadcast` | Addressed and undirected speech                   |
 | `presence`  | Speech plus presence and seating changes          |
 
-Omitted attention uses `broadcast`. The scale applies to every agent, including
-a configured summary writer. Summary activations have their own authority.
+An omitted attention value is `broadcast`. The scale applies to every agent,
+including a configured summary writer. Summary activations have their own
+authority.
 
 Attention controls waking. It does not grant authority to commit. The room
 checks the activation, lease, recipient, and consumed context for every write.
@@ -65,22 +65,20 @@ checks the activation, lease, recipient, and consumed context for every write.
 An agent activation can use `seat({ name })` and `unseat({ name })`. The room
 also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 
-- An activation holds `seat` only when the reserve held an agent as the room
-  composed. The tool list of a seat then stays the same for the whole room,
-  so a harness keeps its session and its prompt cache. After the reserve
-  empties, `seat` refuses with "The reserve is empty." A room composed with
-  an empty reserve never offers `seat` to an agent. The host seats with
-  `room.seat`.
+- A respond activation holds `unseat` unless the room turns seating off. It
+  holds `seat` only when the reserve held an agent as the room composed. The
+  tool list of a seat then stays the same for the whole room, so a harness
+  keeps its session and its prompt cache. After the reserve empties, `seat`
+  refuses with "The reserve is empty." A room composed with an empty reserve
+  never offers `seat` to an agent. The host seats with `room.seat`.
 - The prompt shows the reserve of the moment, and shows no block when the
   reserve is empty.
 - `seat` accepts a name from the definitions or the reserve.
 - `unseat` accepts a currently seated agent, including the calling agent.
 - An unknown name or a person name is refused.
-- Agent tool commits return `unchanged` when the requested seating already holds.
-- A host `room.seat` / `room.unseat` call that repeats an already-satisfied
-  request resolves without writing a new entry. A host `seat` that asks for
-  other attention or fixing than the held seat has is refused.
-- Neither path writes another entry for that request.
+- A request that the roster already satisfies writes no entry. An agent tool
+  commit returns `unchanged`, and a host call resolves. A host `seat` that
+  asks for other attention or fixing than the held seat has is refused.
 - An unseating drops the scheduled says of that seat
   ([Exchange](exchange.md#6-a-scheduled-say)). A seating again does not bring
   them back.

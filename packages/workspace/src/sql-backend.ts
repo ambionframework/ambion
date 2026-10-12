@@ -14,7 +14,7 @@
  * same handle.
  *
  * This module holds types only, so the root entry loads no database
- * driver. `docs/workspace.md` states the contract.
+ * driver. `docs/sql.md` states the contract.
  */
 
 import type { ResourceEnv, WorkspaceAgent } from './resource.ts';

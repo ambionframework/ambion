@@ -1,45 +1,31 @@
 # The Pi executor
 
-`@ambionframework/pi` runs Ambion agents on Pi. This page holds what is
-specific to the Pi adapter. [Executors](executors.md) holds the shared
-contract: the activation flow, the room tools, exchange continuity, failure
-classification, the step vocabulary, and the trace.
-[The Claude guide](claude.md) covers a second shipped executor kind, and [the
-Codex guide](codex.md) a third. [The
-README](../README.md) holds the positioning.
+`@ambionframework/pi` runs Ambion agents on Pi. [Use an
+executor](executors.md#use-an-executor) holds the install, the shared
+options, the wiring, the sign-in rules, and the shared troubleshooting. This
+page holds what differs for Pi. [The README](../README.md) holds the
+positioning.
 
-## What it is and when to use it
+## What it is
 
 **The Pi harness of `@earendil-works/pi-durable` owns the model loop, the
 session, its persistence and its compaction. The caller owns the process.**
 `pi()` defines the executor of one agent. `piExecution()` gives a room or a
-runtime the services that run it. The executor adapts the harness to the
-contract of the room. The package holds Pi and the model registry. The
-kernel names no model library.
+runtime the services that run it. The package holds Pi and the model registry.
 
-Use Pi when the loop runs in the host process and the agent needs:
+**Pi fits a loop that runs in the host process.**
 
 - **Any provider that the Pi registry lists.** The model id is
   `provider/model-id`.
-- **Tools that run in process.** A tool is a function of the host.
 - **Steering during a pass.** A line that lands mid-activation reaches the
   model as a write that the harness places before its next request.
 - **A host that runs seats apart from the room.** The Cloudflare adapter
   builds its seats on `piExecution`.
-- **A deterministic test.** A scripted stream replaces the provider.
 
-Use [the Claude executor](claude.md) when the agent needs the built-in tools
-of Claude Code.
+Use [the Claude executor](claude.md) for the Claude Code loop on a Claude
+model.
 
-## Install and sign in
-
-```sh
-npm install @ambionframework/ambion @ambionframework/journal @ambionframework/pi
-```
-
-Every package needs Node 22.19 or newer. The packages install from npmjs with no token. A dev build of `main` installs
-from GitHub Packages; see
-[Toolchain](toolchain.md#9-release-and-publishing).
+## Sign in
 
 **The registry reads the key from the environment.** The stream takes the
 provider of the model, writes it in upper case, replaces each `-` with `_`,
@@ -47,13 +33,9 @@ and reads `<PROVIDER>_API_KEY`. The id `anthropic/claude-sonnet-5` reads
 `ANTHROPIC_API_KEY`. The id `google-vertex/...` reads `GOOGLE_VERTEX_API_KEY`.
 A key that Pi passes in its own stream options wins over the variable.
 
-**A subscription sign-in replaces the key.** Pi signs in to Claude Pro and
-Max (`anthropic`) and to ChatGPT Plus and Pro (`openai-codex`) with OAuth.
-Run `loginPi('anthropic', fileCredentials(path))` once on a host that has a
-browser. Pass the same store to `piExecution({ credentials })`. A provider
-with a stored sign-in answers with it, and Pi does not read its
-`<PROVIDER>_API_KEY`. A provider with none keeps the key rule above. [Subscriptions](#subscriptions)
-holds the steps.
+**A subscription sign-in replaces the key.** A provider with a stored sign-in
+answers with it, and Pi does not read its `<PROVIDER>_API_KEY`.
+[Subscriptions](#subscriptions) holds the steps.
 
 **The registry loads on the first request.** A room with a scripted `stream`
 never loads it and needs no key.
@@ -112,36 +94,22 @@ try {
 }
 ```
 
-**Pass `piExecution()` as `execution` to a room or runtime.** It gives the
-steps of each activation to the logger of the runtime. A host that needs a
-scripted stream or its own session place passes `piExecution(options)`.
-The runtime supplies the storage and the limits.
-[Executors](executors.md#the-executor-contract) states how a room resolves
-an execution.
-
 ## Options
 
-**`pi(options)` returns a frozen executor of kind `pi`.** The kernel
-validates the shared fields. Pi adds `model` and `compaction`.
+**`pi(options)` takes the [shared options](executors.md#options-every-executor-takes)
+and three of its own.** The `tools` option also takes a native Pi tool that
+`fromPiTool` adapts.
 
-| Option                 | Required | Default                      | Meaning                                                                                                |
-| ---------------------- | -------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `instructions`         | Yes      | None                         | The private guidance of the agent.                                                                     |
-| `model`                | Yes      | None                         | A Pi model id, `provider/model-id`.                                                                    |
-| `tools`                | No       | None                         | The tools of the agent, from `defineTool` or `fromPiTool`.                                             |
-| `bundles`              | No       | None                         | Tool bundles. Their guidance joins the prompt after the respond policy.                                |
-| `compose`              | No       | `quickjsRuntime()`           | The `compose` and `describe` tools of the seat: a runtime and optional limits ([Compose](compose.md)). |
-| `respondPolicy`        | No       | `DEFAULT_RESPOND_POLICY`     | The respond policy. It replaces the default.                                                           |
-| `summaryPolicy`        | No       | `DEFAULT_SUMMARY_POLICY`     | The summary policy. It replaces the default.                                                           |
-| `activationTokenLimit` | No       | The whole record             | The token limit of the record one activation reads. A positive integer.                                |
-| `estimateTokens`       | No       | `Math.ceil(text.length / 4)` | A function that counts the tokens of a text. It needs the limit.                                       |
-| `compaction`           | No       | The harness default          | When the harness compacts the session. A partial Pi `CompactionPolicy`.                                |
-| `thinking`             | No       | `'off'`                      | How much the model reasons before it answers. A Pi thinking level.                                     |
+| Option       | Required | Default             | Meaning                                                                 |
+| ------------ | -------- | ------------------- | ----------------------------------------------------------------------- |
+| `model`      | Yes      | None                | A Pi model id, `provider/model-id`.                                     |
+| `compaction` | No       | The harness default | When the harness compacts the session. A partial Pi `CompactionPolicy`. |
+| `thinking`   | No       | `'off'`             | How much the model reasons before it answers. A Pi thinking level.      |
 
 **Compaction is on by default.** The harness holds the default policy. The
 executor passes `compaction` to the harness as it is, and a field that the
 definition omits keeps the default. The policy has `enabled`,
-`reserveTokens`, `keepRecentTokens`, and `trigger`. `pi()` throws when a
+`reserveTokens`, `keepRecentTokens`, and `backgroundTokens`. `pi()` throws when a
 count is negative or not a safe integer, and when `enabled` is not a
 boolean. The harness does not check the policy.
 
@@ -156,29 +124,21 @@ boolean. The harness does not check the policy.
 
 **Every stream keeps the sessions on the disk by default.** A custom
 `stream` makes the model a stub, and the sessions stay on the disk.
-
-**`sessions: 'memory'` keeps the sessions in memory.** Each seat keeps its
-sessions for as long as the connector lives, and the room writes nothing to
-the disk. A test uses it, so that no room opens a session of another run.
-The memory store keeps the two newest sessions of each room and seat: the
-session of the open exchange, and the session of the exchange before it
-for its summary. It deletes the others.
+`sessions: 'memory'` keeps them in memory for as long as the connector
+lives, and the room writes nothing to the disk. A test uses it, so that no
+room opens a session of another run. The memory store keeps the two newest
+sessions of each room and seat: the session of the open exchange, and the
+session of the exchange before it for its summary. It deletes the others.
 `createExecutionServices` takes the same `PiExecutionOptions`.
 `piExecution` takes its clock from the runtime.
 
-`pi()` throws at definition time when `estimateTokens` has no
-`activationTokenLimit`, when the limit is not a positive integer, and when
-`estimateTokens` is not a function.
-
-**`estimateTokens` is a function that the room runs.** The default counts
-`Math.ceil(text.length / 4)`. [History and limits](room.md#history-and-limits)
-states the rule.
-
 ## Subscriptions
 
-**A subscription needs a store and one sign-in.** Pi runs the OAuth flow of
-the provider and keeps the credential in a `CredentialStore`. The package
-ships `fileCredentials(path)`, one JSON file keyed by provider id.
+**A subscription needs a store and one sign-in.** Pi signs in to Claude Pro
+and Max (`anthropic`) and to ChatGPT Plus and Pro (`openai-codex`) with OAuth.
+Pi runs the flow of the provider and keeps the credential in a
+`CredentialStore`. The package ships `fileCredentials(path)`, one JSON file
+keyed by provider id.
 
 ```ts
 import { fileCredentials, loginPi, piExecution } from '@ambionframework/pi';
@@ -215,19 +175,10 @@ refresh.
 
 **A revoked sign-in is a permanent failure.** An `invalid_grant` on refresh,
 and a provider with no sign-in and no key, fail the seat with no retry.
-Run `loginPi` again.
-
-**The cost is notional.** The `usage` steps price tokens at the list price
-of the model. A subscription bills nothing per token, and it has its own
-usage limit. A limit that the provider reports is a permanent failure.
-
-**Read the terms of the provider first.** A provider may restrict the use of
-a consumer subscription outside its own clients. The terms are the choice
-of the person who owns the account.
+Run `loginPi` again. A refresh that fails on the network retries.
 
 ## How an activation runs
 
-[Executors](executors.md#the-executor-contract) states the pass flow.
 [How an activation runs](executors.md#how-an-activation-runs) states the
 read position and the record window. Pi adds these facts.
 
@@ -239,28 +190,23 @@ conversation, and resolves when the submission settles. The harness runs
 with the `thinking` level of the definition.
 
 **The system prompt is the mechanism and the agent part.** A prompt section
-of the harness renders `pass.mechanism` and `pass.agent` before each
-request. The section has no tag, so the model reads the text as the executor
-built it. The harness writes the prompt entry after the first input. A
-hook moves the first prompt entry to the head of each request, so the
-provider sends it as its system prompt. The stored session keeps its order.
-A later pass changes the prompt with the view in hand. The text of
-`pass.record()` is the first input.
+of the harness renders `pass.mechanism` and `pass.agent`, and a hook moves it
+to the head of each request, so the provider sends it as its system prompt.
+The text of `pass.record()` is the first input.
 
 **Each range of the record goes into the session as a marker.** A view, a
-delta, and a steered line each write an entry of kind `ambion.record`. Its
-data hold `after` and `through`: the position the range starts after and
-the position it runs through. A range of a view or a delta carries no model
-message. Its text joins the user input of the pass. A steered line carries
-its text as a user message of its own entry. The provider receives the text
-alone, as a user message.
+delta, and a steered line each write an entry of kind `ambion.record` with
+`after` and `through`: the position the range starts after and the position
+it runs through. A view or a delta carries no model message, and its text
+joins the user input of the pass. A steered line carries its text as a user
+message of its own entry. `src/harness.ts` and `src/freshness.ts` hold the
+mechanism.
 
 **`readThrough` follows the exact provider input.** A hook of the harness
 runs before each provider request. The executor reports the ranges that the
 pass holds, the steered lines that the harness placed, and the tool results
 that the request holds. The core joins the ranges into the highest
-contiguous position they reach. The room tool answers also move the
-position; see [Executors](executors.md#how-an-activation-runs).
+contiguous position they reach.
 
 **A steer is a write to the conversation.** A line that lands during a pass
 becomes a write that the harness queues. The harness places it before the
@@ -281,8 +227,8 @@ takes the view as read.
 
 **The harness does not retry a failed request.** The executor sets the
 retry policy of the harness to `{ enabled: false, maxRetries: 0 }`, and the
-stream option `maxRetries` to `0`, so the provider client does not retry
-either. A failed request fails the pass, and the room owns every retry.
+stream option `maxRetries` to `0`. A failed request fails the pass, and the
+room owns every retry.
 
 **The harness compacts the session.** When the context of a request passes
 the threshold of the policy, the harness asks the same model for a summary.
@@ -295,49 +241,41 @@ as a `usage` step at the end of the pass. `readThrough` never moves back.
 context-overflow error makes the harness compact and send the request
 again. With `compaction.enabled` set to `false`, the error fails the pass,
 and the room classifies it. A `length` stop below the output limit of the
-model ends the pass with `stop: 'length'`.
-
-**The stub model of a scripted stream reports a window of one million
-tokens.** A scripted room compacts only when its definition sets
-`compaction.reserveTokens` close to the window of one million tokens.
+model ends the pass with `stop: 'length'`. The stub model of a scripted
+stream reports a window of one million tokens, so a scripted room compacts
+only when `compaction.reserveTokens` is close to that window.
 
 **A fault of the storage fails the pass.** A storage that fails a commit
-poisons the session of the harness. The harness reports the fault and
-settles no submission after it. The executor turns the first report into a
-transient failure of the pass. The executor aborts the conversation first,
-so no tool and no request follows the failed pass. The room then retries.
+poisons the session of the harness. The executor turns the first report into
+a transient failure of the pass. It aborts the conversation first, so no tool
+and no request follows the failed pass. The room then retries.
 
-## How room tools reach the harness
+## Room tools and the tools of the agent
 
-[Executors](executors.md#the-room-tools) states the room tools, the commit
-key, and the room answers.
+[The room tools](executors.md#the-room-tools) state the room tools, the
+commit key, and the room answers.
 
 **The room tools are harness tools bound to the activation.** The harness
-calls them in the same process, so it needs no transport. A room tool that
-fails answers with an error result, so the model reads the text.
-
-**The executor builds the tools of the definition from each `AmbionTool`.**
-It hosts only the room tools of `pass.tools`.
-[Executors](executors.md#the-room-tools) states the fields of a tool that
-the harness reads and a `BoundTool` does not carry.
+calls them in the same process. A room tool that fails answers with an error
+result, so the model reads the text. The executor hosts only the room tools
+of `pass.tools`, and builds the tools of the definition from each
+`AmbionTool`.
 
 **The model holds exactly the tools of the activation.** One extension of
 the harness holds the room tools, the tools of the definition, and the tools
 of its bundles. The harness adds no built-in tool, no skill, and no prompt
-template. The
-skills of an agent come from its workspace bundle ([Skills](skills.md)). A
-call to a tool the model does not hold gets an error result, and the pass
-continues. A continued session takes the tools of the activation that
-continues it: a summary activation holds `say` alone.
+template. The skills of an agent come from its workspace bundle
+([Skills](skills.md)). A call to a tool the model does not hold gets an error
+result, and the pass continues. A continued session takes the tools of the
+activation that continues it: a summary activation holds `say` alone.
 
 **A tool result reaches the model whole.** The harness bounds a tool result
 to 2000 lines and 50 KiB unless the tool sets `outputLimits`. Every tool of
 the executor sets the limits to the largest safe integer. The tool owns the
 size of its result.
 
-**An `unknown` or `stale` answer ends the pass.** The executor cuts the activation
-and stands the seat down. The tool result names why the pass ended, and no
-further pass follows.
+**An `unknown` or `stale` answer ends the pass.** The executor cuts the
+activation and stands the seat down. No further pass follows.
 
 ## Tools and bundles an agent can add
 
@@ -347,8 +285,8 @@ and how a bundle adds tools and guidance. Pi adds these facts.
 **The executor wraps a tool as a harness tool.** Its context carries
 `agent`, `signal`, `callId`, `onUpdate`, `room`, `activation`, and
 `exchange`. The signal is the abort signal of the pass. A string result
-becomes text content. A thrown error becomes a tool error. An abort of the pass throws on, so
-the harness records the abort.
+becomes text content. A thrown error becomes a tool error. An abort of the
+pass throws on, so the harness records the abort.
 
 **`fromPiTool` adapts a native Pi tool.** It keeps the name, the schema,
 `prepareArguments`, and `executionMode`, and passes the call id, the signal,
@@ -369,19 +307,16 @@ hold.
 ## Policy and the trust boundary
 
 **Pi runs every tool on the host.** A tool has the privileges of the host
-process. Pi has no permission layer and no sandbox. The
-definition is the whole policy: a tool that the definition omits does not
-exist for the model.
+process. Pi has no permission layer and no sandbox. The definition is the
+whole policy: a tool that the definition omits does not exist for the model.
+The model sees the system prompt, the record, and the tools of the
+activation. It sees no environment variable and no key.
 
-**What the model sees.** The model sees the system prompt at the head of
-the request, the record, and the tools that
-[Definitions and tools](agent.md#tools) lists for the activation. The model
-sees no environment variable and no key.
-
-**What the host holds.** The registry stream reads the provider key in the
-host process, and it sends the key to the provider only. A tool that reads
-`process.env` or the disk gives the model what it reads. Give a tool the
-narrowest reach that the job needs, and use a workspace backend for files.
+**The host process holds the keys.** The registry stream reads the provider
+key in the host process, and it sends the key to the provider only. A tool
+that reads `process.env` or the disk gives the model what it reads. Give a
+tool the narrowest reach that the job needs, and use a workspace backend for
+files.
 
 **The credential file holds the sign-in of the account.** A host that sets
 `credentials` gives every tool of the host process the same reach as the
@@ -403,8 +338,8 @@ stay in memory, and the trace carries a warning notice with the error.
 
 ## Exchange continuity
 
-[Executors](executors.md#exchange-continuity) states the rule, the recorded
-session, and the fresh start.
+[Exchange continuity](executors.md#exchange-continuity) states the rule, the
+recorded session, and the fresh start.
 
 **A session carries the id of the activation that began it.** The release
 records `{ kind: 'pi', id }`. An activation reopens the session only
@@ -412,22 +347,28 @@ when `pass.resumeId` names that id. Its first input is `pass.record(after)`,
 with `after` the position the session read through: the delta, after the
 reminders of the tool bundles ([Processes](processes.md#reminders)). A
 delta with no message starts no pass. A summary activation reads the whole
-view. `readThrough` starts at the position the session read through.
-
-**The ranges in the session hold the position it read through.** The
+view. `readThrough` starts at the position the session read through. That
 position is the largest `through` of the `ambion.record` entries that the
-context still holds. The executor writes no other entry for it.
+context still holds.
+
+**Where the session lives.**
+
+- **Node.** The harness writes each session to a JSONL storage under
+  `sessionDir`, in a folder for each room, seat, and session id:
+  `<sessionDir>/<room>/<seat>/<id>`. A restart on the same disk reopens it.
+- **`sessions: 'memory'`.** A `MemoryStorage` of pi-durable keeps the two
+  newest sessions of each room and seat in memory. A restart loses them.
+- **Cloudflare.** The seat object keeps its sessions in memory on the
+  object instance. An eviction loses them.
 
 **A session that cannot open starts fresh.** A session the store does not
 hold, cannot read, or that the harness cannot restore, closes. A fresh
 session under the id of the activation replaces it, and the activation reads
 the whole view. A JSONL file with a corrupt line is such a session. A new
-session whose id the store already holds takes a new id.
-
-**The trace reports each fallback.** It carries a warning notice with the
-error when the disk refuses to create a session, when the disk cannot read
-a session, and when the harness cannot restore a session. A session the
-disk refuses to create stays in memory.
+session whose id the store already holds takes a new id. The trace carries a
+warning notice with the error when the disk refuses to create a session,
+cannot read one, or when the harness cannot restore one. A session the disk
+refuses to create stays in memory.
 
 **A session that fails gives way too.** When the store fails a write during
 a pass, the pass fails as transient. The release then records no session, so
@@ -449,26 +390,11 @@ the record once. The entries stay in the storage.
 **The sessions of a seat stay apart.** The open exchange can run beside
 the summary of the exchange before it, and each continues its own session.
 
-**Where the session lives.**
-
-- **Node.** The harness writes each session to a JSONL storage under
-  `sessionDir`, in a folder for each room, seat, and session id:
-  `<sessionDir>/<room>/<seat>/<id>`. A restart on the same disk reopens it.
-  A session the disk refuses stays in memory, and the trace carries a
-  warning notice with the error.
-- **`sessions: 'memory'`.** A `MemoryStorage` of pi-durable keeps the two
-  newest sessions of each room and seat in memory. A restart loses them.
-- **Cloudflare.** The seat object keeps its sessions in memory on the
-  object instance. An eviction loses them.
-
-[The trace](executors.md#the-trace-log) shows the host's logger what the
-model did.
-
 ## The step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the twelve step kinds and
-the trace policy. The table below gives the harness event behind each step. The
-driver writes `pass`, `room`, and `end`.
+[The step vocabulary](executors.md#the-step-vocabulary) holds the thirteen
+step kinds and the trace policy. The table below gives the harness event
+behind each step. The driver writes `pass`, `input`, `room`, and `end`.
 
 | Step          | Source in Pi                                                                                                                                      |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -481,38 +407,51 @@ driver writes `pass`, `room`, and `end`.
 | `session`     | No harness event. The executor records one at the start of each activation: `pi`, the model string of the options, the session id, and the tools. |
 | `usage`       | The `usage_changed` event, one for each answer. The compaction spend joins the last one.                                                          |
 
-A redacted thinking block adds no step. The trace policy of the definition
-sets how much of `thinking` and tool output the journal keeps.
+A redacted thinking block adds no step.
 
 ## Usage and cost
 
 **The executor records one `usage` step for each provider request.** The
 harness reports each request as a `usage` event, a failed request and a
 compaction summary included. The step holds `input`, `output`, `cacheRead`,
-`cacheWrite`, and `cost`. Pi computes `cost`
-from the price table of the model in the registry. A stub model has a zero
-price table. A provider that reports no usage gives zeros.
+`cacheWrite`, and `cost`. Pi computes `cost` from the price table of the
+model in the registry, at the list price. A stub model has a zero price
+table. A provider that reports no usage gives zeros.
 
 ## Failure classification
 
-[Executors](executors.md#failure-classification) states the shared rule.
+[Failure classification](executors.md#failure-classification) states the
+shared rule and the text set.
 
-**The executor reads a status only from a provider diagnostic.** A rate
-limit names a token count that reads like a status, so free text never
-gives one. The last diagnostic with a status wins.
-
-**The shared classifier reads the text.** The
-[text set](executors.md#failure-classification) holds the words of each
-provider that Pi reaches.
+**The executor reads a status only from a provider diagnostic.** The last
+diagnostic with a status wins.
 
 **A fault in the configuration is permanent.** An unknown model id fails
-on the first pass, and the room does not retry it. The harness codes
-`model_unavailable` and `configured_tools_unavailable` are permanent for
-the same reason: a retry reads the same configuration.
+on the first pass, and the room does not retry it. The harness reason
+`no_model` (the conversation has no model) is permanent for the same reason:
+a retry reads the same configuration.
 
-**The failure names the provider's words.** A provider error that arrives
-as a status and a JSON body reads `400 invalid_request_error: <message>
-(request <id>)`. The cause reads the original text.
+## Run an agent outside a room
+
+**`runAgent(services, request)` runs one Pi agent with no room.** It takes
+the `ExecutionServices` of `createExecutionServices` and a `RunAgentRequest`
+with `model`, `name`, `agent`, `system`, `prompt`, `ends`, and optional
+`tools`, `bundles`, `thinking`, and `signal`. It opens one in-memory session,
+submits the prompt once, and returns a `RunAgentResult` with the `end` call,
+the `calls` before it, and the summed `usage` when the agent calls a tool that
+`ends` names. It rejects when the run fails, when the signal aborts it, and
+when the agent stops with no such call. [The simulator](simulator.md#the-model-call)
+uses it.
+
+## Other exports
+
+**A host that runs seats apart uses the services directly.**
+`createExecutionServices(options)` builds the `ExecutionServices` that
+`piExecution` wraps, and `ModelResolver` types its model lookup. `stubModel`
+is the model that a custom stream receives. `memorySessions`, `PiSessions`,
+`SessionScope`, and `CreatedSession` describe the session store.
+`terminalInteraction(streams?)` is the `AuthInteraction` that `loginPi` uses
+when the caller passes none.
 
 ## Testing
 
@@ -520,10 +459,9 @@ as a status and a JSON body reads `400 invalid_request_error: <message>
 `@ambionframework/pi/testing` exports `scriptedStream`, `PiScript`,
 `isClosingContext`, `contextText`, `toolNames`, `toolResultTexts`,
 `scriptOf`, and `piExecutorFixture`. A script answers with the verbs of
-`@ambionframework/ambion/testing`: `say`, `callTool`, `schedule`, `seat`,
-`quiet`, and `byAgent`. The executor puts the stream in one provider of a Pi
-`Models` collection, which holds the model of the seat under its provider
-and id.
+`@ambionframework/ambion/testing` ([the shared recipe](executors.md#test-with-the-scripted-executor)).
+The executor puts the stream in one provider of a Pi `Models` collection,
+which holds the model of the seat under its provider and id.
 
 ```ts
 import {
@@ -571,9 +509,7 @@ try {
 **The scripted stream routes on the seat.** The stub model carries the seat
 name in `model.name`, so a script never reads the prompt to learn who it
 serves. `scriptedStream` counts calls for each seat, answers an abort with an
-aborted message, and turns a script that throws into an error message. A
-test that needs no Pi imports `scripted` from
-`@ambionframework/ambion/testing`, which runs a script with no model at all.
+aborted message, and turns a script that throws into an error message.
 
 **The stream turns a reply into a message.** A reply with calls becomes one
 message with one tool call for each call, and the stop reason `toolUse`. An
@@ -589,38 +525,15 @@ because Pi tool calls carry JSON.
 **`piExecutorFixture()` runs the executor suite.** It maps each plan of
 `@ambionframework/ambion/conformance` to a script, and declares steering,
 usage, permanent failure, and memory.
-`packages/pi/test/executor-conformance.test.ts` runs the suite with no key.
-
-**What the scripted tier proves.** It proves the room, the freshness rules,
-the steer path, exchange continuity, compaction, the trace steps, and the
-failure paths. Tests in `packages/pi/test` cover each, and
-`packages/claude/test/mixed-room.test.ts` runs a Pi seat beside a Claude
-seat.
-
-**What it cannot prove.** A scripted stream sends no real provider payload.
-It shows nothing about the registry, the price tables, the real usage of a
-provider, the length of a real context, or what a real model says.
-
-**The live tier runs on a real provider.** The scenarios in
-`packages/ambion/test/live` use `pi()` and `piExecution()` with a key from
-`<PROVIDER>_API_KEY`. `pnpm test:live` runs them and costs money. CI runs the
-tier on `main` and on a weekly schedule. See [Toolchain](toolchain.md). The
-Pi package has no live test of its own. The Workbench live tests also run
-Pi seats.
 
 ## Troubleshooting
 
-| Symptom                                                             | Cause                                                                                                                                                                   |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Each seat fails at once with `no_execution`                         | No supplied execution serves the kind of the seat. Pass `piExecution()` to the room or runtime.                                                                         |
-| `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is permanent.                                                                                      |
-| The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY`, the credit, and the usage limit.                                                               |
-| `invalid_grant` or `Provider is not configured`                     | The provider revoked the stored sign-in, or the store holds none. Run `loginPi` again, and pass the same `credentials`. A refresh that fails on the network retries.    |
-| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat reached a Pi executor through an execution with no kind. Pass the execution of each kind.                                                                 |
-| `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                                                                                  |
-| The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.                                                                    |
-| A say returns `Not delivered: the room moved`                       | The freshness rule refused a say against newer record. The model reads the new messages, then says its message again unless they already say it or make it unnecessary. |
-| A steer shows `consumed: false`                                     | No provider request held the line before the pass ended. The next delta carries the line.                                                                               |
-| The first activation after a restart re-reads the record            | The sessions were in memory, or the restart used another `sessionDir`. A new session starts. Read the warning notices of the trace for a disk that refused a session.   |
-| The session directory grows                                         | The executor deletes no session file. Remove old files under `sessionDir`.                                                                                              |
-| The activation ends with `stop: 'length'`                           | The last model message hit a length limit. Shorten the record with `activationTokenLimit`.                                                                              |
+[The shared table](executors.md#troubleshooting) lists the symptoms that
+hold for every kind. These rows are specific to Pi.
+
+| Symptom                                                             | Cause                                                                                                                                                                 |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is permanent.                                                                                    |
+| `invalid_grant` or `Provider is not configured`                     | The provider revoked the stored sign-in, or the store holds none. Run `loginPi` again, and pass the same `credentials`. A refresh that fails on the network retries.  |
+| The first activation after a restart re-reads the record            | The sessions were in memory, or the restart used another `sessionDir`. A new session starts. Read the warning notices of the trace for a disk that refused a session. |
+| The session directory grows                                         | The executor deletes no session file. Remove old files under `sessionDir`.                                                                                            |

@@ -17,11 +17,8 @@ summary. The room does not maintain a separate summary for agent memory.
 A summary replaces its covered source messages in later agent prompts. This
 reduces context size and model cost. Summaries can omit details; this loss is
 an accepted tradeoff. The journal retains the original discussion for application
-reads and human review. Agents have no built-in source-retrieval tool.
-
-Keep the current summary prompts and replacement behavior. Source retrieval,
-pagination, and retaining all covered source in agent prompts are deferred.
-Revisit this decision when demonstrated application needs justify a change.
+reads and human review. An agent reads a covered message with the `recall`
+tool ([Definitions and tools](agent.md#tools)).
 
 ## Configuration
 
@@ -49,17 +46,11 @@ const room = await startRoom({
 });
 ```
 
-If `seats` is omitted, every defined agent starts seated with
-`broadcast` attention. `summaryWriter` must name a seated agent: `startRoom`
-rejects a `summaryWriter` name outside `seats`. The host can still unseat the
-writer later; the exchange closing at that time then has no summary
-activation.
-
-`startRoom({ assistant })` accepts an ordinary agent definition and supplies
-its definition entry, broadcast seat, and summary writer. A conflicting
-explicit summary writer is refused. This shorthand preserves the summary
-activation and seating rules described here. See
-[Default assistant](assistant.md) for the built-in implementation.
+`summaryWriter` must name a seated agent. [Roster](roster.md#configuration)
+states the seating rules. The host can still unseat the writer later; the
+exchange closing at that time then has no summary activation.
+[Default assistant](assistant.md) states how `startRoom({ assistant })`
+supplies the summary writer.
 
 Every exchange where a person spoke and an agent said a message is eligible
 for a summary. Eligibility does not depend on the number of messages or
@@ -135,16 +126,13 @@ The room stamps the writer, recipient, covered range, activation id, and
 timestamp on the stored summary. The writer cannot supply or alter those
 fields.
 
-The summary activation receives only `say`. The writer may decline by ending
-without calling it; the source range then remains available to later agent
-activations. The writer uses its domain and seating tools during respond
-activations.
+The writer may decline by ending without calling `say`; the source range then
+remains available to later agent activations. The writer uses its domain and
+seating tools during respond activations.
 
 Summary publication wakes no idle agent and does not open another exchange.
 The summary is a room record entry, so replay and response queries use the
 same facts as the live room.
-[`summary.test.ts`](../packages/ambion/test/summary.test.ts) holds the tests
-of the summary work.
 
 ## Completion and reads
 
@@ -160,18 +148,3 @@ fixed source discussion for human review. The journal retains every entry.
 If the writer leaves while a summary activation is pending, that activation
 settles. Reseating that agent does not revive it. A later human
 exchange can receive a new summary activation.
-
-## Seating
-
-All respond activations use the same seating operations. A live respond
-activation may call `seat({ name })` or `unseat({ name })` and may call `say`.
-The room refuses an unknown name. A request to seat an agent that is already
-seated returns the existing no-op result and writes no journal entry, wake, or
-acknowledgement. An agent may unseat itself unless its own seat is fixed. The
-summary writer's seat is fixed by default, so it cannot unseat itself; the
-host can still unseat it through `room.unseat`. See [Roster](roster.md) for
-the fixed-seat rule.
-
-Attention controls which messages wake an idle seat. It does not create a
-summary role or restrict an agent's tools. There is no scheduler, role system,
-or capability framework in the room.

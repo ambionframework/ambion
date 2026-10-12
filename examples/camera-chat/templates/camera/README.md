@@ -51,9 +51,7 @@ frames per second, with no audio. Timestamps record receipt of the captured
 frame. The server compresses one frame at a time on the thread pool. A newer
 frame replaces a frame that waits for compression.
 
-**Capture costs CPU and bandwidth.** On the owner's Mac at 1280 × 720, Node
-uses about 30% of one core for PNG encoding and FFmpeg uses about 8%. One
-frame is a PNG of about 700 KB. The `bash` timeout of the launch command
+The `bash` timeout of the launch command
 (86400 seconds above) ends the process after 24 hours. Capture stops then,
 and the agent must start the server again.
 

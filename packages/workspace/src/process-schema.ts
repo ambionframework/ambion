@@ -23,7 +23,7 @@ export const ProcessFacts = Type.Object(
 		agent: Type.String({ description: 'The agent that started the process.' }),
 		command: Type.String({ description: 'The command, as it was given.' }),
 		port: Type.Integer({
-			description: 'The port that the workspace set in $PORT for the command. Zero means none.',
+			description: 'The port that the workspace set in $PORT for the command.',
 		}),
 		state: ProcessState,
 		output: Type.String({

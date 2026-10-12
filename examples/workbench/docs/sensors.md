@@ -187,14 +187,10 @@ carries its digest. The server returns the bytes at `/files/<digest>`.
 `400`, `404`, `422`, or `503`. The `fetch` tool shows a status outside 200
 to 299 as an error that holds the first 2 KiB of the body as process data.
 
-**The version 2 protocol differs from version 1 in four points.**
-
-| Version 1                               | Version 2                                     |
-| --------------------------------------- | --------------------------------------------- |
-| `POST /<sensor>/observe` with a body    | `GET /<sensor>/observe` with a query          |
-| The workspace chose and parsed the port | The workspace sets `$PORT`; the server reads  |
-| `connect` validated the index           | The macro reads the index at each call        |
-| The workspace client checked each file  | The macro checks each file against its digest |
+**The protocol has four fixed points.** A client reads an observation with
+`GET /<sensor>/observe` and a query. The workspace sets `$PORT`, and the
+server reads it. The macro reads the index at each call. The macro checks
+each file against its digest.
 
 ## The observe macro
 
@@ -202,7 +198,7 @@ to 299 as an error that holds the first 2 KiB of the body as process data.
 template ships it as `skills/<template>/macros/observe.js`, in a skill that
 has the name of the template. A seat runs it with `compose`, as
 `sensor-server/observe` or `camera/observe`
-([Macros](../../../docs/macros.md)).
+([Macros](../../../docs/skills.md#macros)).
 
 | Argument     | Meaning                                       |
 | ------------ | --------------------------------------------- |
@@ -244,7 +240,7 @@ const surveyor = defineAgent({
 **The macro that runs comes from the host's copy of the template.** An
 edit of `skills/` in a fork changes nothing that runs. Skills belong to a
 definition, and `approve` pins the hash that the host loaded
-([Macros](../../../docs/macros.md#review-a-macro)). Two sources that hold the same skill
+([Macros](../../../docs/skills.md#review-a-macro)). Two sources that hold the same skill
 folder fail with a duplicate error ([Skills](../../../docs/skills.md#several-sources)).
 
 **A host that loads no template skill still reads sensors.** The workbench
@@ -311,51 +307,6 @@ workspace can read any running process with GET
 **A read follows the cancellation of its call.** An abort closes the HTTP
 work. It does not cancel the server process. A server owns its own
 recovery.
-
-## The examples and their evidence
-
-**Two templates show the pattern.** The sensor-server template of the
-workbench serves a numeric series, a frame, and a text fixture with no
-hardware. The camera template of the camera chat serves frames of a Mac
-camera. Each template lists its own tests in its README, and each runs its
-server in a test.
-
-**The workstation tests exercise the process lifecycle.** The test
-`process-http-lifecycle.test.ts` of the workstation package starts a small
-HTTP server with `bash` in a host. A second agent reads a JSON body and a
-file with `fetch`. The test kills the host, opens a new workspace, and
-adopts the process. The owner cancels the process, and `fetch` refuses its
-name. The OpenSSH tier runs it, and the test skips when that tier is
-absent.
-
-**The tests cover the essential boundaries.**
-
-- `fetch` keeps the bytes that it reads, and `restore` returns them.
-- A body past the limit, a non-2xx status, and an ended process fail.
-- Two processes with one name fail, and the handle selects one.
-- The forward opens once for each process and closes when it ends.
-- The macro refuses another `api` and a file with the wrong digest.
-- Measurement timestamps stay unchanged, including in snapshots.
-- A frame returns as an image part and its export path in the text.
-
-**A scripted seat proves transport and storage.** Neither case claims to
-validate hardware timing or scientific inference.
-
-## Out of scope
-
-- Spend controls, exchange limits, quotas, and new rate-limit policies.
-- A framework daemon, reducer SDK, instrument drivers, or model captions.
-- A public service directory or a registry of sensor processes.
-- Automatic service restart, upgrades, installation, or supervision.
-- Public port exposure, browser viewers, CORS, and arbitrary remote URLs.
-- A method other than GET, and a request header or body.
-- Live media streams, audio and video playback, and cross-sensor queries.
-- Automatic detection delivery and a `followAndPost` helper.
-- New refs, journal entries, and kernel scheduling rules.
-- Clock synchronization, skew estimates, or timestamp correction.
-- Commands to the world. [Actuators](actuators.md) describes them.
-- Sensor reads as inputs to a controller. A sensor serves agents, and a
-  controller reads its own instruments.
 
 **Existing host composition stays available.** A host can read a process
 with `workspace.fetch` and call `room.post`. That integration uses host time

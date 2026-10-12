@@ -2,48 +2,20 @@
 
 **Run Ambion agents on Pi.** `pi()` defines the executor of an agent.
 `piExecution()` gives a runtime or a room the services that run it. The
-kernel, `@ambionframework/ambion`, imports no model library. This package holds
-Pi and the model registry. The
-[guide](https://github.com/ambionframework/ambion/blob/main/docs/pi.md) holds
-every detail. [Ambion](https://ambionframework.com) is a collaboration kernel
-for agents and humans.
+Pi harness of `@earendil-works/pi-durable` owns the model loop, the session,
+and its compaction in the host process. [Ambion](https://ambionframework.com)
+is a collaboration kernel for agents and humans. The kernel,
+`@ambionframework/ambion`, imports no model library.
 
-## When to use it
-
-- **The loop runs in the host process.** the Pi harness of
-  `@earendil-works/pi-durable` owns the model loop, the session, its
-  persistence and its compaction.
-- **Any provider that the Pi registry lists.** The model id is
-  `provider/model-id`.
-- **Steering during a pass.** A line that lands mid-activation reaches the
-  model as a write that the harness places before its next request.
-- **Deterministic tests.** A scripted stream replaces the provider.
-
-Use [`@ambionframework/claude`](https://github.com/ambionframework/ambion/blob/main/docs/claude.md)
-when the agent needs the built-in tools of Claude Code.
-
-## Install and sign in
+## Install
 
 ```sh
 npm install @ambionframework/ambion @ambionframework/journal @ambionframework/pi
 ```
 
-Every package needs Node 22.19 or newer. The packages install from npmjs with no token. A dev build of `main` installs
-from GitHub Packages; see
-[the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
-
-**The registry reads the key from the environment.** The variable is the
-upper-case provider of the model, with each `-` replaced by `_`, and the
-suffix `_API_KEY`. The id `anthropic/claude-sonnet-5` reads
-`ANTHROPIC_API_KEY`.
-
-**A subscription replaces the key.** Run `loginPi('anthropic', store)` for
-Claude Pro and Max, or `loginPi('openai-codex', store)` for ChatGPT Plus and
-Pro, once on a host with a browser. `store` is `fileCredentials(path)`.
-Pass the same store as `piExecution({ credentials: store })`. A provider with
-a stored sign-in never reads its `<PROVIDER>_API_KEY`. The
-[guide](https://github.com/ambionframework/ambion/blob/main/docs/pi.md#subscriptions)
-holds the steps and the limits.
+The package needs Node 22.19 or newer. The registry reads
+`<PROVIDER>_API_KEY` for the provider of the model. A subscription of Claude
+Pro and Max or ChatGPT Plus and Pro replaces the key: run `loginPi` once.
 
 ## Example
 
@@ -99,165 +71,32 @@ try {
 }
 ```
 
-**Pass `piExecution()` as `execution` to a room or runtime.** A host that
-needs a scripted stream or its own session place passes
-`piExecution(options)` to the room or to `createRuntime`.
+Pass `piExecution()` as `execution` to a room or runtime.
 
 ## Options
 
-| Option                 | Default                      | Meaning                                                          |
-| ---------------------- | ---------------------------- | ---------------------------------------------------------------- |
-| `instructions`         | Required                     | The private guidance of the agent.                               |
-| `model`                | Required                     | A Pi model id, `provider/model-id`.                              |
-| `tools`, `bundles`     | None                         | The tools of the agent and the bundles that add tools.           |
-| `respondPolicy`        | `DEFAULT_RESPOND_POLICY`     | The respond policy. It replaces the default.                     |
-| `summaryPolicy`        | `DEFAULT_SUMMARY_POLICY`     | The summary policy. It replaces the default.                     |
-| `activationTokenLimit` | The whole record             | The token limit of the record one activation reads.              |
-| `estimateTokens`       | `Math.ceil(text.length / 4)` | A function that counts the tokens of a text. It needs the limit. |
-| `compaction`           | The harness default          | When the harness compacts the session.                           |
-| `thinking`             | `off`                        | How much the model reasons, a Pi `ThinkingLevel`.                |
+`pi(options)` takes the options that every executor shares, and these three:
 
-`piExecution({ stream, sessions, sessionDir, credentials })` takes four options.
-Without a `stream`, the Pi registry answers. A scripted `stream` makes a
-room deterministic, and the model then resolves to a stub. `sessionDir`
-names the directory on the local disk for the sessions. Without it, every
-stream keeps them in `ambion-pi-sessions-<uid>` in the OS temporary
-directory, with access for its owner only. `sessions: 'memory'` keeps them
-in memory, two for each room and seat, as a test does. `credentials` is a Pi
-`CredentialStore` that holds subscription sign-ins.
+- **`model`.** A Pi model id, `provider/model-id`. Required.
+- **`compaction`.** When the harness compacts the session. A partial Pi
+  `CompactionPolicy`.
+- **`thinking`.** How much the model reasons. A Pi thinking level. The default
+  is `off`.
 
-## How an activation runs
+`piExecution({ stream, sessions, sessionDir, credentials })` takes four
+options. A scripted `stream` makes a room deterministic. `sessions: 'memory'`
+keeps the sessions in memory. `sessionDir` names the directory for the
+sessions on the local disk. `credentials` is a Pi `CredentialStore` that
+holds subscription sign-ins.
 
-**One pi-durable `Harness` serves each activation.** The first pass opens
-the session storage and the harness, and submits the whole view as one
-input. A later pass submits the messages that landed beyond what the session
-has read.
+Every tool runs on the host, and the session files under `sessionDir` hold the
+whole transcript. `@ambionframework/pi/testing` exports a scripted stream and
+`piExecutorFixture`.
 
-**Freshness follows the exact provider input.** Each range of the record
-goes into the session as an entry that carries its positions. A hook before
-each provider request reports what the request holds, so the room refuses a
-say against a stale draft with the messages it missed. A line that lands
-mid-activation is a queued write, and counts when a provider request holds
-it.
+## Learn more
 
-**Room tools are harness tools.** A respond activation receives `say`,
-`seat`, and `unseat`, and then the tools of the agent. A summary activation
-receives `say` only. The harness adds no built-in tool, no skill, and no
-prompt template.
-
-**The room owns the retries, and the harness compacts.** The harness does
-not retry a failed request. It compacts the session when the context nears
-the window of the model. A context-overflow error makes the harness compact
-and send the request again. With `compaction.enabled` set to `false`, the
-error fails the pass.
-
-## Policy and the trust boundary
-
-**Every tool runs on the host.** Pi has no permission layer and no sandbox.
-The definition is the whole policy. The model sees no environment variable and
-no key. The registry stream reads the key in the host process. On Node, the
-session files under `sessionDir` hold the whole transcript, tool output
-included, and the executor deletes none of them.
-
-## Exchange continuity
-
-**The release records `{ kind: 'pi', id }`,** where the id names the
-activation that began the session. The next activation of the seat in the
-same exchange reopens the session and prompts it with the delta. The first
-activation in a new exchange begins a fresh session. A session the store
-cannot open, or that fails a write, gives way to a fresh one, and the
-activation does not fail. On Node the session is a JSONL storage under
-`sessionDir`, so a restart on the same disk reopens it. A Cloudflare seat keeps its sessions in memory.
-
-## Steps, usage, and failures
-
-**Steps.** The executor records `thinking`, `text`, `tool_call`,
-`tool_result`, `steer`, and `usage`.
-
-**Usage.** One `usage` step follows each provider request, with the cost from
-the price table of the model.
-
-**Failures.** Credit, quota, usage-limit, or authentication text, a
-diagnostic status of 400, 401, 402, 403, 404, 405, or 422, and an unknown
-model are permanent. Every other failure is transient.
-
-## Test
-
-`@ambionframework/pi/testing` exports a scripted stream and its helpers:
-`scriptedStream`, `PiScript`, `isClosingContext`, `contextText`, `toolNames`, and
-`toolResultTexts`. A script answers with the verbs of
-`@ambionframework/ambion/testing`: `say`, `callTool`, `schedule`, `seat`,
-`quiet`, and `byAgent`. `piExecutorFixture()` runs the executor suite of
-`@ambionframework/ambion/conformance` on a scripted stream, and `scriptOf`
-maps each plan of the suite to a script.
-
-```ts
-import {
-  createRuntime,
-  defineAgent,
-  definePerson,
-  isSaid,
-  startRoom,
-} from '@ambionframework/ambion';
-import { byAgent, quiet, say } from '@ambionframework/ambion/testing';
-import { memoryJournals } from '@ambionframework/journal';
-import { pi, piExecution } from '@ambionframework/pi';
-import { scriptedStream } from '@ambionframework/pi/testing';
-
-const inventory = defineAgent({
-  name: 'inventory',
-  identity: 'Checks stock constraints.',
-  executor: pi({ instructions: 'Answer once.', model: 'anthropic/claude-sonnet-5' }),
-});
-
-const stream = scriptedStream(
-  byAgent({
-    inventory: (_context, _agent, request) => (request === 1 ? say('42 units in stock.') : quiet()),
-  }),
-);
-
-const runtime = createRuntime({ storage: memoryJournals() });
-const room = await startRoom({
-  runtime,
-  name: 'delivery-test',
-  agents: [inventory],
-  execution: piExecution({ stream, sessions: 'memory' }),
-});
-
-try {
-  const visit = await room.visit(definePerson({ name: 'priya', identity: 'Asks.' }));
-  const exchange = await visit.send({ text: 'How many units?' });
-  console.log((await exchange.waitForClose()).filter(isSaid).map((message) => message.text));
-} finally {
-  await room.stop();
-}
-```
-
-A scripted stream sends no provider payload. It shows nothing about the
-registry, the price tables, or a real model. The live scenarios of
-`packages/ambion/test/live` run Pi on a real provider through `pnpm test:live`.
-
-## Exports
-
-| Export                                                       | Use                                                         |
-| ------------------------------------------------------------ | ----------------------------------------------------------- |
-| `pi(options)`                                                | The executor of an agent definition                         |
-| `fromPiTool(tool)`                                           | Adapt a native Pi tool to an Ambion tool                    |
-| `piExecution({ stream, sessions, sessionDir, credentials })` | The `execution` value for `startRoom` and `createRuntime`   |
-| `fileCredentials(path)`, `loginPi`, `terminalInteraction`    | A store of subscription sign-ins, and the sign-in           |
-| `createExecutionServices`                                    | The services for a host that runs seats apart from the room |
-| `memorySessions`, `PiSessions`, `SessionScope`               | A store of sessions in memory, and the store contract       |
-| `stubModel`                                                  | The model that a custom stream receives                     |
-| `piExecutorFixture` (`/testing`)                             | The executor suite on a scripted stream                     |
-
-## Troubleshooting
-
-- **`no_execution`.** No supplied execution serves the kind of the seat. Pass `piExecution()` to the room or runtime.
-- **`Unknown model`.** The id needs the form `provider/model-id` and a
-  provider that the registry lists. The failure is permanent, so the room
-  does not retry it.
-- **Abandoned after one attempt.** A permanent failure. Check
-  `<PROVIDER>_API_KEY` and the credit of the account.
-
-The [guide](https://github.com/ambionframework/ambion/blob/main/docs/pi.md#troubleshooting)
-lists more causes.
+The [Pi guide](https://github.com/ambionframework/ambion/blob/main/docs/pi.md) holds the subscriptions, the sessions, the step
+mapping, and the troubleshooting. The [executor guide](https://github.com/ambionframework/ambion/blob/main/docs/executors.md)
+holds the options, the wiring, the failure classes, and the tests that every
+executor shares. Use [`@ambionframework/claude`](https://github.com/ambionframework/ambion/blob/main/docs/claude.md) for the
+Claude Code loop on a Claude model.

@@ -1,10 +1,5 @@
 # The canvas
 
-> **Status: the package `@ambionframework/canvas` implements this page.** It
-> holds the store, the lifecycle, the tools, the bridge, and the widgets with
-> their acts. The runtime is a required parameter of each room operation.
-> [The road to 1.0.0](../planning/1.0.0.md) owns delivery and evidence.
-
 **A canvas is a named collection of rooms.** It holds the rooms of a
 deployment and the relations between them. A room that a host opens is a
 root room. A room that an agent opens for background work is a breakout
@@ -95,9 +90,8 @@ records the result in the row and stops the room. An archived room does
 not start again, and a new attempt is a new breakout room.
 
 **The canvas runs the calls on one room name in order.** The tool calls
-and the host operations on one room name run one at a time, as the
-`serial` queue of the workbench runs them
-(`examples/workbench/src/rooms.ts`). The kernel refuses a post to a
+and the host operations on one room name run one at a time, in one queue
+for each name. The kernel refuses a post to a
 stopped room with `room_stopped`, and the canvas maps it to a refusal.
 After `close`, every tool call is a refusal. The widget calls of a room run
 in a queue of their own ([Widgets](widgets.md#the-tools)), so a stop never
@@ -155,11 +149,10 @@ before it writes the row, in the order of
 [the check order](#the-tool-schemas). An agent can only lower its own
 attention, and the host owns every operation that adds activations.
 
-**The first release bounds no chain of exchanges.** A scheduled say can
+**The canvas bounds no chain of exchanges.** A scheduled say can
 keep a breakout room active after its first exchange. Each closed exchange
 carries `usage`, so the host can read the spend of each opener.
-[D1](../planning/backlog.md#designs-with-a-shape) holds kernel bounds
-and quotas.
+Kernel bounds and quotas do not exist yet.
 
 ### The bridge
 
@@ -331,90 +324,14 @@ another workspace and gives up mirror reads.
 ## The interface
 
 **This section states the shape of the package.** The defaults are the
-values of the first release.
+values that the package ships.
 
 ### The host interface
 
+`types.ts` in `packages/canvas/src` holds the signatures of `openCanvas`
+and `Canvas`, with their TSDoc. `subscribe` hears these events:
+
 ```ts
-function openCanvas(options: OpenCanvasOptions): Canvas;
-
-interface OpenCanvasOptions {
-  readonly name: string;
-  /** The runtime gives every room its execution. The canvas adds no execution option. */
-  readonly runtime: Runtime;
-  readonly store: CanvasStore;
-  /** With a workspace, the canvas attaches the mirror of each room. */
-  readonly workspace?: Workspace;
-  readonly breakout?: BreakoutOptions;
-  /** The catalog of widget kinds that the host draws. Without it, widgetTools is a refusal. */
-  readonly widgets?: WidgetOptions;
-  /** A failed start keeps its row `running`. The next `resume` tries again. */
-  readonly onError?: (error: CanvasError) => void;
-}
-
-interface Canvas {
-  readonly name: string;
-  /** The breakout bundle: breakout, tell, archive, report, and the reminder. Call it before defineAgent. */
-  tools(): ToolBundle;
-  /** The widget bundle: show, hide, and the reminder. A refusal with no widgets.kinds. Call it before defineAgent. */
-  widgetTools(): ToolBundle;
-  /**
-   * Takes the definitions once. Reads the rows and the widget revisions, then starts or
-   * resumes each running root room, then each running breakout room, then runs one
-   * report pass for each live parent. A second call is a refusal.
-   */
-  resume(options: { readonly agents: readonly AgentDefinition[] }): Promise<void>;
-  /**
-   * Opens a root room. Needs resume first. A root row returns its live handle, or starts
-   * from its row; the other options of the repeat are ignored. A breakout name is a refusal.
-   */
-  open(options: CanvasRoomOptions): Promise<Room>;
-  /**
-   * With a root name, sets the room to running, starts it, then starts its breakout
-   * rooms whose rows are running. With a breakout name, sets that room to running and
-   * starts it, under a live parent only. An archived room is a refusal.
-   */
-  start(name: string): Promise<void>;
-  /**
-   * Sets the row to stopped, and stops the room. A root stops with its breakout rooms;
-   * their rows do not change.
-   */
-  stop(name: string): Promise<void>;
-  /**
-   * Archives a breakout room: records the close, then stops it. The `archive` tool calls it.
-   * A stopped row records the close and stops nothing. A repeat returns the recorded close.
-   */
-  archive(name: string, close: CanvasClose): Promise<CanvasClose>;
-  /** Stops every handle of this run. Each row keeps its state. Every tool call after it is a refusal. */
-  close(): Promise<void>;
-  /** The live handle of a room of this run, or undefined. */
-  room(name: string): Room | undefined;
-  rooms(): readonly CanvasRoom[];
-  /** The current revision of each widget of a room, hidden ones included. Empty before resume. */
-  widgets(room: string): readonly CanvasWidget[];
-  /** One revision by id, or undefined. Read at resume. */
-  revision(id: string): CanvasWidget | undefined;
-  /** The act that answers each answered revision of a room: its seq and the person. Empty before resume. */
-  answers(room: string): ReadonlyMap<string, { readonly seq: number; readonly by: string }>;
-  /** Checks an act, then sends it through the visit of the person in that room. */
-  act(person: PersonDefinition, act: WidgetAct): Promise<WidgetActResult>;
-  subscribe(listener: (event: CanvasEvent) => void): () => void;
-}
-
-type CanvasRoomOptions = Pick<StartRoomOptions, 'seats' | 'seating'> & {
-  readonly name: string;
-  readonly goal: string;
-  /** The definitions of this room. Default: every definition. */
-  readonly agents?: readonly string[];
-  /**
-   * The name of a definition given at resume. A name that no definition resolves is a
-   * refusal. The row keeps the name, so a later start resolves it again.
-   */
-  readonly assistant?: string;
-  /** The name of a definition given at resume. It resolves as `assistant` does. */
-  readonly summaryWriter?: string;
-};
-
 type CanvasEvent =
   | { readonly type: 'opened'; readonly room: CanvasRoom }
   | { readonly type: 'started' | 'stopped'; readonly room: string }
@@ -426,27 +343,6 @@ type CanvasEvent =
       readonly revision: string;
       readonly seq: number;
     };
-
-interface CanvasError {
-  readonly room: string;
-  readonly operation:
-    | 'resume'
-    | 'open'
-    | 'start'
-    | 'stop'
-    | 'close'
-    | 'breakout'
-    | 'tell'
-    | 'archive'
-    | 'report'
-    | 'notice'
-    | 'mirror'
-    | 'show'
-    | 'hide'
-    | 'widget'
-    | 'act';
-  readonly error: unknown;
-}
 ```
 
 **The definitions arrive at `resume`.** `defineAgent` reads the bundles
@@ -480,56 +376,6 @@ so the mirror holds the last message.
 
 ### The store
 
-```ts
-interface CanvasStore {
-  list(): Promise<readonly CanvasRoom[]>;
-  /** Writes the row when the name is free. A row of that name stays as it is. */
-  insert(room: CanvasRoom): Promise<'inserted' | 'exists'>;
-  setState(name: string, state: 'running' | 'stopped'): Promise<void>;
-  /** Sets the row to archived with its close. An archived row stays as it is. */
-  archive(name: string, close: CanvasClose): Promise<CanvasClose>;
-  /** Every widget revision, in the order of insertion. */
-  revisions(): Promise<readonly CanvasWidget[]>;
-  /** Appends one revision. A revision id that exists stays as it is. */
-  appendRevision(widget: CanvasWidget): Promise<'inserted' | 'exists'>;
-}
-
-interface CanvasRoom {
-  readonly name: string;
-  readonly goal: string;
-  readonly state: 'running' | 'stopped' | 'archived';
-  readonly start: RootStart | BreakoutStart;
-  readonly close?: CanvasClose;
-}
-
-interface CanvasClose {
-  readonly result: 'done' | 'failed';
-  readonly note?: string;
-}
-
-interface RootStart {
-  readonly kind: 'root';
-  readonly agents?: readonly string[];
-  readonly seats?: StartRoomOptions['seats'];
-  readonly assistant?: string;
-  readonly summaryWriter?: string;
-  readonly seating?: boolean;
-}
-
-interface BreakoutStart {
-  readonly kind: 'breakout';
-  readonly parent: string;
-  readonly opener: string;
-  readonly agents: readonly string[];
-  readonly message: string;
-  readonly to?: string;
-}
-
-/** `Sql` is the type that `sqliteJournals` takes, from `@ambionframework/journal`. */
-function sqliteCanvas(sql: Sql): CanvasStore;
-function memoryCanvas(): CanvasStore;
-```
-
 **`insert` returns `exists` on a repeat, so a write is idempotent.**
 `canvasStoreConformance` runs the same cases over both stores.
 `sqliteCanvas` writes the tables `canvas_rooms` and
@@ -539,24 +385,10 @@ revisions.
 
 ### The breakout options
 
-```ts
-interface BreakoutOptions {
-  /** The most running breakout rooms for one opener in one parent. Default 3. */
-  readonly perOpener?: number;
-}
-```
-
 **`resume` refuses two definitions of one name.** `openCanvas` refuses a canvas name
 that is not a room name.
 
 ### The widget options
-
-```ts
-interface WidgetOptions {
-  /** The kinds that the host draws. A `show` names one of them. */
-  readonly kinds: readonly WidgetKind[];
-}
-```
 
 **The catalog is the one widget option.** `openCanvas` refuses a catalog
 with a duplicate kind name. [Widgets](widgets.md#the-views) describes a kind
@@ -564,34 +396,6 @@ and its actions. [Widgets](widgets.md#the-acts) describes `act`, `answers`,
 and `WidgetAct`.
 
 ### The tool schemas
-
-```ts
-breakout({
-  name: string,        // the room is <parent>-<name>: the shared name syntax, 48 characters at most
-  goal: string,
-  message: string,     // the initial message
-  agents: string[],    // one or more names of definitions of the canvas
-  to?: string,         // a worker; omit to post to every worker
-}) -> { room: string, uri: string, mirror?: string, state: 'running' | 'stopped' | 'archived', created: boolean, close?: CanvasClose }
-
-tell({
-  room: string,        // a breakout room that the caller opened
-  text: string,
-  to?: string,
-  refs?: string[],
-}) -> { room: string, from: Seq }
-
-archive({
-  room: string,        // a breakout room that the caller opened
-  result: 'done' | 'failed',
-  note?: string,
-}) -> { room: string, result: 'done' | 'failed', note?: string }
-
-report({
-  text: string,
-  refs?: string[],
-}) -> { room: string, from: Seq, to?: string }
-```
 
 **The tools read the caller from `ToolContext`.** The opener is
 `ctx.agent.name`, and the parent is `ctx.room`. `report` reads the parent
@@ -648,8 +452,3 @@ seq of the message that holds the key.
 **`perOpener` counts running rows.** It counts the breakout rows with
 that parent and that opener whose state is `running`. `archive` frees a
 place.
-
-## Out of scope
-
-[The road to 1.0.0](../planning/1.0.0.md#out-of-scope) lists the work that
-this package leaves out.

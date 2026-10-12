@@ -5,7 +5,7 @@
  * backend. It keeps one forward for each process, and closes it when the
  * process ends.
  *
- * `docs/processes.md` is the design contract.
+ * `docs/processes.md` states the forward and the cache.
  */
 
 import type { WorkspaceEndpoint, WorkspaceEndpoints } from './backend.ts';

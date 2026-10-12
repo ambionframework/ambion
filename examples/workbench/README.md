@@ -5,9 +5,14 @@ specialized agents share one project. A person asks a question, and the
 agents read the datasheets, choose parts, and plan tests, on the record.
 
 Workbench is the runnable example for the Ambion collaboration kernel. See
-the root [README](../../README.md) for what Ambion is. The full lab design
-is in [docs/example.md](../../docs/example.md); this package builds the part
-that runs on the current kernel API.
+the root [README](../../README.md) for what Ambion is.
+[docs/example.md](../../docs/example.md) holds the people, the tool set, the
+rooms, the lab database, the kernel map, and the evidence. This page holds the
+run commands and the terminal.
+
+**The git backend holds three templates.** They are `firmware-sketch`,
+`sensor-server`, and `actuator-controller`. The [sensor](docs/sensors.md) and
+[actuator](docs/actuators.md) pages describe the last two.
 
 ## Run
 
@@ -28,17 +33,22 @@ pnpm start ./bench --as mira   # a directory, and a person
 ```
 
 **The host keeps the root rooms on one canvas.** The canvas stores one row
-for each room in `rooms.db`, beside the journals. A stopped room has a
-stopped row, and a restart leaves it stopped. A failed stop leaves the room
-stopped. The `/resume` command starts it again from its journal.
+for each room in `rooms.db`, beside the journals. It owns the name, the
+goal, the seats, and whether the room runs. At the start it resumes each
+running room and attaches the room mirror, and at the close it stops the
+rooms. A stopped room has a stopped row, and a restart leaves it stopped. A
+failed stop leaves the room stopped. The `/resume` command starts it again
+from its journal. The host keeps the feed, the composer, and the scenarios.
+The answer of a person to an approval stays a room message.
 
 `pnpm start` runs Node with `--experimental-ffi`, which OpenTUI needs. A
-directory with no `rooms.db` gets the three sample rooms and the datasheets.
+directory with no `rooms.db` gets the four sample rooms and the datasheets.
 A directory that has one resumes the rooms that ran, including a room you
 created. A room you stopped stays stopped until you resume it. Set `WORKBENCH_USER` instead of `--as` to pick a
 person. Without either, the first screen asks who you are. Set
 `AMBION_MODEL` and its provider credential to change the model of the Pi
-seats. The default is `anthropic/claude-sonnet-5`.
+seats. The default is `anthropic/claude-sonnet-5`. `AMBION_EXECUTOR=codex`
+moves the assistant to Codex, and any other value leaves it on Pi.
 
 **A seat with no key does not run, and the others do.** At start, the
 Workbench prints one line for each seat whose executor kind has no key. The header
@@ -56,45 +66,6 @@ error retries to the cap.
 
 The terminal reads its colors from the repository brand kit in the root
 [`brand/`](../../brand) directory. The example has no HTTP interface.
-
-## Actuator controller template
-
-The lab Git backend offers an
-[`actuator-controller` template](templates/actuator-controller). It is a
-Node controller for one actuator over a simulated plant. The harness
-installs the stop handlers first, holds a deadline, logs JSON lines, and
-exits 0 only after the device is safe. `start` takes a lock and replaces
-itself with `node`. Its `npm test` sends real signals to the controller.
-[Actuators](docs/actuators.md) states the pattern.
-
-## Sensor server template
-
-The lab Git backend offers a [`sensor-server` template](templates/sensor-server).
-It serves deterministic numeric, frame, and text fixtures over HTTP on
-`$PORT`, in protocol version 2. An agent can fork and customize it like the
-firmware template. The template README covers the setup, validation, process
-startup, data storage, and rollback. Its `npm test` checks HTTP behavior,
-schemas, digests, the conformance cases, launch metadata, and data-directory
-safety. The template ships a `skills/` folder with the `observe` macro.
-
-The running Workbench uses `directoryBackend`, which has no endpoints.
-It does not add `fetch` to the terminal workspace, and it loads no template
-skill. The workstation flow reads the template with `fetch`. The Workbench's
-`test/sensor-template.test.ts` covers the Git fork, push, fresh clone, and
-rejection of an invalid fixture change. The OpenSSH acceptance is in the
-workstation package. See [Sensors](docs/sensors.md).
-
-## Rules of the sensor and actuator patterns
-
-- **A sensor template carries a protocol version.** A breaking change raises
-  `api`, and the macros of the template refuse a server at another `api`. A
-  forked server does not upgrade with the host. Reducer state belongs to the
-  server. The workspace keeps what `fetch` reads through snapshot refs.
-  Measurement timestamps are the source of truth; host time governs host
-  interactions.
-- **A sensor definition starts as a Git template.** The agent forks,
-  customizes, validates, commits, and pushes before it runs a saved version.
-  Replacement and rollback use the Git and process tools.
 
 ## The terminal
 
@@ -157,19 +128,45 @@ with the first 50 rows of each. The panel opens the database read-only. It
 shows a picture (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, up to 8 MiB) with
 OpenTUI's own terminal image rendering, negotiated to the terminal's protocol.
 
-**An agent pins a file with `show`.** The kinds are `markdown`, `table`
+**An agent pins a file with `show`.** The call is `show({ name, kind,
+source: { type: 'file', path }, title? })`. The kinds are `markdown`, `table`
 (a SQLite database file), and `image`. The terminal draws the pinned files of
-the open room in a side area, each with its title and kind. `hide` removes
-a pin. The side area gives way to the files panel and the processes panel.
+the open room in a side area, one after the other, each with its title or
+name and its kind. `hide` removes a pin.
 
-**A pin can carry actions.** The side area draws each action as a button
-under its pin, with the person it is `for`. A widget that holds an answer
-reads `answered by <person> in #<seq>`, and its once actions read as done.
-Press Tab, then `a`, to take the keys. Up and Down choose an action, Enter
-presses it, and Esc leaves. An action with fields opens a form: type into a
-text or number field, press Space or Left and Right to change a boolean or a
-choice, and press Enter to send. The press reaches the room as a message of
-you, and the agent that wrote the pin answers it.
+- **The host reads each file as its author,** with the size limits of the
+  files panel, and it checks the size again on the bytes that it reads.
+- **It reads again** after each widget event, each room start, and the end of
+  each activation. It polls nothing.
+- **The area draws four pins at most** and says `and N more`. It marks a
+  stopped room, whose files stay as last read. A widget of an archived
+  breakout room draws nothing.
+- **The area draws text as text** and drops terminal escapes. It gives way to
+  the files panel and the processes panel.
+
+**A pin can carry actions.** `show` also takes `actions` and `for` on these
+kinds. The side area draws each action as a button under its pin, and it
+shows `for` as `for mira`. A widget that holds an answer reads `answered by
+<person> in #<seq>`, and its once actions read as done. Press Tab, then `a`,
+to take the keys. Up and Down choose an action, Enter presses it, and Esc
+leaves. An action with fields opens a form: type into a text or number field,
+press Space or Left and Right to change a boolean or a choice, and press
+Enter to send. The form checks the values and shows the first problem before
+it sends. The press reaches the room as a message of you, and the agent that
+wrote the pin answers it.
+
+- **A press calls `canvas.act` as the person** through `Workbench.act`. The
+  host saves the act of each call, with its press token, until the call gives
+  a result. After a failure, the next press of the same action sends that act
+  again as the same person, so a press lands once.
+- **A refusal drops the act** and shows its reason alone. A `stale` result
+  redraws the new revision, and an `answered` result shows a line.
+- **A button is inactive,** with the reason, when `for` names another person
+  or the room is stopped.
+- **The host reads the pins again on the `widget` event,** and it adds the
+  answer to the pins on the `answered` event with no new file read.
+  [Camera Chat](../camera-chat/README.md) reuses `ActionPad` and
+  `ActionsView` for the `look` action of its viewfinders.
 
 **`/ps` shows the background processes that the agents started with
 `bash`.** The panel lists the running processes first, then the newest
@@ -264,58 +261,33 @@ the record, so a restart keeps them.
 
 ## The team
 
-**One assistant coordinates three specialists, and the specialists run on
-three executor kinds.** The assistant seats a specialist, routes a request to a named specialist,
-and writes the closing summary.
+**One assistant coordinates three specialists, and the seats run on three
+executor kinds.** [docs/example.md](../../docs/example.md#the-assistant-and-the-specialists)
+states the scope of each specialist.
 
-| Agent           | Scope                                                              | Kind   | Model                              | Key                 |
-| --------------- | ------------------------------------------------------------------ | ------ | ---------------------------------- | ------------------- |
-| **Assistant**   | Understands the request, seats a specialist, and returns a summary | Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` |
-| **Datasheets**  | Reads `/library` and states exact limits with their source         | Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` |
-| **Design**      | Chooses parts and values, and shows the circuit math               | Claude | `claude-sonnet-5`                  | `ANTHROPIC_API_KEY` |
-| **Experiments** | Turns a question into a short, repeatable test plan                | Codex  | `gpt-5.6-luna`, reasoning `medium` | `CODEX_API_KEY`     |
+| Agent           | Kind   | Model                              | Key                 |
+| --------------- | ------ | ---------------------------------- | ------------------- |
+| **Assistant**   | Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` |
+| **Datasheets**  | Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` |
+| **Design**      | Claude | `claude-sonnet-5`                  | `ANTHROPIC_API_KEY` |
+| **Experiments** | Codex  | `gpt-5.6-luna`, reasoning `medium` | `CODEX_API_KEY`     |
 
-The assistant uses `defineAssistant` from `@ambionframework/assistant`, and
-its `executor` function builds the executor of the kind that `seatKinds` names. Each
-room seats the specialists it needs. The reserve holds the rest. The header
-of the terminal shows the executor kind beside each agent name.
+The `seatKinds` table names the kind of each seat, the assistant included.
+The `executor` function of the assistant builds the executor of that kind.
+The header of the terminal shows the executor kind beside each agent name.
 
-**The assistant delegates to a breakout room that specialists staff.** Every
-seat holds the one canvas bundle: `breakout`, `tell`, `archive`, and
-`report`. A specialist works in a root room and in a breakout room, with the
-same definition and the same home. A breakout room is named
-`<parent>-<name>`. The room list shows it with its parent, and `/room`
-completes it with `breakout of <parent>`. A person visits it as any other
-room. A specialist in a breakout room sends its result with `report`, and the
-report lands in the parent room. The assistant archives the breakout room
-when the work is done. See [the canvas](../../docs/canvas.md).
-
-The seats hold one list of bundles: the workspace, the instrument, the
-widgets, and the canvas.
 `src/rooms.ts` passes a list of three executions, one for each executor
-kind. Each execution checks keys, sets the environment, and
-lets a test script an executor. Every host supplies the execution for each
-kind through the room or runtime.
+kind. Each execution checks keys, sets the environment, and lets a test
+script an executor. Every host supplies the execution for each kind through
+the room or runtime. The seats hold one list of bundles. See
+[the tool set](../../docs/example.md#one-tool-set-one-filesystem-no-native-tool).
 
-### One tool set, one filesystem, no native tool
-
-**Every agent holds the same tools and reaches the same filesystem, and no
-native tool of any harness is on.** One list of bundles serves every seat:
-the workspace, the lab, and the instrument tools, in that order. Each seat
-also has the `compose` tool, which is the default of the executor packages. All three
-executor kinds share one workspace instance, so a file that one agent writes is
-the file that another agent reads.
-
-| Kind   | How it enforces the guarantee                                       |
-| ------ | ------------------------------------------------------------------- |
-| Pi     | Has no native tool. The seat holds only the tools that it receives. |
-| Claude | Passes no built-in tool. No Claude definition option names one.     |
-| Codex  | Has no native tool. The seat holds only the tools that it receives. |
-
-`test/tool-set.test.ts` fails when a definition drifts from this. The live
-test `test/live/tool-set.test.ts` asks each seat for its tool list, writes a
-file with one seat and reads it with another, and asks each seat for
-`/etc/hosts`.
+**The assistant delegates to a breakout room that specialists staff.** A
+breakout room is named `<parent>-<name>`. The room list shows it with its
+parent, and `/room` completes it with `breakout of <parent>`. A person
+visits it as any other room. A restart resumes the breakout rooms that ran,
+and replays the notices that no journal holds. The assistant archives the
+breakout room when the work is done. See [the canvas](../../docs/canvas.md).
 
 ## Tests
 
@@ -330,22 +302,9 @@ A scenario skips when an executor kind that it uses has no key: the `bringup`
 scenario needs `ANTHROPIC_API_KEY`, and the `sensing` scenario needs
 `ANTHROPIC_API_KEY` and `CODEX_API_KEY`.
 
-## The rooms
-
-**Four rooms share one kit.** Each goal shows a distinct collaboration
-pattern. Each room offers a suggested prompt.
-
-| Room     | Pattern                         | Starting work                                             |
-| -------- | ------------------------------- | --------------------------------------------------------- |
-| bringup  | Datasheet check → design        | Blink one LED and choose its series resistor              |
-| sensing  | Design → test plan              | Wire the HC-SR04 and plan a distance test                 |
-| power    | Datasheet check → budget        | Add up the kit current and confirm USB power              |
-| firmware | Template → fork → pushed branch | Fork the firmware sketch, set the pins, and push a branch |
-
 ## The workspace
 
-**Every room shares one directory workspace.** It holds the datasheets and
-the team's artifacts.
+**The on-disk layout of the shared workspace.**
 
 ```text
 .data/
@@ -357,10 +316,6 @@ the team's artifacts.
     shared/         kit.md and notes.md, the team's artifacts
     home/           Agent home directories
 ```
-
-The datasheets are simplified summaries for a runnable example. They are not
-the manufacturer datasheets. The example connects no real hardware, so every
-measurement is a planned value.
 
 ## What persists
 
@@ -387,39 +342,3 @@ can pause before it continues.
 The person picker is a local convention, not authentication. A deployed
 application must authenticate people and control access to rooms and
 workspace resources.
-
-## Files
-
-| File                     | What                                                   |
-| ------------------------ | ------------------------------------------------------ |
-| `src/definitions.ts`     | The assistant, the specialists, the people             |
-| `src/scenarios.ts`       | The rooms, and the workspace seed                      |
-| `src/repositories.ts`    | The git backend and its templates                      |
-| `src/rooms.ts`           | The canvas of the root rooms and the host room view    |
-| `src/workbench.ts`       | The host API the terminal calls in process             |
-| `src/files.ts`           | The workspace list, one file preview, and `/attach`    |
-| `src/names.ts`           | The room name and goal rules                           |
-| `src/sql.ts`             | The `Sql` of the stores over one SQLite database       |
-| `src/session.ts`         | The terminal state and commands, without OpenTUI       |
-| `src/feed.ts`            | The room feed: one read at a time                      |
-| `src/commands.ts`        | The slash commands and their suggestions               |
-| `src/timeline.ts`        | The record grouped into questions, threads, summaries  |
-| `src/steps.ts`           | The steps of an activation, and the cost of a run      |
-| `src/approvals.ts`       | The instrument operations that wait for an answer      |
-| `src/transcript.ts`      | The conversation, with open and closed threads         |
-| `src/composer.ts`        | The composer, room chip, palette, and paste detection  |
-| `src/browser.ts`         | The files panel state: search, matches, chosen file    |
-| `src/files-panel.ts`     | The files panel beside the conversation                |
-| `src/action-state.ts`    | The actions of a pin: focus, form, press token, result |
-| `src/widget-actions.ts`  | The buttons and the form of the actions, in OpenTUI    |
-| `src/processes.ts`       | The order of the processes, and the end of an output   |
-| `src/process-browser.ts` | The processes panel state: list, choice, and cancel    |
-| `src/process-panel.ts`   | The processes panel beside the conversation            |
-| `src/database.ts`        | The SQLite preview: tables and their first rows        |
-| `src/refs.ts`            | The refs of a message: parse, resolve, and one chip    |
-| `src/tui.ts`             | The terminal: layout, keys, and the run loop           |
-| `src/kinds.ts`           | The executor kind, model, and key of each seat         |
-| `src/unavailable.ts`     | The execution of a kind that has no key                |
-| `src/main.ts`            | The entry point                                        |
-| `src/brand.ts`           | The product name and the terminal palette              |
-| `library/`               | The datasheets                                         |
