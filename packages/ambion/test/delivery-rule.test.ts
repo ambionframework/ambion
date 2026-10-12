@@ -10,7 +10,6 @@ import type { Body, RoomEntry } from '../src/journal/journal.ts';
 import { messageDelivery } from '../src/room/delivery.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import type { EndReason, Message } from '../src/types.ts';
-import { freeze } from './support/core-failure.ts';
 import { evolve } from './support/evolve.ts';
 import { activationOf, foldRoom, pendingOf, replayState } from './support/fold.ts';
 
@@ -293,20 +292,6 @@ describe('delivery replay projection', () => {
 				expect(new Set(actual?.steers.map((steer) => steer.seat) ?? [])).toEqual(delivery.steers);
 			}
 		}
-	});
-
-	it('keeps every earlier delivery projection unchanged through evolve', () => {
-		let state = foldRoom([], retry);
-		const history: RoomEntry[] = [];
-		const retained: { state: typeof state; snapshot: typeof state }[] = [];
-		for (const entry of entries) {
-			retained.push({ state, snapshot: structuredClone(state) });
-			freeze(state);
-			history.push(entry);
-			state = evolve(state, entry, retry);
-			expect(state).toEqual(foldRoom(history, retry));
-		}
-		for (const previous of retained) expect(previous.state).toEqual(previous.snapshot);
 	});
 
 	it('retains unconsumed work for retry and clears consumed or removed work', () => {

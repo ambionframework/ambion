@@ -36,10 +36,10 @@ import { type CodexOptions, codex, codexExecution } from '../../src/index.ts';
 import { dumpDirectory, liveDump } from './dump.ts';
 
 /** The model every live Codex seat runs on. */
-export const MODEL = 'gpt-5.6-luna';
+const MODEL = 'gpt-5.6-luna';
 
 /** The variable that holds the key. */
-export const KEY_VAR = 'CODEX_API_KEY';
+const KEY_VAR = 'CODEX_API_KEY';
 
 /** The login file a seat links by default: `auth.json` of the host. */
 const HOST_LOGIN = seatHome({}).login;
@@ -49,7 +49,7 @@ const HOST_LOGIN = seatHome({}).login;
  * binary reads the key before the login. `login` when the host has a login
  * file from `codex login`. Absent when the host has neither.
  */
-export const SIGN_IN: 'key' | 'login' | undefined = process.env[KEY_VAR]
+const SIGN_IN: 'key' | 'login' | undefined = process.env[KEY_VAR]
 	? 'key'
 	: HOST_LOGIN !== undefined && existsSync(HOST_LOGIN)
 		? 'login'
@@ -59,7 +59,7 @@ export const SIGN_IN: 'key' | 'login' | undefined = process.env[KEY_VAR]
 export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(SIGN_IN === undefined);
 
 /** How long a live room may take to go quiet before the test gives up on it. */
-export const QUIET_MS = 150_000;
+const QUIET_MS = 150_000;
 
 export const person = definePerson({
 	name: 'priya',
@@ -69,7 +69,7 @@ export const person = definePerson({
 let unique = 0;
 
 /** A room name no other test in the process has used. */
-export const roomName = (prefix: string) => `codex-live-${prefix}-${process.pid}-${++unique}`;
+const roomName = (prefix: string) => `codex-live-${prefix}-${process.pid}-${++unique}`;
 
 /** A Codex seat on the live model. Every definition sets the model and the effort. */
 export function seat(
@@ -111,15 +111,6 @@ export async function open(
 	const steps = (activation: string): TraceStep[] =>
 		records.flatMap((record) => (record.step.activation === activation ? [record.step] : []));
 	return { room, name, runtime, events, steps };
-}
-
-/** A promise that fails after `ms`, naming what did not happen. */
-export function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	const deadline = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new Error(`${what} did not happen within ${ms} ms.`)), ms);
-	});
-	return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
 }
 
 /** The room goes quiet, or the test fails and stops it. */

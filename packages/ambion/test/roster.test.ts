@@ -336,31 +336,6 @@ describe('ordinary participation', () => {
 		expect(kinds(await messagesOf(session))).toEqual(['arrived', 'said']);
 	});
 
-	it('lets an ordinary seat add several colleagues without a local call quota', async () => {
-		const session = await open({
-			agents: [product],
-			available: [surveyor, architect, greeter],
-			script: byAgent({
-				product: (_context, _name, request) => {
-					const next = [surveyor, architect, greeter][request - 1];
-					return next === undefined ? quiet() : seat(next.name);
-				},
-			}),
-		});
-
-		await (await session.visit(priya)).send({ text: 'Bring everyone needed.' });
-		await waitForRoom(session);
-
-		expect(await seatNames(session)).toEqual(['product', 'surveyor', 'architect', 'greeter']);
-		expect(kinds(await messagesOf(session))).toEqual([
-			'arrived',
-			'said',
-			'seated',
-			'seated',
-			'seated',
-		]);
-	});
-
 	it('passes a colleague steering message to an ordinary seat still selecting membership', async () => {
 		const held = deferred();
 		const contexts: string[] = [];

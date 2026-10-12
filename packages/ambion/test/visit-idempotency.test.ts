@@ -133,6 +133,7 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 		expect(await count(room, 'arrived')).toBe(1);
 
 		await expect(observed(room.visit(returnedPerson))).rejects.toThrow(/different identity/);
+		await expect(room.visit(returnedPerson)).rejects.toEqual(refusal('duplicate_name'));
 		expect(await count(room, 'arrived')).toBe(1);
 		await (await first).leave();
 	});

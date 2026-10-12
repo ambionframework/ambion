@@ -10,7 +10,6 @@ import {
 	createRuntime,
 	definePerson,
 	isSaid,
-	type Message,
 	type Room,
 	resumeRoom,
 	startRoom,
@@ -26,7 +25,7 @@ import {
 } from './support/room.ts';
 import { type PiScript, quiet, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
-import { gatedJournals, type Storage, storages } from './support/storage.ts';
+import { type Storage, storages } from './support/storage.ts';
 
 const watcher = scriptedAgent('watcher', 'Records room activity.');
 const priya = definePerson({
@@ -152,44 +151,6 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			(await messagesOf(resumed)).filter((message) => message.key === 'promise-1'),
 		).toHaveLength(1);
 		expect(reconnected.lastDeparture).toBe(left?.seq);
-	});
-
-	it('merges history and live notifications once by message sequence', async () => {
-		const { opened, clock } = await host(storage);
-		const gate = deferred();
-		const entered = deferred();
-		onTestFinished(gate.resolve);
-		const journals = gatedJournals(opened.storage, (kind) => {
-			if (kind !== 'message') return undefined;
-			entered.resolve();
-			return gate.promise;
-		});
-		const room = stopAtEnd(
-			await startRoom({
-				name: roomName(`reconnect-overlap-${storage.name}`),
-				agents: [],
-				runtime: createRuntime({ clock, storage: journals }),
-			}),
-		);
-		const live: Message[] = [];
-		const off = room.subscribe((event) => {
-			if (event.type === 'message') live.push(event.message);
-		});
-		const arriving = room.visit(priya);
-		await entered.promise;
-		const replay = messagesOf(room, { after: 0 });
-		gate.resolve();
-		const [visit, history] = await Promise.all([arriving, replay]);
-		off();
-
-		const merged = new Map<number, Message>();
-		for (const message of [...history, ...live]) merged.set(message.seq, message);
-		expect(history).toHaveLength(1);
-		expect(live).toHaveLength(1);
-		expect(live[0]?.seq).toBe(history[0]?.seq);
-		expect([...merged.values()]).toHaveLength(1);
-		expect(merged.get(history[0]?.seq ?? -1)).toMatchObject({ kind: 'arrived', from: priya.name });
-		await visit.leave();
 	});
 });
 

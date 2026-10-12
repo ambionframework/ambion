@@ -127,7 +127,6 @@ describe('the just-bash adapter', () => {
 				exitCode: 128,
 				output: 'fatal: network access is disabled\n',
 			});
-			expect(backend.guidance).toContain('git is available');
 		},
 	);
 

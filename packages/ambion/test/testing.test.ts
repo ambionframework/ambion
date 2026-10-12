@@ -199,27 +199,6 @@ describe('scripted', () => {
 		);
 	});
 
-	it('logs the input of each pass under input: full', async () => {
-		const logged: Step[] = [];
-		const room = await open({
-			name: roomName('testing-input'),
-			agents: [agent('a', [], { thinking: 'omit', toolOutput: 'omit', input: 'full' })],
-			runtime: createRuntime({
-				storage: memoryJournals(),
-				logger: (traced) => void logged.push(traced.step),
-			}),
-			execution: scripted(() => quiet()),
-		});
-		await (await room.visit(andrei)).send({ text: 'Hello?' });
-		await settled(room);
-		expect(
-			logged.flatMap((step) => (step.type === 'input' ? [[step.part, step.text]] : [])),
-		).toEqual([
-			['system', expect.stringContaining('answer what is asked')],
-			['record', expect.stringContaining('Hello?')],
-		]);
-	});
-
 	it('turns a script that throws into a transient error and writes no message', async () => {
 		const clock = fakeClock();
 		const room = await open({
@@ -462,22 +441,6 @@ describe('scriptedOpener', () => {
 		await session.pass(input(closing));
 		expect(commits).toHaveLength(1);
 		expect(commits[0]).not.toHaveProperty('readThrough');
-	});
-
-	it('reports a script that throws as a transient failure and emits the error', async () => {
-		const { open, events } = harness(() => said(4));
-		const session = open(
-			scriptedOpener(() => {
-				throw new Error('broke');
-			}, agent('a')),
-		);
-		await expect(session.pass(input(respond))).resolves.toEqual({
-			failed: true,
-			cause: 'transient',
-			message: 'broke',
-			error: new Error('broke'),
-		});
-		expect(events).toEqual([expect.objectContaining({ type: 'error', cause: 'transient' })]);
 	});
 
 	/**

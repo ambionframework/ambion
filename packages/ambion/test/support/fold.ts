@@ -8,8 +8,9 @@
  * function over the entries. `projection-equivalence.test.ts` holds the
  * projection equal to it after every entry of a seeded walk.
  */
+import type { Entry } from '@ambionframework/journal';
 import { type ActivationId, decodeActivationId } from '../../src/activation-id.ts';
-import type { Close, Composition, Seating } from '../../src/journal/entries.ts';
+import type { Close, Composition, Lease, Seating } from '../../src/journal/entries.ts';
 import type { RoomEntry } from '../../src/journal/journal.ts';
 import type { MessageRecipients } from '../../src/room/delivery.ts';
 import { exchangeAfter, summaryCompletion } from '../../src/room/exchange.ts';
@@ -23,6 +24,7 @@ import {
 	reserveOf,
 } from '../../src/room/fold.ts';
 import {
+	applyLease,
 	type DueActivation,
 	type DueRespond,
 	dueOf,
@@ -205,3 +207,16 @@ function foldOwed(
 /** The state the room derives: the projection after every entry. */
 export const replayState = (entries: readonly RoomEntry[], options: FoldOptions): RoomState =>
 	projectState(replay(entries, options));
+
+/**
+ * Every lease the changes fold to. The complete journal remains available,
+ * so a lease's attempt history is reconstructed directly from its changes.
+ */
+export function foldLeases(
+	changes: readonly Entry<Lease>[],
+	held: readonly LeaseHold[] = [],
+): Map<string, LeaseHold> {
+	const leases = new Map<string, LeaseHold>(held.map((lease) => [lease.id, lease]));
+	for (const entry of changes) applyLease(leases, entry);
+	return leases;
+}

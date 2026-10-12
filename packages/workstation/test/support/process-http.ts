@@ -130,25 +130,6 @@ export const dynamicAction = (
 	verify?: Action['verify'],
 ): Action => ({ tool, args, ...(verify === undefined ? {} : { verify }) });
 
-/** Require a workspace bash result to prove that its process ended with `code`. */
-export function expectExitCode(text: string, code: number, label: string, handle?: string): void {
-	const match =
-		/^\[Process (bash-[a-f0-9]+)(?: \([^)]+\))? exited with code (-?\d+)\. Output: [^\r\n]*\]$/m.exec(
-			text,
-		);
-	if (match === null || (handle !== undefined && match[1] !== handle)) {
-		throw new Error(`${label} did not finish before the next action: ${text}`);
-	}
-	const actual = Number(match[2]);
-	if (actual !== code)
-		throw new Error(`${label} exited with code ${actual}, expected ${code}: ${text}`);
-}
-
-/** Require a short workspace command to finish successfully before the next action. */
-export function expectSuccess(label: string): NonNullable<Action['verify']> {
-	return (text) => expectExitCode(text, 0, label);
-}
-
 /**
  * Require cancellation to report the requested process as cancelled: the
  * state `cancelled`, or exit code 0 when the server ended cleanly inside

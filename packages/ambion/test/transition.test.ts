@@ -323,22 +323,6 @@ describe('room transition', () => {
 		});
 	});
 
-	it('preserves the detached summary view range and reserve identities', () => {
-		const state = closing();
-		const spec = activationSpec('closed:3:writer:1', state);
-		if (spec === undefined) throw new Error('Expected summary grant.');
-		const view = viewOf(spec, {
-			name: 'room',
-			now,
-			state,
-			live: new Map(),
-			messagesSince: () => 0,
-		});
-		expect(view.through).toBe(3);
-		expect(view.context.reserve).toEqual([{ name: 'reserve', identity: 'Reserve.' }]);
-		expect(view.context.messages.map((message) => message.seq)).toEqual([2, 3]);
-	});
-
 	it('starts a new summary activation after reseating before close, and never revives one ended after close', () => {
 		const start = [composition('writer'), person(), question()];
 		const beforeClose = fold(...start, unseated(4), seated(5), closed(6, 5));

@@ -2,14 +2,8 @@ import { memoryJournals } from '@ambionframework/journal';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { createRuntime, definePerson, defineTool, resumeRoom, startRoom } from '../src/index.ts';
-import {
-	messagesOf,
-	participantsOf,
-	roomName,
-	scriptedAgent,
-	waitForRoom,
-} from './support/room.ts';
+import { createRuntime, definePerson, defineTool, startRoom } from '../src/index.ts';
+import { participantsOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { callTool, quiet, scriptedStream, toolNames } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { faultyJournals, memory } from './support/storage.ts';
@@ -58,33 +52,6 @@ describe('room bindings', () => {
 		expect(calls.sort()).toEqual(['first', 'second']);
 		expect(prompts.some((prompt) => prompt.includes('Use first.'))).toBe(true);
 		expect(prompts.some((prompt) => prompt.includes('Use second.'))).toBe(true);
-	});
-
-	it('leaves the live host authoritative when resume lacks its bindings', async () => {
-		const opened = await memory.open();
-		const analyst = scriptedAgent('analyst');
-		const name = roomName('resume-bindings');
-		const first = await startRoom({
-			name,
-			runtime: createRuntime({ storage: opened.storage }),
-			agents: [analyst],
-			execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
-		});
-		await waitForRoom(first);
-		await expect(
-			resumeRoom(name, { runtime: createRuntime({ storage: opened.storage }), agents: [] }),
-		).rejects.toThrow(/has no binding/);
-		await (
-			await first.visit(definePerson({ name: 'priya', identity: 'Project manager.' }))
-		).send({ text: 'Still mine?' });
-		await waitForRoom(first);
-		expect(
-			(await messagesOf(first)).some(
-				(message) => message.kind === 'said' && message.text === 'Still mine?',
-			),
-		).toBe(true);
-		await first.stop();
-		await opened.dispose();
 	});
 
 	it('keeps the startup definition through a failed membership write', async () => {

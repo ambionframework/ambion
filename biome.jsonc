@@ -29,6 +29,9 @@
 			},
 			"suspicious": {
 				"noExplicitAny": "error",
+				// A cycle of value imports makes a module read another before it runs.
+				// The rule skips type-only imports, which vanish at build time.
+				"noImportCycles": "error",
 				// The examples are console programs; `noConsole` is re-enabled
 				// for library source in the override below.
 				"noConsole": "off"

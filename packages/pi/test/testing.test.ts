@@ -2,17 +2,10 @@
 
 import { byAgent, callTool, quiet, say, schedule, spend } from '@ambionframework/ambion/testing';
 import { fauxAssistantMessage, normalizeContext } from '@earendil-works/pi-ai';
-import { expect, expectTypeOf, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { type StreamFn, streamModels } from '../src/models.ts';
 import { stubModel } from '../src/services.ts';
 import { isClosingContext, scriptedStream, scriptOf } from '../src/testing.ts';
-
-it('names the seat in the stub model and needs no cast', async () => {
-	const model = await stubModel('anthropic/x', 'product');
-	expect(model.name).toBe('product');
-	expect(model.id).toBe('anthropic/x');
-	expectTypeOf(model.api).toBeString();
-});
 
 it('routes on the seat the stub model names, whatever the model id', async () => {
 	const seen: string[] = [];

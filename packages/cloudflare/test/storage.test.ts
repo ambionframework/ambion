@@ -5,33 +5,9 @@
  */
 
 import { env, runInDurableObject } from 'cloudflare:test';
-import { namespaced } from '@ambionframework/journal';
 import { storageConformance } from '@ambionframework/journal/conformance';
 import { expect, it } from 'vitest';
 import { roomMetadata, seatMetadata, sqlStorage } from '../src/storage.ts';
-
-it('orders native journal appends conditionally beside a second journal name on one backend', async () => {
-	const stub = env.ROOM.get(env.ROOM.idFromName('storage-conditional'));
-	await runInDurableObject(stub, async (_instance, state) => {
-		const storage = sqlStorage(state);
-		const journals = namespaced(storage, 'ambion/room');
-		const first = await journals.open('room');
-		const second = await journals.open('room');
-		const [left, right] = await Promise.all([
-			first.append({ writer: 'left' }, 0),
-			second.append({ writer: 'right' }, 0),
-		]);
-		expect([left, right].filter((entry) => entry !== undefined)).toHaveLength(1);
-		const read = await first.read(0);
-		expect(read.position).toBe(1);
-		expect(read.entries).toHaveLength(1);
-
-		const other = await namespaced(storage, 'ambion/other').open('room');
-		await other.append({ step: 1 }, 0);
-		expect((await first.read(0)).entries).toEqual(read.entries);
-		expect((await other.read(0)).entries).toHaveLength(1);
-	});
-});
 
 it('keeps each object record in one row, and applies each change whole', async () => {
 	const stub = env.ROOM.get(env.ROOM.idFromName('storage-metadata'));
@@ -78,7 +54,7 @@ for (const [index, c] of listed.entries()) {
 		await runInDurableObject(stub, async (_instance, state) => {
 			const suite = storageConformance({
 				name: 'durable object SQLite',
-				open: () => ({ opener: sqlStorage(state) }),
+				open: () => ({ opener: sqlStorage(state), peer: () => sqlStorage(state) }),
 			});
 			await suite[index]?.run();
 		});

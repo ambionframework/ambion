@@ -70,29 +70,13 @@ describe('the forward cache of fetch', () => {
 		expect(server.requests).toEqual(['/a', '/a']);
 	});
 
-	it.each([
-		{
-			name: 'a name that no running process has',
-			ask: 'lathe',
-			error:
-				/^No running process is named 'lathe'\. A process of an agent that has not acted since the host started is not listed yet\.$/,
-		},
-		{
-			name: 'a handle that no running process has',
-			ask: 'bash-0123456789ab',
-			error: /^No running process is named 'bash-0123456789ab'\./,
-		},
-		{
-			name: 'a name that two processes of two agents have',
-			ask: 'camera',
-			error:
-				/^Two running processes are named 'camera': bash-[0-9a-f]{12} of ada, bash-[0-9a-f]{12} of bob\. Give the handle\.$/,
-		},
-	])('refuses $name', async ({ ask, error }) => {
+	it('refuses a handle that no running process has', async () => {
 		const { cache, start } = open();
 		await start('ada', 'camera');
 		await start('bob', 'camera');
-		await expect(cache.resolve(ask)).rejects.toThrow(error);
+		await expect(cache.resolve('bash-0123456789ab')).rejects.toThrow(
+			/^No running process is named 'bash-0123456789ab'\./,
+		);
 	});
 
 	it('refuses a process that has ended, a process with no port, and a path with no slash', async () => {

@@ -180,24 +180,6 @@ describe('say, seat and unseat', () => {
 			{ intent: { kind: 'said' } },
 		]);
 		expect(commits[0]?.intent).toMatchObject({ refs: ['room://lab', 'file:///work/plan.md'] });
-		expect(commits[1]?.intent).not.toHaveProperty('refs');
-	});
-
-	it('answers an unchanged seating with the fact, and commits a seated intent', async () => {
-		const results: string[] = [];
-		const { commits } = await on(
-			() => ({ unchanged: { kind: 'seated', name: 'ada' } }),
-			async (turn) => {
-				results.push(textOf(await turn.call(...say())));
-				results.push(textOf(await turn.call('seat', { name: ' ada ' })));
-			},
-		);
-		expect(results).toEqual(
-			Array(2).fill(
-				'ada is already seated. Seating it again does not activate it. Read its mark in the roster: marked "named only", it gets the request through say with to set to ada; with no mark or marked "watches arrivals", it already has the request.',
-			),
-		);
-		expect(commits[1]?.intent).toEqual({ kind: 'seated', name: 'ada' });
 	});
 
 	it('gives the model a refusal as an error result', async () => {

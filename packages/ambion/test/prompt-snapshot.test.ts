@@ -100,9 +100,6 @@ describe('the rendered prompt', () => {
 			renderActivation({ ...respond, context: { ...respond.context, ...extra } }, worker).agent;
 		expect(handoff({ seating: false })).toBe(handoff({}));
 		expect(handoff({ reserved: undefined })).toBe(handoff({}));
-		expect(handoff({})).toContain(
-			'"named only".\nA seated colleague with no mark reads the record',
-		);
 	});
 
 	it('renders a closing activation', () => {

@@ -75,20 +75,7 @@ describe('workstation endpoints over the in-process SSH tier', () => {
 		expect(ssh.logins.get('ada') ?? 0).toBe(0);
 	});
 
-	it('reports SSH forwarding refusal and keeps the shared workstation session usable', async () => {
-		const { backend, http, ssh } = await fixture();
-		const env = await backend.connect({ name: 'ada' });
-		ssh.refuseForwarding(true);
-		await expect(open(backend, http.port)).rejects.toThrow(/forward.*127\.0\.0\.1/i);
-		expect(ssh.forwards.size).toBe(0);
-		ssh.refuseForwarding(false);
-		const port = await open(backend, http.port);
-		expect(await textAt(port.url)).toBe('served GET /');
-		await port.close();
-		await env.cleanup();
-	});
-
-	it('releases the failed open lease and unpublished loopback listener after forwarding refusal', async () => {
+	it('reports SSH forwarding refusal, releases the failed open lease and listener, and keeps the shared workstation session usable', async () => {
 		const { backend, http, ssh } = await fixture({ idleTimeout: 0.05 });
 		const endpoints = backend.endpoints;
 		if (endpoints === undefined) throw new Error('The workstation has no endpoint capability.');
@@ -104,6 +91,14 @@ describe('workstation endpoints over the in-process SSH tier', () => {
 			'The refused port open kept its session lease alive.',
 			1_500,
 		);
+		const env = await backend.connect({ name: 'ada' });
+		await expect(open(backend, http.port)).rejects.toThrow(/forward.*127\.0\.0\.1/i);
+		expect(ssh.forwards.size).toBe(0);
+		ssh.refuseForwarding(false);
+		const port = await open(backend, http.port);
+		expect(await textAt(port.url)).toBe('served GET /');
+		await port.close();
+		await env.cleanup();
 	});
 
 	it('surfaces an unavailable remote loopback service without leaking its transport', async () => {

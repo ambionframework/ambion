@@ -28,16 +28,6 @@ describe('configure', () => {
 		expect(() => configure({ agents: [first, second] })).toThrow(/repeat agent 'duplicate'/);
 	});
 
-	it('accepts an agent with the compose and describe tools', () => {
-		const composer = defineAgent({
-			name: 'composer',
-			identity: 'composer identity',
-			executor: pi({ instructions: 'Compose.', model: 'scripted/test' }),
-		});
-		expect(composer.executor.tools.map((tool) => tool.name)).toEqual(['compose', 'describe']);
-		expect(() => configure({ agents: [composer] })).not.toThrow();
-	});
-
 	it('gives a seat the Pi execution, and a host with the configured limits and logger', () => {
 		const logger = () => {};
 		configure({

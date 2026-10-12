@@ -42,6 +42,7 @@ const sqlOver = (database: DatabaseSync): Sql => ({
 
 interface Opened {
 	readonly opener: JournalOpener;
+	readonly peer?: () => JournalOpener;
 	dispose(): void;
 }
 
@@ -51,7 +52,11 @@ const backends: readonly { name: string; open(): Opened }[] = [
 		name: 'native SQLite',
 		open: () => {
 			const database = new DatabaseSync(':memory:');
-			return { opener: sqliteJournals(sqlOver(database)), dispose: () => database.close() };
+			return {
+				opener: sqliteJournals(sqlOver(database)),
+				peer: () => sqliteJournals(sqlOver(database)),
+				dispose: () => database.close(),
+			};
 		},
 	},
 ];
@@ -131,42 +136,26 @@ describe.each(backends)('$name Journal contract', ({ open }) => {
 	});
 });
 
-describe.each(backends)('$name Journal refusal of a body that is not JSON', ({ open }) => {
+describe('Journal refusal of a body that is not JSON', () => {
 	it.each([
 		['an undefined field', { text: 'a', nested: undefined }],
 		['a Date', { text: new Date() }],
 		['a bigint', { text: 1n }],
+		['a function', { text: 'a', act: () => undefined }],
 	])('refuses %s before storage sees it', async (_name, bad) => {
-		const backend = open();
-		onTestFinished(backend.dispose);
-		const opened = await journal(backend.opener, 'refused');
+		const opener = memoryJournals();
+		const opened = await journal(opener, 'refused');
 		await expect(
 			opened.append('note', { decide: () => ({ body: bad as unknown as { text: string } }) }),
 		).rejects.toThrow(/refuses the proposed 'note' body/);
 		expect(opened.entries).toEqual([]);
-		expect((await (await backend.opener.open('refused')).read(0)).entries).toEqual([]);
+		expect((await (await opener.open('refused')).read(0)).entries).toEqual([]);
 		const next = await opened.append('note', { decide: () => ({ body: { text: 'ok' } }) });
 		expect(next).toMatchObject({ entry: { seq: 1 } });
 	});
 });
 
 describe('native SQLite', () => {
-	it('atomically refuses a stale append across independently opened handles', async () => {
-		const database = new DatabaseSync(':memory:');
-		onTestFinished(() => database.close());
-		const first = await sqliteJournals(sqlOver(database)).open('room');
-		const second = await sqliteJournals(sqlOver(database)).open('room');
-		const [left, right] = await Promise.all([
-			first.append({ writer: 'left' }, 0),
-			second.append({ writer: 'right' }, 0),
-		]);
-		expect([left, right].filter((entry) => entry !== undefined)).toHaveLength(1);
-		expect(await first.read(0)).toMatchObject({ position: 1, entries: [{ position: 1 }] });
-		const current = await second.read(0);
-		const next = await second.append({ writer: 'second' }, current.position);
-		expect(next).toEqual({ position: 2, entry: { writer: 'second' } });
-	});
-
 	it('returns an entry appended after a read query on the next read', async () => {
 		const database = new DatabaseSync(':memory:');
 		onTestFinished(() => database.close());

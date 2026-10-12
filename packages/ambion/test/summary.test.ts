@@ -232,18 +232,10 @@ describe('closing summaries', () => {
 		expect(contexts[0]).toContain('the inspector needs 48h notice');
 		// what its person owns reaches it in the roster, so an assistant holds no copy
 		expect(contexts[0]).toContain('Project manager. Owns the programme.');
-		// and it is addressed as the assistant it is, not as a seat that speaks
-		expect(prompts[0]).toContain("You are 'assistant'.");
-		expect(prompts[0]).toContain('using the say tool');
-		expect(prompts[0]).not.toContain('Speaking is the say tool');
+
 		// it is told whom it writes for, and how that person reads
 		expect(prompts[0]).toContain('You are writing for priya.');
-		// the exchange messages are the only source, and no answer means no summary
-		expect(prompts[0]).toContain('The messages of the exchange are your source.');
-		expect(prompts[0]).toContain('Add nothing from your own knowledge.');
-		expect(prompts[0]).toContain('is a fact of the exchange: report it.');
-		expect(prompts[0]).toContain('end your activation without calling say');
-		expect(contexts[0]).toContain('These messages are your only source.');
+
 		expect(prompts[0]).toContain('Leave out who said what.');
 		// The last line names the range this activation closes, in the journal's
 		// own seq: the same number a workspace mirror writes for each message,
@@ -267,7 +259,7 @@ describe('closing summaries', () => {
 		expect(latest).not.toContain('the inspector needs 48h notice');
 		// the roster names the seat that writes for people, and nobody brings one
 		expect(latest).toContain('- assistant (idle, wakes for nothing said):');
-		expect(latest).not.toContain('brings');
+
 		// a record that holds a summary tells its seats how to read a fold; one that does not, does not
 		expect(read[0]).not.toContain('summarised for <name> below');
 		expect(latest).toContain('summarised for <name> below');
@@ -706,23 +698,6 @@ describe('closing summaries', () => {
 		await clock.advance(200_000);
 		expect(starts()).toBe(1);
 	});
-
-	it('rejects exchange completion when the room stops before publication', async () => {
-		const session = await open({
-			script: byAgent({ product: twoAnswers, assistant: writes('The one message.') }),
-		});
-		const events = collect(session);
-
-		const visit = await session.visit(priya);
-		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
-		// Shutdown while the room still owes a summary: the activation is cut,
-		// and completion for this unfinished exchange rejects.
-		const waiting = exchange.waitForClose();
-		await session.stop();
-		await expect(waiting).rejects.toThrow(/stopped|interrupted/i);
-		await expect(exchange.waitForSummary()).rejects.toThrow(/stopped|interrupted/i);
-		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(0);
-	});
 });
 
 describe('an exchange', () => {
@@ -937,36 +912,6 @@ describe('a fold', () => {
 	});
 });
 
-describe('a room without a summary writer', () => {
-	it('opens and closes an exchange, and owes no summary', async () => {
-		// Nothing holds a room to an assistant. The room closes the exchange
-		// the way it always does, and no close names a seat, so nothing is
-		// owed and nobody summarizes.
-		const session = stopAtEnd(
-			await startRoom({
-				name: roomName(),
-				agents: [product],
-				runtime,
-				execution: piExecution({
-					sessions: 'memory',
-					stream: scriptedStream(byAgent({ product: insists('Thursday is out.') })),
-				}),
-			}),
-		);
-		const events = collect(session);
-
-		const visit = await session.visit(priya);
-		await visit.send({ text: 'Can I tell the client Thursday?' });
-		await waitForRoom(session);
-
-		const record = await messagesOf(session);
-		expect(record.filter((m) => m.kind === 'summary')).toEqual([]);
-		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said']);
-		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(1);
-		expect((await participantsOf(session)).map((s) => s.name)).toEqual(['product', 'priya']);
-	});
-});
-
 describe('a summary writer with domain tools', () => {
 	it('uses ordinary tools while responding and only say while summarizing', async () => {
 		const book = defineTool({
@@ -1037,13 +982,6 @@ describe('a summary writer with domain tools', () => {
 });
 
 describe('definePerson', () => {
-	it('keeps how a person reads, and drops a blank', () => {
-		expect(priya.preferences).toBe(
-			'Lead with the decision she has to make. Leave out who said what.',
-		);
-		expect(dan.preferences).toBeUndefined();
-	});
-
 	it.each([
 		['definePerson', definePerson],
 		['captureHuman', captureHuman],

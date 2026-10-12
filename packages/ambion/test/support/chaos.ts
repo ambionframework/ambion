@@ -33,7 +33,6 @@ import {
 	startRoom,
 } from '../../src/index.ts';
 import type { Lease } from '../../src/journal/entries.ts';
-import { foldLeases } from '../../src/room/lease.ts';
 import { isLive } from '../../src/room/rules.verified.ts';
 import { type FakeClock, fakeClock } from '../../src/testing.ts';
 import {
@@ -48,6 +47,7 @@ import {
 	sam,
 	steady,
 } from './cast.ts';
+import { foldLeases } from './fold.ts';
 import { invariants } from './invariants.ts';
 import { serializing } from './ports.ts';
 import { currentExchange, runningLeases, stateOf, storedOf } from './room.ts';

@@ -55,15 +55,14 @@ cycle in the graph above. The test config sends the package's own specifiers
 to its source, so a test reads one module.
 
 Internal dependencies use `workspace:*`; pnpm rewrites them to the release
-version while packing. Two packages get a packed-consumer smoke check that
+version while packing. One package gets a packed-consumer smoke check that
 installs the tarball outside the repository and exercises its built
 exports: `scripts/release.mjs verify` installs `@ambionframework/workspace`
-with no token and imports its resource entry, and
-[`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) does the same
-for the journal. The other packages rely on `pnpm run check:packages` for
-export and pack-list correctness, and on `pnpm run test` for the built
-`dist/**` that `check:types` type-checks against; neither installs a
-tarball in an external project the way the two smoke checks do.
+with no token and imports its resource entry. The other packages rely on
+`pnpm run check:packages` for export and pack-list correctness, and on
+`pnpm run test` for the built `dist/**` that `check:types` type-checks
+against; neither installs a tarball in an external project the way the smoke
+check does.
 
 **A packed consumer of the workspace installs no Pi package.**
 `scripts/packed-consumer.test.mjs` packs the workspace, the workstation, and
@@ -103,7 +102,8 @@ mechanism each. `core.ts` imports no sibling. The executor contract lives in
 trace, and rendering. It imports no model library:
 `@ambionframework/pi` holds Pi and depends on the core. `room.ts` composes
 both behind the public facade.
-`biome.jsonc` enforces these import boundaries.
+`biome.jsonc` enforces these import boundaries. The Biome rule
+`noImportCycles` refuses a cycle of value imports. It skips type-only imports.
 
 **A test checks that each import rule refuses what it names.** Biome reads
 each group as a gitignore pattern, and a pattern that matches nothing
@@ -368,7 +368,7 @@ the package first. See
 [Codex](codex.md).
 
 The scripted suite and live tier share invariants. The scripted tier also runs
-the failure matrix, process kill, random walk, consistency history, and split
+the failure matrix, process kill, consistency history, and split
 host checks. See [`test/support/invariants.ts`](../packages/ambion/test/support/invariants.ts)
 and [`durability.md`](durability.md) for the claims those tests enforce.
 

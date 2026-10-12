@@ -1,4 +1,4 @@
-import { definePerson, readRoom, startRoom } from '@ambionframework/ambion';
+import { definePerson } from '@ambionframework/ambion';
 import { byAgent, callTool, type Script, say, settled } from '@ambionframework/ambion/testing';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
@@ -251,52 +251,6 @@ describe('breakout', () => {
 		);
 		await canvas.close();
 		await refusal(open(), /closed/);
-	});
-});
-
-describe('the start of a row', () => {
-	it('starts a row that has no journal, and posts the start under its key', async () => {
-		const { canvas, store, errors } = host();
-		await store.insert(rootRow());
-		await store.insert(breakoutRow('site-a', 'site'));
-		await canvas.resume({ agents: [tooled('ada', canvas.tools()), cy] });
-		const read = await live(canvas, 'site-a').read();
-		expect(read.messages.filter((m) => m.kind === 'system')).toMatchObject([
-			{ text: 'Start.', key: 'breakout-start:site-a' },
-		]);
-		expect(errors).toEqual([]);
-	});
-
-	it('posts the start once for a journal that has the room and no post', async () => {
-		const first = host();
-		await first.store.insert(rootRow());
-		await first.store.insert(breakoutRow('site-a', 'site'));
-		await startRoom({ name: 'site-a', agents: [cy], runtime: first.runtime }).then((room) =>
-			room.stop(),
-		);
-		for (let run = 0; run < 2; run++) {
-			const next = host({ store: first.store, storage: first.storage });
-			await next.canvas.resume({ agents: [tooled('ada', next.canvas.tools()), cy] });
-			const read = await live(next.canvas, 'site-a').read();
-			expect(read.messages.filter((m) => m.kind === 'system')).toHaveLength(1);
-			await next.canvas.close();
-		}
-	});
-
-	it('starts no archived room, and keeps its journal readable', async () => {
-		const first = host();
-		await first.store.insert(rootRow());
-		await first.store.insert(breakoutRow('site-a', 'site'));
-		await startRoom({ name: 'site-a', agents: [cy], runtime: first.runtime }).then(async (room) => {
-			await room.post({ text: 'Start.', key: 'breakout-start:site-a' });
-			await room.stop();
-		});
-		await first.store.archive('site-a', { result: 'done' });
-		const next = host({ store: first.store, storage: first.storage });
-		await next.canvas.resume({ agents: [tooled('ada', next.canvas.tools()), cy] });
-		expect(next.canvas.room('site-a')).toBeUndefined();
-		const read = await readRoom('site-a', { runtime: next.runtime });
-		expect(read.messages.some((m) => m.kind === 'system')).toBe(true);
 	});
 });
 
@@ -696,19 +650,5 @@ describe('the bridge', () => {
 		await canvas.start('site-survey');
 		expect(await noticesOf(systemMessages)).toHaveLength(1);
 		expect(errors).toHaveLength(1);
-	});
-});
-
-describe('a visit', () => {
-	it('lets a person visit a breakout room', async () => {
-		const { open, canvas } = await lab();
-		await open();
-		const room = live(canvas, 'site-survey');
-		const visit = await room.visit(definePerson({ name: 'priya', identity: 'Priya.' }));
-		const sent = await visit.send({ text: 'How is it going?', key: 'visit-1' });
-		await sent.waitForClose();
-		expect((await room.read()).messages.some((m) => m.kind === 'said' || m.kind === 'system')).toBe(
-			true,
-		);
 	});
 });

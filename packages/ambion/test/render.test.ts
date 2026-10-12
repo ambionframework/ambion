@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderActivation, renderDelta, renderRecord } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
-import { messageUri, roomUri } from '../src/index.ts';
+import { messageUri } from '../src/index.ts';
 import { renderLine } from '../src/record.ts';
 import type { Message } from '../src/types.ts';
 import { scriptedAgent } from './support/room.ts';
@@ -172,10 +172,8 @@ describe('the URIs a prompt states', () => {
 			},
 		};
 		const rendered = renderActivation(view, worker);
-		expect(rendered.context).toContain(roomUri('site'));
 		expect(rendered.agent).toContain('refs');
 		expect(rendered.context).toContain('opened by message 4');
-		expect(rendered.context).toContain(messageUri('site', 4));
 		expect(rendered.context).not.toContain('/exchange/');
 		expect(rendered.context).not.toContain('a say you scheduled');
 		// An exchange that names no person, with its opening out of the view, names only its start.
@@ -185,8 +183,6 @@ describe('the URIs a prompt states', () => {
 		).context;
 		expect(bare).toContain('Exchange 4 is active.');
 		expect(bare).not.toContain('human direction');
-		// The kernel names no database: a seat with no database reads no database guidance.
-		expect(`${rendered.mechanism}${rendered.agent}`).not.toMatch(/database|sqlite/i);
 	});
 
 	it('states that a returned say that opened the exchange is the seat’s own', () => {

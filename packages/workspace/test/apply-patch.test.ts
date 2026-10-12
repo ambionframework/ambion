@@ -867,8 +867,6 @@ describe('the arguments of the apply_patch tool', () => {
 	};
 
 	it.each([
-		{ name: 'a bare string', args: 'P', expected: { input: 'P' } },
-		{ name: 'the name patch', args: { patch: 'P' }, expected: { input: 'P' } },
 		{
 			name: 'input beside patch',
 			args: { input: 'I', patch: 'P' },

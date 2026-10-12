@@ -289,9 +289,6 @@ importers:
       '@ambionframework/just-bash':
         specifier: workspace:*
         version: link:../just-bash
-      '@ambionframework/pi':
-        specifier: workspace:*
-        version: link:../pi
       '@ambionframework/workspace':
         specifier: workspace:*
         version: link:../workspace

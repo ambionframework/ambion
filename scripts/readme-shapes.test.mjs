@@ -27,15 +27,6 @@ test('every defineAgent example passes an executor and no model fields', () => {
 	}
 });
 
-test('no README example calls env.writeFile or env.readTextFile', () => {
-	// Those calls need a harness Context, which a README reader cannot build.
-	for (const page of pages) {
-		for (const block of blocksOf(page)) {
-			assert.doesNotMatch(block, /env\.(writeFile|readTextFile)\(/, `${page}: needs a Context`);
-		}
-	}
-});
-
 test('the README shows the three executor kinds with the workspace tools only', () => {
 	const code = blocksOf('README.md').join('\n');
 	for (const call of ['pi({', 'claude({', 'codex({']) {

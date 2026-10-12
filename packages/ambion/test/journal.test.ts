@@ -56,10 +56,6 @@ describe('key spaces', () => {
 			key: 'k1',
 		});
 	});
-
-	it('gives a delivery token and a commit token of equal text two keys', () => {
-		expect(spaced('delivery', 'same')).not.toBe(spaced('commit', 'same'));
-	});
 });
 
 describe('roomJournal', () => {

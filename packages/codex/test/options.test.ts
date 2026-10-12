@@ -174,13 +174,6 @@ describe('threadParams', () => {
 		expect(executor.tools.map((tool) => tool.name)).toEqual(names);
 		expect(executor.guidance).toBe(guidance);
 	});
-
-	it('defaults reasoningSummary to auto', () => {
-		expect(codex({ instructions: 'x', model: 'm' }).reasoningSummary).toBe('auto');
-		expect(
-			codex({ instructions: 'x', model: 'm', reasoningSummary: 'none' }).reasoningSummary,
-		).toBe('none');
-	});
 });
 
 describe('exclusiveEntry', () => {

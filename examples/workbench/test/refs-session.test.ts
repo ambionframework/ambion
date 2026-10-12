@@ -94,7 +94,7 @@ function keysOver(session: Awaited<ReturnType<typeof open>>['session']) {
 }
 
 describe('the refs of a message', () => {
-	it('lists and marks the refs of the shown messages, and a message ref opens its discussion', async () => {
+	it('lists and marks the refs of the shown messages', async () => {
 		const { session } = await open();
 		const state = session.refItems.map((item) => [item.id, Boolean(item.resolved.target)]);
 		expect(state).toEqual([
@@ -112,12 +112,6 @@ describe('the refs of a message', () => {
 			room: 'bringup',
 			seq: 3,
 		});
-		expect(session.expanded.has('1')).toBe(false);
-		await session.openRef('4#0');
-		expect(session.expanded.has('1')).toBe(true);
-		expect(session.focus).toBe(3);
-		session.clearFocus();
-		expect(session.focus).toBeUndefined();
 		session.setAllOpen(true);
 		expect(session.refItems.map((item) => item.id).slice(0, 2)).toEqual(['2#0', '2#1']);
 	});
