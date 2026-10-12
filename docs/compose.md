@@ -744,16 +744,16 @@ refuses a second `compose`.
 **Six files of the vocabulary layer hold the tools.** `compose.ts` holds
 the types, the checks, and `COMPOSE_GUIDANCE`. `compose-tool.ts` holds the
 tool and the hosting exports. `compose-run.ts` holds the run of one compose
-call. `compose-catalog.ts` renders the catalog, `compose-describe.ts` holds the `describe` tool, and `compose-macros.ts`
-checks the macros. `tool-call.ts` holds the one function that runs a tool
-call. The file list of the layer in `biome.jsonc` names each file
+call. `compose-catalog.ts` renders the catalog, `compose-describe.ts`
+holds the `describe` tool, and `compose-macros.ts` checks the macros.
+`tool-call.ts` holds the argument check and the call of a nested tool. The file list of the layer in `biome.jsonc` names each file
 ([Toolchain](toolchain.md)).
 
 **Every executor kind hosts `compose` as one more tool.** Pi builds its
 tools from the definition. Claude and Codex host `pass.tools`, which holds
 each tool of the definition as a `BoundTool`. The `invoke` of `compose`
 closes over the other tools of the definition. It runs each nested call
-through `tool-call.ts`, the one function that runs a tool call. A Codex
+through `tool-call.ts`. A Codex
 seat gets `compose` through the same `agentTools` path as a Claude seat,
 and no test of `compose` runs on a Codex seat.
 
