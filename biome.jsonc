@@ -718,39 +718,6 @@
 			}
 		},
 		{
-			// The child of `processRuntime` runs under --permission with no allow
-			// flag: Node loads its entry file and no other file. The build bundles
-			// the setup script into the entry, so the source imports that script and
-			// `node:` built-ins, and nothing else. A Biome override replaces the
-			// options of an earlier one for the same rule, so this entry repeats
-			// the refusal of the core's files.
-			"includes": ["packages/compose/src/child.ts"],
-			"linter": {
-				"rules": {
-					"style": {
-						"noRestrictedImports": {
-							"level": "error",
-							"options": {
-								"patterns": [
-									{
-										"group": [
-											"@ambionframework/**",
-											"quickjs-emscripten",
-											"quickjs-emscripten/**",
-											"./*",
-											"!./guest.ts",
-											"../**"
-										],
-										"message": "The child loads its entry file and no other file at run time. It imports `node:` built-ins and the setup script, which the build bundles."
-									}
-								]
-							}
-						}
-					}
-				}
-			}
-		},
-		{
 			// The Pi test entry reads the verbs and the `Reply` type of the core
 			// test entry, and so does the scripted demo of Camera Chat. A Biome override replaces the options of an earlier one
 			// for the same rule, so this entry repeats the group above and adds

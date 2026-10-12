@@ -15,7 +15,7 @@ packages/
   claude/       Claude Agent SDK executor: claude() and claudeExecution()
   cloudflare/   Durable Object adapter
   codex/        Codex executor: codex() and codexExecution()
-  compose/       the runtimes of compose: quickjsRuntime() and processRuntime()
+  compose/      the runtime of compose: quickjsRuntime()
   journal/      append-only journal storage
   just-bash/    workspace bash backends over just-bash, and a git backend in the process
   pi/           Pi executor: pi() and piExecution()

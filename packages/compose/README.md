@@ -1,6 +1,6 @@
 # @ambionframework/compose
 
-The runtimes of the `compose` tool of an
+The runtime of the `compose` tool of an
 [Ambion](https://ambionframework.com) seat. A runtime runs the code of one
 compose call. The code calls the tools of the seat as `tools.<name>(args)`.
 `pi()`, `claude()`, and `codex()` give every seat `quickjsRuntime()` by default.
@@ -12,8 +12,7 @@ A host passes `compose: { runtime }` to choose another runtime.
 pnpm add @ambionframework/ambion @ambionframework/compose
 ```
 
-Every package needs Node 22.19 or newer. `processRuntime` needs Node 26 or
-newer.
+Every package needs Node 22.19 or newer.
 
 ## Use
 
@@ -35,21 +34,18 @@ const analyst = defineAgent({
 });
 ```
 
-## The two runtimes
+## The runtime
 
-| ComposeRuntime     | Runs the code                                           | Memory and CPU                                                        | Isolation                                                                                     |
-| ------------------ | ------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `quickjsRuntime()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit and a CPU limit, both in the options                   | A runtime and a WebAssembly memory for each compose call. It shares the process of the host.  |
-| `processRuntime()` | In a `node:vm` context, in a child Node process         | `--max-old-space-size` on the child. The host kills it at the signal. | The child runs under `--permission` with no allow flag: no file, network, process, or worker. |
+| ComposeRuntime     | Runs the code                                           | Memory and CPU                                      | Isolation                                                                                    |
+| ------------------ | ------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `quickjsRuntime()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit and a CPU limit, both in the options | A runtime and a WebAssembly memory for each compose call. It shares the process of the host. |
 
-**Neither runtime is a defense against hostile code.** A separate context
-limits the names that code reaches. `processRuntime` adds the permission
-model of Node, which gives the child no file, no network, no child process,
-and no worker. The code of a model is not hostile, and the runtimes bound
-its mistakes. [Trust](https://github.com/ambionframework/ambion/blob/main/docs/trust.md)
+**The runtime is not a defense against hostile code.** A separate context
+limits the names that code reaches. The code of a model is not hostile, and
+the runtime bounds its mistakes. [Trust](https://github.com/ambionframework/ambion/blob/main/docs/trust.md)
 states what the kernel does not defend.
 
-**The code has no ambient authority.** Both runtimes run one setup script
+**The code has no ambient authority.** The runtime runs one setup script
 in a fresh context. It makes these names throw or absent.
 
 | Name                                          | In the code                                        |
@@ -95,25 +91,6 @@ module of the evaluation is its own, so the garbage collector reclaims it.
 Code that catches an out-of-memory error leaves the same objects. The free of
 the runtime then aborts, the evaluation keeps the value of the code, and
 Emscripten can print an `Aborted(...)` line to stderr.
-
-## `processRuntime(options)`
-
-| Option        | Meaning                                                     | Default |
-| ------------- | ----------------------------------------------------------- | ------- |
-| `memoryLimit` | The bytes of the old space of the heap of the child         | 64 MiB  |
-| `spawn`       | Starts the child. A test passes a function that records it. | `spawn` |
-
-**An ArrayBuffer lives outside the bound.** `--max-old-space-size` limits the
-old space of the heap. Memory of an ArrayBuffer is not in it.
-
-**The constructor throws on Node 22.** Node 22 has no `--allow-net`, so its
-permission model does not refuse the network. Use `quickjsRuntime` there.
-
-**The child speaks JSON lines over stdio.** Each call carries an id, so
-several calls run together. The host kills the child at the signal and at the
-end of the code. The child entry is one bundled file that imports only `node:`
-built-ins, because Node loads that file and no other. A relative import in
-the child fails with `ERR_ACCESS_DENIED`.
 
 ## Test a runtime
 

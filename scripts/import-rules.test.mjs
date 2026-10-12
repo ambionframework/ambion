@@ -127,29 +127,12 @@ const CASES = [
 	['packages/assistant/src', '@ambionframework/ambion/testing', true],
 	['packages/assistant/src', '@ambionframework/ambion/src/room.ts', true],
 	['packages/assistant/src', '../../ambion/src/room.ts', true],
-	// The runtimes reach the core the same way.
+	// The runtime reaches the core the same way.
 	['packages/compose/src', '@ambionframework/ambion', false],
 	['packages/compose/src', '@ambionframework/ambion/conformance', false],
 	['packages/compose/src', '@ambionframework/ambion/testing', true],
 	['packages/compose/src', '@ambionframework/ambion/src/room.ts', true],
 	['packages/compose/src', '../../ambion/src/room.ts', true],
-	// The child of `processRuntime` imports `node:` built-ins and the setup
-	// script, and no other file.
-	[
-		'packages/compose/src',
-		[
-			['node:readline', false],
-			['node:vm', false],
-			['./guest.ts', false],
-			['./quickjs.ts', true],
-			['./crossing.ts', true],
-			['@ambionframework/ambion', true],
-			['quickjs-emscripten', true],
-			['../../ambion/src/room.ts', true],
-		],
-		null,
-		'child.ts',
-	],
 	// The workspace reaches the core the same way, and loads no just-bash.
 	['packages/workspace/src', '@ambionframework/ambion', false],
 	['packages/workspace/src', '@ambionframework/ambion/testing', true],

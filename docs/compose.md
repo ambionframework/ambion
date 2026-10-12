@@ -5,8 +5,8 @@ has the `compose` tool and the `describe` tool, with `quickjsRuntime()` by
 default. A seat cannot turn them off. The main entry exports the types of the
 option and `COMPOSE_GUIDANCE`.
 Skill [macros](macros.md) run by name. The package
-`@ambionframework/compose/runtime` holds `quickjsRuntime` and `processRuntime`,
-and both pass `composeRuntimeConformance`.
+`@ambionframework/compose/runtime` holds `quickjsRuntime`, which passes
+`composeRuntimeConformance`.
 
 **Macros are the main use of `compose`.** A skill stores a procedure as a
 [macro](macros.md), and the model runs it by name with arguments. The model
@@ -121,8 +121,8 @@ the bound names. It differs for three cases:
 | The call binds nothing                     | The same two messages, with `This call binds no tool.`                                     |
 
 `compose` gives the runtime the names of the seat tools that the call
-leaves out in `unlisted`. The two runtimes share one guest script, so
-both give the same message. The read of `then` and `toJSON` does not throw,
+leaves out in `unlisted`. The guest script of the runtime builds
+the message. The read of `then` and `toJSON` does not throw,
 so `await tools` and `JSON.stringify(tools)` work. `'wait' in tools` is
 false for an unbound name.
 
@@ -225,9 +225,8 @@ section that states it in full.
   8 calls at a time, 65,536 bytes of returned JSON, and 120,000 ms of wall
   time. The activation deadline ends a call sooner. The description of
   `compose` shows the values of the seat ([Limits](#limits)).
-- **Each runtime adds limits of its own.** `quickjsRuntime` limits the
-  heap to 64 MiB and the code to 10,000 ms of CPU. `processRuntime`
-  limits the old space of the child heap to 64 MiB. The description of
+- **The runtime adds limits of its own.** `quickjsRuntime` limits the
+  heap to 64 MiB and the code to 10,000 ms of CPU. The description of
   `compose` does not state them ([The runtime](#the-runtime)).
 - **The code has no ambient authority.** It has no clock, no random
   source, no timer, no import, and no I/O except through tools
@@ -930,7 +929,7 @@ carries it.
 
 **A runtime states its isolation.** A separate JavaScript context in
 the same process limits the names that code reaches. It is not a security
-boundary against hostile code. Each runtime states its memory limit, its
+boundary against hostile code. A runtime states its memory limit, its
 CPU limit, and its isolation. [Trust](trust.md) states what the kernel does
 not defend.
 
@@ -942,7 +941,7 @@ as every seat does.
 **A seat has `quickjsRuntime()` by default.** The executor options take a
 `compose` option. With no option, the seat has the `compose` and `describe`
 tools with `quickjsRuntime()`. A host passes its own `compose` object to
-choose `processRuntime()`, an approval hook, guidance, or limits.
+choose another runtime, an approval hook, guidance, or limits.
 
 ```ts
 import { quickjsRuntime } from '@ambionframework/compose/runtime';
@@ -966,15 +965,14 @@ alone adds no tool for an absent option. A definition already holds the
 entry holds a definition, and `@ambionframework/cloudflare` finds each
 definition by name in the worker, so no function crosses a wire.
 
-**`@ambionframework/compose/runtime` holds the first two runtimes.** Both pass
+**`@ambionframework/compose/runtime` holds `quickjsRuntime`.** It passes
 one conformance suite, `composeRuntimeConformance`, which
 `@ambionframework/ambion/conformance` exports beside the other suites of
-the kernel.
+the kernel. A runtime of a host passes the same suite.
 
-| ComposeRuntime     | Runs the code                                           | Memory and CPU                                                                                                                                   | Isolation                                                                                                  |
-| ------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `quickjsRuntime()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit on the QuickJS heap (64 MiB), and a CPU limit on the time of the code (10,000 ms). A cut ends the run between stretches           | A fresh QuickJS runtime for each compose call. It shares the process of the host.                          |
-| `processRuntime()` | In a `node:vm` context, in a child Node process         | `--max-old-space-size` on the old space of the child heap (64 MiB). An ArrayBuffer is outside that bound. The host kills the child at the signal | The child runs under `--permission` with no allow flag: no file, network, child process, worker, or addon. |
+| ComposeRuntime     | Runs the code                                           | Memory and CPU                                                                                                                         | Isolation                                                                         |
+| ------------------ | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `quickjsRuntime()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit on the QuickJS heap (64 MiB), and a CPU limit on the time of the code (10,000 ms). A cut ends the run between stretches | A fresh QuickJS runtime for each compose call. It shares the process of the host. |
 
 **`quickjsRuntime` uses the synchronous QuickJS build.** The asyncify
 build of `quickjs-emscripten` runs one host call at a time, so
@@ -991,22 +989,6 @@ The runtime disposes each promise and each value handle that it makes.
 QuickJS aborts the process when it frees a runtime that still holds one.
 The package is MIT, it has no native part, and the lockfile already holds
 it through `just-bash`.
-
-**`processRuntime` needs the network permission of Node.** Node 22 has
-no `--allow-net`, so its permission model does not refuse the network.
-`processRuntime()` throws at construction on a Node whose
-`process.allowedNodeEnvironmentFlags` has no `--allow-net`. The package
-keeps the floor of Node 22.19, and `quickjsRuntime` runs on every
-supported Node.
-
-**The child of `processRuntime` speaks JSON lines over stdio.** Each
-binding call carries an id, so several calls run together, and each
-answer names the call that it settles. The child entry is one file.
-Under `--permission` with no allow flag, Node loads the entry and refuses
-every other file read, so a relative import fails with
-`ERR_ACCESS_DENIED`. The package builds the child entry as its own tsdown
-entry, and the entry imports only `node:` built-ins.
-`packages/claude/tsdown.config.ts` builds two entries in the same way.
 
 **Cloudflare has no compose runtime in the first version.** A worker cannot
 start a process, and a worker loads WebAssembly only from its bundle. The
@@ -1110,9 +1092,8 @@ Items 1, 6, and 7 add a live run.
 2. **The data stays out of the context.** A test passes a large result
    from one tool into another. The model receives only the returned value,
    and the trace holds the nested calls with their `parent`.
-3. **Two runtimes run the same code.** `quickjsRuntime()` and
-   `processRuntime()` pass `composeRuntimeConformance`, with no change to a
-   tool. The suite covers the globals table, a memory limit, a cut,
+3. **The runtime passes the conformance suite.** `quickjsRuntime()`
+   passes `composeRuntimeConformance`, with no change to a tool. The suite covers the globals table, a memory limit, a cut,
    concurrent binding calls, and JSON at each crossing.
 4. **Failure keeps its facts.** An error, a cut, a limit, a denial, an
    invalid declared output, and a call that outlives the code each give
