@@ -77,7 +77,7 @@ pnpm check              # the gate; run it, after pnpm format, before every push
 pnpm check lint types   # only the named steps
 pnpm --filter @ambionframework/<pkg> exec vitest run [file]   # one package or file
 node --test scripts/<name>.test.mjs                            # one report check
-pnpm rule:check <file>  # regenerate and prove one rules file; needs Dafny
+pnpm rule:check <file>  # generate and prove one rules file; needs Dafny
 pnpm check:lemmascript  # prove every rules and proofs file; needs Dafny
 pnpm chaos              # the failure sweeps on both storages, 200 seeds
 pnpm test:live          # a real model; costs money, see below

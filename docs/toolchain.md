@@ -217,17 +217,18 @@ timings, passing tests, and stack frames inside `node_modules`. It puts a
 header over the lines of each turbo task and makes each path relative to
 the root. The last line names the failed steps, for `pnpm check <step...>`.
 
-LemmaScript source, its generated `.dfy.gen` and `.dfy`, and a hand-written
-`.proofs.dfy` are kept together. The `.dfy` equals the generation, so
-`npx lsc regen --backend=dafny <file>` after a contract edit is a copy; a
-proof the generator cannot write goes in the `.proofs.dfy`, which includes
-the generated file. `pnpm check` runs `lsc gen-check`, which regenerates
-and fails on a stale file without Dafny; `pnpm check:lemmascript` runs the
+LemmaScript source, its `.dfy`, and a hand-written `.proofs.dfy` are kept
+together. The `.dfy` equals the generation, which `lsc gen` writes to a
+`.dfy.gen` that git ignores. `pnpm rule:check <file>` after a contract edit
+copies the generation to the `.dfy`. A proof the generator cannot write
+goes in the `.proofs.dfy`, which includes the `.dfy`. `pnpm check` runs
+`lsc gen-check`, which regenerates and fails on a stale file without Dafny; `pnpm check:lemmascript` runs the
 proof and `check-extra.sh`, which verifies every proofs file, and needs
 Dafny on `PATH`. `pnpm rule:check <file>` does both for one file.
 `lsc gen-check` passes a `.dfy` that only adds lines to the generation, so
 [`scripts/rules-fresh.sh`](../scripts/rules-fresh.sh) compares each listed
-`.dfy` with its fresh generation and names the stale file.
+`.dfy` with the generation that `lsc gen-check` just wrote and names the
+stale file.
 
 `LemmaScript-files.txt` lists what CI verifies, one `path [timeout] [dafny
 flags]` per line. A timeout above 60 turns the batch check into a generation
