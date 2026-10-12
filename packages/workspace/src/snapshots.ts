@@ -24,11 +24,11 @@ import {
 	parseSnapshotUri,
 	REF_LIMITS,
 	snapshotUri,
+	type ToolBundle,
 	type ToolContext,
 } from '@ambionframework/ambion';
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
-import type { Capability } from './capability.ts';
 import type { ObjectEnv } from './object-backend.ts';
 import { unwrap } from './object-files.ts';
 import { assertObjectSize, MAX_OBJECT_BYTES, sha256Hex } from './object-rules.ts';
@@ -353,10 +353,10 @@ function createRestoreTool(store: SnapshotStore): AmbionTool {
 }
 
 /** The snapshot capability: `snapshot` and `restore` over the store, and the citation note. */
-export function snapshotCapability(store: SnapshotStore): Capability {
+export function snapshotCapability(store: SnapshotStore): ToolBundle {
 	return {
 		tools: [createSnapshotTool(store), createRestoreTool(store)],
-		notes: [snapshotGuidance(store.workspace)],
+		guidance: snapshotGuidance(store.workspace),
 	};
 }
 

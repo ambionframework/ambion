@@ -49,9 +49,8 @@ revisions are the durable records outside the journals. A row holds hosting
 intent, the tree, and what a start needs. It holds no message, no lease, and no exchange
 ([The store](#the-store)).
 
-**The depth is one.** A breakout room has no breakout rooms. The row of a
-breakout room has depth one, and `breakout`, `tell`, and `archive` refuse a
-call from it.
+**A breakout room opens no breakout room.** The `start` of the row names a
+breakout room, and `breakout`, `tell`, and `archive` refuse a call from it.
 
 **A breakout room is a regular room.** An agent behaves in it as the
 composition of the room says: who is present, and whether the room has an
@@ -498,7 +497,6 @@ interface CanvasStore {
 interface CanvasRoom {
   readonly name: string;
   readonly goal: string;
-  readonly depth: 0 | 1;
   readonly state: 'running' | 'stopped' | 'archived';
   readonly start: RootStart | BreakoutStart;
   readonly close?: CanvasClose;

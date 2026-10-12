@@ -12,7 +12,7 @@ import {
 import { isName } from '@ambionframework/ambion/names';
 import type { RoomMirror } from '@ambionframework/workspace';
 import { type ActPort, type Answer, Answers, actOn } from './acts.ts';
-import { type BreakoutPort, DEFAULT_PER_OPENER, startOf } from './breakout.ts';
+import { type BreakoutPort, DEFAULT_PER_OPENER, isRoot, startOf } from './breakout.ts';
 import { Bridge } from './bridge.ts';
 import { castOf, type Definitions, definitionsOf, refuse, rootStartOf } from './cast.ts';
 import { EVENT_OPERATION, roomOf } from './events.ts';
@@ -214,12 +214,12 @@ class CanvasRun implements Canvas {
 	}
 
 	private async launchRunning(): Promise<void> {
-		await this.launchAll((row) => row.depth === 0);
+		await this.launchAll(isRoot);
 		await this.launchAll(
 			(row) => row.start.kind === 'breakout' && this.handles.has(row.start.parent),
 		);
 		for (const row of [...this.rows.values()])
-			if (row.depth === 0 && this.handles.has(row.name) && !this.closed)
+			if (isRoot(row) && this.handles.has(row.name) && !this.closed)
 				await this.bridge.replay(row.name);
 	}
 
@@ -351,7 +351,6 @@ class CanvasRun implements Canvas {
 		const row: CanvasRoom = {
 			name: options.name,
 			goal: options.goal,
-			depth: 0,
 			state: 'running',
 			start: rootStartOf(options),
 		};
@@ -366,7 +365,7 @@ class CanvasRun implements Canvas {
 	}
 
 	private async openExisting(found: CanvasRoom): Promise<Room> {
-		if (found.depth !== 0)
+		if (!isRoot(found))
 			throw refuse(`"${found.name}" is a breakout room. A host opens root rooms.`);
 		const live = this.handles.get(found.name);
 		if (live !== undefined) return live.room;
@@ -394,7 +393,7 @@ class CanvasRun implements Canvas {
 			await this.record(name, 'running');
 			await this.launch(name);
 		});
-		if (row.depth === 0) await this.startChildren(name);
+		if (isRoot(row)) await this.startChildren(name);
 		const parent = startOf(row)?.parent ?? name;
 		if (!this.closed && this.handles.has(parent)) await this.bridge.replay(parent);
 	}
@@ -507,7 +506,7 @@ class CanvasRun implements Canvas {
 			await this.record(name, 'stopped');
 			await this.release(name);
 		});
-		if (row.depth === 0) await this.releaseChildren(name);
+		if (isRoot(row)) await this.releaseChildren(name);
 	}
 
 	/** A root stops its breakout rooms. Their rows keep their state. */
@@ -545,7 +544,7 @@ class CanvasRun implements Canvas {
 
 	private async archiveRow(name: string, close: CanvasClose): Promise<CanvasClose> {
 		const row = this.row(name);
-		if (row.depth !== 1) throw refuse(`"${name}" is a root room. Only a breakout room archives.`);
+		if (isRoot(row)) throw refuse(`"${name}" is a root room. Only a breakout room archives.`);
 		const recorded = await this.guard(name, 'archive', () =>
 			this.options.store.archive(name, close),
 		);

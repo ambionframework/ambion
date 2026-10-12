@@ -1,19 +1,10 @@
 /**
- * The one shape of a workspace capability, and the helpers that compose
- * capabilities into a bundle. `workspaceTools` in `./workspace.ts` holds the
- * order of the capabilities, and `withSkills` reuses the same helpers.
+ * The helpers that compose the bundles of a workspace into one bundle.
+ * `workspaceTools` in `./workspace.ts` holds the order of the bundles, and
+ * `withSkills` reuses the same helpers.
  */
 
-import type { AmbionTool, Reminder, ReminderSeat } from '@ambionframework/ambion';
-
-/** One capability of a workspace, as a bundle holds it: its tools, its guidance notes, and its reminder. */
-export interface Capability {
-	readonly tools: readonly AmbionTool[];
-	/** Paragraphs of guidance, in order. `joinNotes` drops an empty or undefined note. */
-	readonly notes: readonly (string | undefined)[];
-	/** Text for one respond activation of one seat, or undefined for none. */
-	readonly remind?: Reminder;
-}
+import type { Reminder, ReminderSeat } from '@ambionframework/ambion';
 
 /** The notes that are set, joined as paragraphs in the order given. */
 export function joinNotes(notes: readonly (string | undefined)[]): string {

@@ -30,7 +30,6 @@ const refusal = (promise: Promise<unknown>) =>
 const rootRow = (name: string, start: CanvasRoom['start'] = { kind: 'root' }): CanvasRoom => ({
 	name,
 	goal: `Goal of ${name}.`,
-	depth: 0,
 	state: 'running',
 	start,
 });
@@ -130,7 +129,6 @@ describe('open', () => {
 			{
 				name: 'site',
 				goal: 'Plan.',
-				depth: 0,
 				state: 'running',
 				start: { kind: 'root', agents: ['ada'] },
 			},

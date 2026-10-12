@@ -10,7 +10,6 @@ import { sqlOver } from './support/sql.ts';
 const rootRow = (name: string, state: CanvasRoom['state'] = 'running'): CanvasRoom => ({
 	name,
 	goal: 'Plan.',
-	depth: 0,
 	state,
 	start: { kind: 'root' },
 });

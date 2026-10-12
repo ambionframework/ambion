@@ -22,11 +22,11 @@ import {
 	type AmbionTool,
 	contentText,
 	defineTool,
+	type ToolBundle,
 	type ToolContext,
 } from '@ambionframework/ambion';
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
-import type { Capability } from './capability.ts';
 import { DEFAULT_GRACE_SECONDS, PROCESSES_DIR, type Process } from './process-files.ts';
 import { type LineRange, type OutputRead, readOutput } from './process-output.ts';
 import { MAX_TIMER_SECONDS } from './process-run.ts';
@@ -148,10 +148,10 @@ type CancelParams = Static<typeof cancelSchema>;
 type WaitParams = Static<typeof waitSchema>;
 
 /** The process capability: the four process tools, their note, and the reminder of the table. */
-export function processCapability(options: ProcessToolOptions): Capability {
+export function processCapability(options: ProcessToolOptions): ToolBundle {
 	return {
 		tools: createProcessTools(options),
-		notes: [processToolGuidance()],
+		guidance: processToolGuidance(),
 		remind: options.processes.remind,
 	};
 }

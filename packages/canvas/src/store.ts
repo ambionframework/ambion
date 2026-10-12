@@ -31,7 +31,6 @@ export interface BreakoutStart {
 export interface CanvasRoom {
 	readonly name: string;
 	readonly goal: string;
-	readonly depth: 0 | 1;
 	readonly state: 'running' | 'stopped' | 'archived';
 	readonly start: RootStart | BreakoutStart;
 	readonly close?: CanvasClose;

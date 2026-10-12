@@ -10,8 +10,8 @@
  * backend alone, so this module names no just-bash type.
  */
 
+import type { ToolBundle } from '@ambionframework/ambion';
 import type { WorkspaceEnv } from './backend.ts';
-import type { Capability } from './capability.ts';
 import { fileTools } from './file-tools.ts';
 import type { WorkspaceResource } from './resource.ts';
 
@@ -22,6 +22,6 @@ const FILES_NOTE = [
 ].join('\n');
 
 /** The file capability: the four file tools on the bash resource, and their note. */
-export function fileCapability(bash: WorkspaceResource<WorkspaceEnv>['use']): Capability {
-	return { tools: fileTools(bash), notes: [FILES_NOTE] };
+export function fileCapability(bash: WorkspaceResource<WorkspaceEnv>['use']): ToolBundle {
+	return { tools: fileTools(bash), guidance: FILES_NOTE };
 }

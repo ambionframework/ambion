@@ -137,7 +137,6 @@ const journalOf = (storageName: string, room: string): boolean =>
 const rootRow: CanvasRoom = {
 	name: 'site',
 	goal: 'Plan.',
-	depth: 0,
 	state: 'running',
 	start: { kind: 'root' },
 };

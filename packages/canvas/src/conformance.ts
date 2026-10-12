@@ -32,7 +32,6 @@ export interface CanvasStoreFixture {
 const root = (name: string, state: CanvasRoom['state'] = 'running'): CanvasRoom => ({
 	name,
 	goal: `Goal of ${name}.`,
-	depth: 0,
 	state,
 	start: {
 		kind: 'root',
@@ -47,7 +46,6 @@ const root = (name: string, state: CanvasRoom['state'] = 'running'): CanvasRoom 
 const breakout = (name: string, parent: string): CanvasRoom => ({
 	name,
 	goal: `Goal of ${name}.`,
-	depth: 1,
 	state: 'running',
 	start: {
 		kind: 'breakout',

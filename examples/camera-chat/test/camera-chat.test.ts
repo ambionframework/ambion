@@ -456,7 +456,7 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 	try {
 		// The canvas resumes the room from its row, and the room keeps its record.
 		expect(reopened.canvas.rooms()).toMatchObject([
-			{ name: 'camera', depth: 0, state: 'running', start: { kind: 'root', agents: ['observer'] } },
+			{ name: 'camera', state: 'running', start: { kind: 'root', agents: ['observer'] } },
 		]);
 		expect(reopened.canvas.room('camera')).toBe(reopened.room);
 		// The widget row survives the restart, and no camera process runs to bind.

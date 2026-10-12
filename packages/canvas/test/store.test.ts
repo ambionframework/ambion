@@ -32,7 +32,6 @@ describe('sqliteCanvas', () => {
 			const row = {
 				name: 'site',
 				goal: 'Plan.',
-				depth: 0,
 				state: 'running',
 				start: { kind: 'root', agents: ['ada'] },
 			} as const;

@@ -42,7 +42,6 @@ export const breakoutRow = (
 ): CanvasRoom => ({
 	name,
 	goal: `Work for ${name}.`,
-	depth: 1,
 	state: 'running',
 	start: { kind: 'breakout', parent, opener: 'ada', agents, message: 'Start.' },
 });

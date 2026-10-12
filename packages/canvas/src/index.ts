@@ -3,7 +3,7 @@
  *
  * ```ts
  * const store = sqliteCanvas(sql);
- * await store.insert({ name: 'site', goal: 'Plan the site.', depth: 0, state: 'running', start: { kind: 'root' } });
+ * await store.insert({ name: 'site', goal: 'Plan the site.', state: 'running', start: { kind: 'root' } });
  * ```
  *
  * The contract is `docs/canvas.md`.

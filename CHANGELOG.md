@@ -4,6 +4,13 @@
 
 ### Breaking changes
 
+**A canvas room row has no `depth`.** `CanvasRoom` holds no `depth` field, and
+`start.kind` says whether a room is a root room or a breakout room. The table
+`canvas_rooms` of `sqliteCanvas` has no `depth` column, so a database that an
+earlier build created needs a new `canvas_rooms` table. The refusal of a
+breakout call from a breakout room reads "A breakout room opens no breakout
+room."
+
 **`estimateTokens` is a function.** The executor option of `pi()`, `claude()`,
 and `codex()`, and `Executor.estimateTokens`, take a function from a text to
 a token count, and the default counts `Math.ceil(text.length / 4)`.
@@ -37,7 +44,15 @@ by default. A host that passed `processRuntime()` in `compose: { runtime }`
 passes `quickjsRuntime()` or a `ComposeRuntime` of its own. The accepted
 risk that a compose child process outlives its host closes with the code.
 
+**`@ambionframework/ambion/hosting` exports no `SeatContext` type.** An
+executor package has no use for it. `AgentRunner` still takes the context.
+
 ### Fixes
+
+**The `schedule` tool states what a returned say opens.** The description said
+that the message opens an exchange for the person of the exchange in which the
+seat scheduled it. When no exchange is open, a returned say opens a new
+exchange that has no person until a person speaks.
 
 **A question stays open when the asker schedules a check-in.** An agent that
 asked a person and then scheduled a say to itself closed its exchange as
