@@ -3,14 +3,9 @@
  * the acceptance in `docs/compose.md`). Each case runs on the executor kind
  * of the run. A run costs money, so each room holds one seat and each prompt
  * is short.
- *
- * When `AMBION_LIVE_REPORT` names a file, each case appends one JSON line
- * for each run. `scripts/compose-evidence.mjs` turns the lines into
- * evidence tables.
  */
 
 import { createHash } from 'node:crypto';
-import { appendFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -308,9 +303,8 @@ interface Evidence {
 }
 
 /**
- * Run one case. Each recorded run becomes one JSON line in the file that
- * `AMBION_LIVE_REPORT` names. A failed case writes its lines too, because the
- * spend happened. A line holds the length of the description of `compose`,
+ * Run one case. Each recorded run becomes one JSON line on stdout. A failed
+ * case writes its lines too, because the spend happened. A line holds the length of the description of `compose`,
  * which every request of the seat carries.
  */
 async function evidence(name: string, body: (tools: Evidence) => Promise<void>): Promise<void> {
@@ -340,8 +334,6 @@ async function evidence(name: string, body: (tools: Evidence) => Promise<void>):
 				...(note === undefined ? {} : { note }),
 			};
 			process.stdout.write(`live · compose · ${JSON.stringify(line)}\n`);
-			const file = process.env.AMBION_LIVE_REPORT;
-			if (file) appendFileSync(file, `${JSON.stringify(line)}\n`);
 		}
 	}
 }

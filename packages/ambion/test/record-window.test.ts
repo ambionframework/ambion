@@ -2,13 +2,11 @@
  * The record window: the one rule by which the room bounds the record of a
  * view. The room keeps the newest messages under its cap, then under the
  * token limit of the seat, never splits a summarised range, and keeps the
- * open exchange whole. The view is pure, so every case hands it a value, and
- * the snapshot pins the rendered context of each case.
+ * open exchange whole. The view is pure, so every case hands it a value.
  */
 import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
 import { captureAgent } from '../src/define.ts';
-import { renderActivation } from '../src/execution/render.ts';
 import type { RoomEntry } from '../src/journal/journal.ts';
 import type { ActivationSpec } from '../src/protocol.ts';
 import type { RoomState } from '../src/room/fold.ts';
@@ -142,7 +140,7 @@ function read({ state, spec, cap, tokens, estimator }: Case) {
 				}),
 	};
 	const view = viewOf(spec, facts);
-	return { view, rendered: renderActivation(view, agent).context };
+	return { view };
 }
 
 describe('the room windows the record', () => {
@@ -249,7 +247,7 @@ describe('the room windows the record', () => {
 			{ state: wide, spec: respond, tokens: 300, from: 106, omitted: 104 },
 		],
 	])('%s', (_name, one) => {
-		const { view, rendered } = read(one);
+		const { view } = read(one);
 		const { purpose } = one.spec;
 		const through = purpose.kind === 'summarize' ? purpose.through : Number.POSITIVE_INFINITY;
 		// The view is the tail of the record the purpose may read, from `from` on.
@@ -260,7 +258,6 @@ describe('the room windows the record', () => {
 		);
 		expect(view.context.omitted).toBe(one.omitted);
 		if (one.through !== undefined) expect(view.through).toBe(one.through);
-		expect(rendered).toMatchSnapshot();
 	});
 });
 

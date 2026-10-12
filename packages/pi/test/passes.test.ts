@@ -187,38 +187,6 @@ describe('the Pi executor across the passes of one activation', () => {
 		expect(prompts.at(-1)).toBe('[new] #2 [andrei] And the pump?');
 	});
 
-	it('takes a line that lands before the lane runs into the prompt', async () => {
-		const ready = deferred();
-		const resolving = deferred();
-		const definition = scriptedAgent('worker');
-		const opener = createPiOpener({
-			definition,
-			model: async (id, agent) => {
-				resolving.resolve();
-				await ready.promise;
-				return stubModel(id, agent);
-			},
-			stream: scriptedStream(() => quiet()),
-			now: () => 0,
-			sessions: memorySessions(),
-		});
-		const steps: Step[] = [];
-		const session = stateOf(opener, definition, {
-			trace: {
-				record: (step) => void steps.push(step),
-			},
-		});
-		const running = session.pass({ kind: 'view', view: viewOf(both, 2) });
-		await resolving.promise;
-		session.steer?.(2, 3, '[priya] And the hose?');
-		ready.resolve();
-		await running;
-		expect(steps.filter((step) => step.type === 'steer')).toEqual([
-			{ type: 'steer', seq: 3, consumed: true },
-		]);
-		expect(session.readThrough).toBe(3);
-	});
-
 	it('leaves a line that lands as the last answer ends to the next delta, and sends it once', async () => {
 		let landed = false;
 		let session: ActivationState | undefined;

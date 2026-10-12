@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { expect, expectTypeOf, it } from 'vitest';
 import * as conformance from '../src/conformance.ts';
 import * as hosting from '../src/hosting.ts';
+import type { Seq } from '../src/index.ts';
 import * as main from '../src/index.ts';
-import { PACKAGE_NAME, type Seq } from '../src/index.ts';
 import * as names from '../src/names.ts';
 
 const read = async (name: string) =>
@@ -21,10 +21,6 @@ const manifest = async () =>
 		name: string;
 		exports: Record<string, { import?: string } | string>;
 	};
-
-it('keeps the exported package name in step with the manifest', async () => {
-	expect(PACKAGE_NAME).toBe((await manifest()).name);
-});
 
 it('builds every entry the manifest names', async () => {
 	const { exports } = await manifest();

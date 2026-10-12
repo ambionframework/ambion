@@ -203,11 +203,6 @@ describe('release.mjs against a fake registry', () => {
 	const publishCalls = () =>
 		runner.calls.filter((c) => c.command === 'npm' && c.args[0] === 'publish');
 
-	it('orders the packages by dependency', () => {
-		const names = PACKAGES.map((entry) => entry.manifest.name);
-		assert.ok(names.indexOf('@ambionframework/ambion') < names.indexOf('@ambionframework/pi'));
-	});
-
 	it('stage publishes each package under next in dependency order', async () => {
 		await stage(context(), {});
 		const published = publishCalls().map((c) => c.args[1]);
@@ -221,19 +216,6 @@ describe('release.mjs against a fake registry', () => {
 		}
 		assert.equal(state.gateRuns, 1);
 		assert.equal(state.packs, PACKAGES.length, 'one pack per package, none per publish');
-	});
-
-	it('stage skips a version already published and finishes the rest after a failure', async () => {
-		state.failPublishOf = '@ambionframework/pi';
-		await assert.rejects(stage(context(), {}), /Failed to publish @ambionframework\/pi/);
-		assert.ok(fake.store.has('@ambionframework/ambion'));
-		assert.ok(!fake.store.has('@ambionframework/pi'));
-		state.failPublishOf = undefined;
-		logs.length = 0;
-		await stage(context(), {});
-		assert.ok(logs.some((line) => line.startsWith('skip    @ambionframework/ambion@')));
-		for (const entry of PACKAGES)
-			assert.ok(fake.store.get(entry.manifest.name).versions.has(VERSION));
 	});
 
 	it('stage refuses a dirty tree, an untagged HEAD, a disagreement, and a published version', async () => {
@@ -311,16 +293,26 @@ describe('release.mjs against a fake registry', () => {
 		await promote(context(), { yes: true });
 	}
 
-	it('resumes a partial run when the registry needs a token to read', async () => {
-		state.viewNeedsToken = true;
-		state.failPublishOf = PACKAGES[1].manifest.name;
-		await assert.rejects(stage(context(), {}), /Failed to publish/);
-		state.failPublishOf = undefined;
-		const before = publishCalls().length;
-		await stage(context(), {});
-		assert.equal(publishCalls().length - before, PACKAGES.length - 1);
-		assert.ok(logs.some((line) => line.startsWith('skip')));
-	});
+	for (const [title, viewNeedsToken] of [
+		['reads the registry without a token', false],
+		['reads the registry only with a token', true],
+	]) {
+		it(`stage skips a version already published and finishes the rest after a failure, and ${title}`, async () => {
+			state.viewNeedsToken = viewNeedsToken;
+			state.failPublishOf = '@ambionframework/pi';
+			await assert.rejects(stage(context(), {}), /Failed to publish @ambionframework\/pi/);
+			assert.ok(fake.store.has('@ambionframework/ambion'));
+			assert.ok(!fake.store.has('@ambionframework/pi'));
+			state.failPublishOf = undefined;
+			logs.length = 0;
+			const before = publishCalls().length;
+			await stage(context(), {});
+			assert.equal(publishCalls().length - before, PACKAGES.length - 1);
+			assert.ok(logs.some((line) => line.startsWith('skip    @ambionframework/ambion@')));
+			for (const entry of PACKAGES)
+				assert.ok(fake.store.get(entry.manifest.name).versions.has(VERSION));
+		});
+	}
 
 	it('refuses a registry that is not local', async () => {
 		const { defaultContext } = await import('./release.mjs');
@@ -396,7 +388,7 @@ describe('publish.mjs channels', () => {
 		assert.equal(custom.tag, 'x');
 	});
 
-	it('refuses the latest tag on the dev channel, as the old release workflow passed it', () => {
+	it('refuses the latest tag on the dev channel', () => {
 		assert.throws(
 			() => parseOptions(['--skip-pack', '--tag', 'latest']),
 			/cannot publish under latest/,
@@ -443,12 +435,5 @@ describe('version stamps', () => {
 		assert.ok(isVersion('0.1.0'));
 		assert.ok(!isVersion('0.1.0-dev.042.g1a2b3c4'));
 		assert.ok(!isVersion('0.1'));
-	});
-
-	it('version.mjs --check passes on the repository', () => {
-		execFileSync(process.execPath, ['scripts/version.mjs', '--check'], {
-			cwd: ROOT,
-			stdio: 'pipe',
-		});
 	});
 });

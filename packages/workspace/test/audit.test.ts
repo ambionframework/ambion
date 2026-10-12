@@ -384,8 +384,8 @@ describe('openAuditLog', () => {
 	});
 
 	it('reports a directory failure to onError, and never retries it as an entry that is too large', async () => {
-		// Before, the fallback retried the directory step too: a transient
-		// failure then wrote a RecordTooLarge notice and never reached onError.
+		// A transient failure of the directory step reaches onError. The fallback
+		// does not retry it, so no RecordTooLarge notice replaces the report.
 		const env = await bareEnv(0, 1);
 		const errors: Error[] = [];
 		const log = openAuditLog({ path: '/workspace/audit.jsonl', onError: (e) => errors.push(e) });

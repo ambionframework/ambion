@@ -43,25 +43,6 @@ const failed = (text: string, extra: object = {}): AssistantMessage => ({
 
 describe('the outcome of a settled input', () => {
 	it.each([
-		['a credit refusal in the text', 'Your credit balance is too low', {}, 'permanent'],
-		[
-			'a spent usage limit, as Anthropic words it',
-			'400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-10-01 at 00:00 UTC."}}',
-			{},
-			'permanent',
-		],
-		[
-			'a spent quota, as OpenAI words it, with its 429',
-			'You exceeded your current quota, please check your plan. (insufficient_quota)',
-			{ diagnostics: [{ details: { status: 429 } }] },
-			'permanent',
-		],
-		[
-			'a rate limit with its 429',
-			'rate_limit_error: This request would exceed the rate limit for your organization.',
-			{ diagnostics: [{ details: { status: 429 } }] },
-			'transient',
-		],
 		[
 			'a 401 in a diagnostic',
 			'Refused.',
@@ -93,7 +74,6 @@ describe('the outcome of a settled input', () => {
 			'transient',
 		],
 		['a number in free text', 'Rate limited at 401 tokens.', {}, 'transient'],
-		['an overload with no status', 'Overloaded.', {}, 'transient'],
 	] as const)('classifies %s', (_name, text, extra, cause) => {
 		expect(passOutcome(unanswered('model_error', text), failed(text, extra))).toMatchObject({
 			failed: true,

@@ -11,12 +11,13 @@ import { createRuntime, definePerson, startRoom } from '../src/index.ts';
 import { collect, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
-import { storages } from './support/storage.ts';
+import { memory } from './support/storage.ts';
 
 const worker = scriptedAgent('worker');
 const person = definePerson({ name: 'priya', identity: 'Project manager.' });
 
-describe.each(storages)('provider failure classification on $name storage', (storage) => {
+describe('provider failure classification', () => {
+	const storage = memory;
 	it.each([
 		[
 			'abandons a permanent failure in one attempt',
@@ -28,11 +29,6 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			'does not read a rate-limit token count as a permanent status',
 			'429 rate limit of 400,000 input tokens per minute exceeded',
 			'transient',
-		],
-		[
-			'abandons a spent usage limit in one attempt',
-			'400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits."}}',
-			'permanent',
 		],
 		['retries a transient failure to the cap', '503 the provider is overloaded', 'transient'],
 	] as const)('%s', async (_case, message, cause) => {

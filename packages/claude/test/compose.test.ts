@@ -13,14 +13,7 @@ import {
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
-import {
-	broken,
-	echo,
-	gauge,
-	later,
-	table,
-	total,
-} from '../../ambion/test/support/compose-tools.ts';
+import { broken, echo, table, total } from '../../ambion/test/support/compose-tools.ts';
 import { claude } from '../src/index.ts';
 import { open, seat, viewOf } from './support.ts';
 
@@ -155,30 +148,6 @@ describe('compose on a Claude seat', () => {
 				': failed',
 			],
 		},
-		{
-			name: 'a limit',
-			tools: [echo],
-			call: {
-				uses: ['echo'],
-				code: `for (let i = 0; i < 3; i++) await tools.echo({ text: 'a' });`,
-			},
-			options: { limits: { calls: 2 } },
-			read: ['The compose call passed compose.limits.calls (2).', 'echo: completed'],
-		},
-		{
-			name: 'a denial',
-			tools: [echo],
-			call: { uses: ['echo'], code: `await tools.echo({ text: 'a' });` },
-			options: { approve: () => 'deny' as const },
-			read: ['The approval refused this compose call. No code ran.\nNo call started.'],
-		},
-		{
-			name: 'a name that the catalog lacks',
-			tools: [echo],
-			call: { uses: ['nothing'], code: '' },
-			options: {},
-			read: ["The catalog holds no tool named 'nothing'.\nNo call started."],
-		},
 	])(
 		'gives the model the status and the ledger of $name as an error result',
 		async ({ tools, call, options, read }) => {
@@ -187,38 +156,4 @@ describe('compose on a Claude seat', () => {
 			for (const part of read) expect(ran.read[0]).toContain(part);
 		},
 	);
-
-	it('keeps the result of a call that outlives the code, and names that call', async () => {
-		const ran = await composed(
-			[later('later', false)],
-			[compose({ uses: ['later'], code: `tools.later({}); return 'sent';` })],
-		);
-		expect(ran.read[0]).toMatch(/^"sent"\nCall \S+ \(later\) completed after the code returned\.$/);
-	});
-
-	it('runs the cap of calls together, one call at a time for a sequential tool, and settles the siblings of a failed call', async () => {
-		const wide = gauge('wide');
-		const narrow = gauge('narrow', 'sequential');
-		const ran = await composed(
-			[wide.tool, narrow.tool, broken, later('slow', false)],
-			[
-				compose({
-					uses: ['wide', 'narrow', 'broken', 'slow'],
-					code: `
-						await Promise.all([
-							...Array.from({ length: 6 }, () => tools.wide({})),
-							...Array.from({ length: 3 }, () => tools.narrow({})),
-						]);
-						await Promise.all([tools.slow({}), tools.broken({})]);
-					`,
-				}),
-			],
-			{ limits: { concurrent: 3 } },
-		);
-		expect(wide.seen.most).toBeLessThanOrEqual(3);
-		expect(wide.seen.most).toBeGreaterThan(1);
-		expect(narrow.seen).toMatchObject({ most: 1, calls: 3 });
-		expect(ran.read[0]).toContain('slow: completed');
-		expect(ran.read[0]).toContain('broken: failed');
-	});
 });

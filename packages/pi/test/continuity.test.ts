@@ -98,54 +98,6 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
 	});
 
-	it('refuses a say against a record that moved', async () => {
-		const room = new TwoQuestions(3);
-		const { run } = seatOn(room, await store(), (_context, _agent, request) =>
-			request === 2 ? say('Yes.') : quiet(),
-		);
-		const first = await run('message:1:product:1');
-		await run('message:2:product:1', { resume: first.session });
-		// The continued seat read through 2. The record stands at 3, so the room answers missed.
-		expect(room.commits.at(-1)?.readThrough).toBe(2);
-		expect(room.answers).toEqual(['missed']);
-	});
-
-	it('records no session for an activation that ran no pass', async () => {
-		const { opener, definition } = seatOn(new TwoQuestions(), await store());
-		const cut = stateOf(opener, definition, {
-			id: 'message:2:product:1',
-			room: new TwoQuestions(),
-		});
-		cut.cut();
-		expect(await cut.pass({ kind: 'view', view: await viewOf('message:2:product:1') })).toEqual({
-			failed: false,
-		});
-		expect(cut.session).toBeUndefined();
-		cut.close?.();
-	});
-
-	it('resolves a pass with no failure when it is cut and closed during the model request', async () => {
-		const requested = deferred();
-		const { opener, definition } = seatOn(new TwoQuestions(), await store(), async () => {
-			requested.resolve();
-			await new Promise(() => {});
-			return quiet();
-		});
-		const session = stateOf(opener, definition, {
-			id: 'message:1:product:1',
-			room: new TwoQuestions(),
-		});
-		const running = session.pass({ kind: 'view', view: await viewOf('message:1:product:1') });
-		await requested.promise;
-		session.cut();
-		// The driver closes the harness while the abort of the run is still active.
-		session.close();
-		expect(await running).toEqual({ failed: false });
-		expect(session.isCut).toBe(true);
-		expect(session.shouldRefresh(Number.MAX_SAFE_INTEGER)).toBe(false);
-		expect(session.session).toEqual(began(1));
-	});
-
 	it('fails on a provider refusal, and records the session it continued', async () => {
 		const { run, errors } = seatOn(
 			new TwoQuestions(),
@@ -304,60 +256,6 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(texts(seen.at(-1) as Context)[0]).toContain("The record of 'memory' so far:");
 	});
 
-	it('aborts the run when the harness reports a fault it goes on from', async () => {
-		const executions: string[] = [];
-		const book = defineTool({
-			name: 'book',
-			description: 'Book a day.',
-			parameters: Type.Object({}),
-			execute: () => {
-				executions.push('book');
-				return 'booked';
-			},
-		});
-		const definition = defineAgent({
-			name: 'product',
-			identity: 'Product.',
-			executor: pi({ instructions: 'Work.', model: 'scripted/product', tools: [book] }),
-		});
-		// The hook before the second request throws once. The harness reports it and sends the request.
-		let thrown = false;
-		const room = new TwoQuestions();
-		const { seen, opener } = seatOn(
-			room,
-			await store(),
-			(_context, _agent, request) => (request < 4 ? callTool('book', {}) : quiet()),
-			definition,
-		);
-		const id = 'message:2:product:1';
-		const activation = stateOf(
-			(input) =>
-				opener({
-					...input,
-					get readThrough() {
-						return input.readThrough;
-					},
-					delivered(call) {
-						if (thrown) return input.delivered(call);
-						thrown = true;
-						throw new Error('The hook failed.');
-					},
-				}),
-			definition,
-			{ id, room },
-		);
-		// The activation stays open, as it does while the room retries the pass.
-		onTestFinished(() => activation.close?.());
-		const failed = await activation.pass({ kind: 'view', view: await viewOf(id, room) });
-		expect(thrown).toBe(true);
-		expect(failed).toMatchObject({ failed: true, cause: 'transient' });
-		expect(activation.session).toBeUndefined();
-		// No tool and no request follows a pass that the executor reported failed.
-		const after = { requests: seen.length, executions: executions.length };
-		await new Promise((resolve) => setTimeout(resolve, 100));
-		expect({ requests: seen.length, executions: executions.length }).toEqual(after);
-	});
-
 	it('gives a session a fresh id when the store already holds the id', async () => {
 		const sessions = await store();
 		const one = await sessions.create(scope, 'same');
@@ -490,5 +388,107 @@ describe('exchange continuity on sessions in memory', () => {
 		expect(kept).toEqual(['three', 'four']);
 		// The seat of another room keeps its own.
 		expect(await sessions.open({ room: 'other', seat: 'product' }, 'four')).toBeUndefined();
+	});
+
+	it('refuses a say against a record that moved', async () => {
+		const room = new TwoQuestions(3);
+		const { run } = seatOn(room, memorySessions(), (_context, _agent, request) =>
+			request === 2 ? say('Yes.') : quiet(),
+		);
+		const first = await run('message:1:product:1');
+		await run('message:2:product:1', { resume: first.session });
+		// The continued seat read through 2. The record stands at 3, so the room answers missed.
+		expect(room.commits.at(-1)?.readThrough).toBe(2);
+		expect(room.answers).toEqual(['missed']);
+	});
+
+	it('records no session for an activation that ran no pass', async () => {
+		const { opener, definition } = seatOn(new TwoQuestions(), memorySessions());
+		const cut = stateOf(opener, definition, {
+			id: 'message:2:product:1',
+			room: new TwoQuestions(),
+		});
+		cut.cut();
+		expect(await cut.pass({ kind: 'view', view: await viewOf('message:2:product:1') })).toEqual({
+			failed: false,
+		});
+		expect(cut.session).toBeUndefined();
+		cut.close?.();
+	});
+
+	it('resolves a pass with no failure when it is cut and closed during the model request', async () => {
+		const requested = deferred();
+		const { opener, definition } = seatOn(new TwoQuestions(), memorySessions(), async () => {
+			requested.resolve();
+			await new Promise(() => {});
+			return quiet();
+		});
+		const session = stateOf(opener, definition, {
+			id: 'message:1:product:1',
+			room: new TwoQuestions(),
+		});
+		const running = session.pass({ kind: 'view', view: await viewOf('message:1:product:1') });
+		await requested.promise;
+		session.cut();
+		// The driver closes the harness while the abort of the run is still active.
+		session.close();
+		expect(await running).toEqual({ failed: false });
+		expect(session.isCut).toBe(true);
+		expect(session.shouldRefresh(Number.MAX_SAFE_INTEGER)).toBe(false);
+		expect(session.session).toEqual(began(1));
+	});
+
+	it('aborts the run when the harness reports a fault it goes on from', async () => {
+		const executions: string[] = [];
+		const book = defineTool({
+			name: 'book',
+			description: 'Book a day.',
+			parameters: Type.Object({}),
+			execute: () => {
+				executions.push('book');
+				return 'booked';
+			},
+		});
+		const definition = defineAgent({
+			name: 'product',
+			identity: 'Product.',
+			executor: pi({ instructions: 'Work.', model: 'scripted/product', tools: [book] }),
+		});
+		// The hook before the second request throws once. The harness reports it and sends the request.
+		let thrown = false;
+		const room = new TwoQuestions();
+		const { seen, opener } = seatOn(
+			room,
+			memorySessions(),
+			(_context, _agent, request) => (request < 4 ? callTool('book', {}) : quiet()),
+			definition,
+		);
+		const id = 'message:2:product:1';
+		const activation = stateOf(
+			(input) =>
+				opener({
+					...input,
+					get readThrough() {
+						return input.readThrough;
+					},
+					delivered(call) {
+						if (thrown) return input.delivered(call);
+						thrown = true;
+						throw new Error('The hook failed.');
+					},
+				}),
+			definition,
+			{ id, room },
+		);
+		// The activation stays open, as it does while the room retries the pass.
+		onTestFinished(() => activation.close?.());
+		const failed = await activation.pass({ kind: 'view', view: await viewOf(id, room) });
+		expect(thrown).toBe(true);
+		expect(failed).toMatchObject({ failed: true, cause: 'transient' });
+		expect(activation.session).toBeUndefined();
+		// No tool and no request follows a pass that the executor reported failed.
+		const after = { requests: seen.length, executions: executions.length };
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect({ requests: seen.length, executions: executions.length }).toEqual(after);
 	});
 });

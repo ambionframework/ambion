@@ -588,10 +588,10 @@ skips.
 
 **The package has a live tier.** `packages/claude/test/live/` holds the
 cases that the fake cannot prove. They cover tool exclusivity, a hermetic
-start, memory across activations, a mixed room, steering, the trace, and a
-seat that works through the workspace tools. `vitest.live.config.ts` runs
-them on the real Claude binary with `ANTHROPIC_API_KEY`. The block skips
-without it. A run costs money.
+start, memory across activations, steering, the trace, and a seat that
+works through the workspace tools. `vitest.live.config.ts` runs them on the
+real Claude binary with `ANTHROPIC_API_KEY`. The block skips without it. A
+run costs money.
 
 **The hermetic case runs the real binary through a wrapper.** The wrapper is
 `test/live/support/wire.mjs`. It records the names of the variables of the

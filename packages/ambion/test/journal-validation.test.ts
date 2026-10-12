@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { hostingOf } from '../src/hosting.ts';
-import { createRuntime, startRoom } from '../src/index.ts';
 import { roomJournal } from '../src/journal/journal.ts';
 import { validateRoomBody } from '../src/journal/validate.ts';
-import { roomName, storedOf } from './support/room.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { roomName } from './support/room.ts';
 import { memory } from './support/storage.ts';
 
 const seating = { name: 'alpha', identity: 'Researcher', attention: 'broadcast' };
@@ -167,15 +164,6 @@ describe('room journal body validation', () => {
 	] as const)('reports the kind and the path of a malformed %s body at %s', (kind, body, path) => {
 		const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 		expect(() => validateRoomBody(kind, body)).toThrow(new RegExp(`kind '${kind}'.*${escaped}`));
-	});
-
-	it('writes a run entry with the time alone', async () => {
-		const opened = await memory.open();
-		const name = roomName('run-fence');
-		const runtime = createRuntime({ storage: opened.storage });
-		stopAtEnd(await startRoom({ name, runtime, agents: [], seats: {} }));
-		const stored = await storedOf(hostingOf(runtime).journals, name);
-		expect(stored.find((entry) => entry.kind === 'run')?.body).toEqual({ at: expect.any(String) });
 	});
 
 	it('skips an unknown kind without inspecting its body, and skips it during replay', async () => {

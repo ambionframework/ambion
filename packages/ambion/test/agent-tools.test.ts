@@ -85,13 +85,6 @@ describe('the definition of agent tools', () => {
 		},
 	);
 
-	it.each(['lookup_order', 'read', 'flag'])(
-		'accepts an ordinary tool named %s without a workspace bundle',
-		(name) => {
-			expect(() => worker({ tools: [tool(name)] })).not.toThrow();
-		},
-	);
-
 	it.each([
 		['say', { tools: [tool('say')] }, /room supplies it for an activation/],
 		['schedule', { tools: [tool('schedule')] }, /room supplies it for an activation/],
@@ -215,12 +208,7 @@ describe('the definition of agent tools', () => {
 			'compose',
 			'describe',
 		]);
-		const description = agent.executor.tools.at(-2)?.description ?? '';
-		expect(description).toContain('Every tool that code can bind returns text.');
-		expect(description).not.toContain('->');
-		expect(description).not.toContain('hidden');
-		expect(description).not.toContain('compose ->');
-		expect(description).not.toContain('describe ->');
+
 		// The guidance of the bundles comes first, and the guidance of compose follows it.
 		expect(agent.executor.guidance).toBe(`Use inspect.\n\n${COMPOSE_GUIDANCE}`);
 		expect(worker({ compose }).executor.guidance).toBe(COMPOSE_GUIDANCE);

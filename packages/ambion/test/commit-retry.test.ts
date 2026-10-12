@@ -67,4 +67,42 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 		);
 		expect(commitErrors.length > 0).toBe(lose === 'all');
 	});
+
+	it('reports one port error for a claim that no attempt gets through', async () => {
+		const opened = await openFor(storage);
+		let claims = 0;
+		const tap: Tap = {
+			room: (room) => ({
+				lease: async (request) => {
+					if (request.operation !== 'claim') return room.lease(request);
+					claims += 1;
+					if (claims > 3) return room.lease(request);
+					throw new Error('claim lost');
+				},
+			}),
+		};
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName(`claim-lost-${storage.name}`),
+				agents: [worker],
+				seats: { [worker.name]: 'named' },
+				runtime: createRuntime({
+					storage: opened.storage,
+					limits: { call: { attempts: 3 }, port: { resend: 20 } },
+				}),
+				execution: tapped(
+					piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
+					tap,
+				),
+			}),
+		);
+		const events = collect(room);
+		await (await room.visit(person)).send({ to: worker.name, text: 'please answer' });
+		await waitForRoom(room, 'quiet');
+		expect(claims).toBeGreaterThan(3);
+		const claimErrors = events.filter(
+			(event) => event.type === 'port_error' && event.operation === 'claim',
+		);
+		expect(claimErrors).toHaveLength(1);
+	});
 });

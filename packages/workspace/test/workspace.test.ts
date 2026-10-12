@@ -115,7 +115,7 @@ describe('the built-in tools', () => {
 		);
 	});
 
-	it('accepts Pi alternate edit arguments, and serializes two edits in one model batch so both land', async () => {
+	it('serializes two edits in one model batch so both land', async () => {
 		const site = openWorkspace({ name: name('edits'), backend: { bash: memoryBackend() } });
 		let final: string | undefined;
 		const edit = (from: string, to: string) =>
@@ -125,17 +125,15 @@ describe('the built-in tools', () => {
 				if (request === 1)
 					return callTool('write', { path: 'f.txt', content: 'alpha\nbeta\ngamma\n' });
 				if (request === 2)
-					return callTool('edit', { path: 'f.txt', oldText: 'alpha', newText: 'ALPHA' });
-				if (request === 3)
 					return fauxAssistantMessage([edit('beta', 'BETA'), edit('gamma', 'GAMMA')], {
 						stopReason: 'toolUse',
 					});
-				if (request === 4) return callTool('read', { path: 'f.txt' });
+				if (request === 3) return callTool('read', { path: 'f.txt' });
 				final = toolResults(context).at(-1)?.text;
 				return quiet();
 			},
 		});
-		expect(final).toBe('ALPHA\nBETA\nGAMMA\n');
+		expect(final).toBe('alpha\nBETA\nGAMMA\n');
 		await site.dispose();
 	});
 

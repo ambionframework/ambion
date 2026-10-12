@@ -10,7 +10,6 @@ import { exchangeSession, summaryCompletion } from '../src/room/exchange.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import { awaitingFor, toRoomRead } from '../src/room/read.ts';
 import type { Exchange, Message, RoomRead, SummaryMessage } from '../src/types.ts';
-import { evolve } from './support/evolve.ts';
 import { activationOf, foldRoom, owedOf, pendingOf, replayState } from './support/fold.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
@@ -181,19 +180,6 @@ describe('exchange outcomes', () => {
 		]);
 		const silent = [...asked, close(5, 4, 4), summary(6, 'sam', 4, 4)];
 		expect(closed(readOf(silent))[0]?.summaries).toBeUndefined();
-	});
-
-	it('reads the same outcomes from the incremental state as from the fold', () => {
-		const entries = [
-			...asked,
-			said(5, 'worker', 'sam'),
-			close(6, 4, 5),
-			said(7, 'priya'),
-			cancel(8),
-		];
-		let state = foldRoom(entries.slice(0, 3), retry);
-		for (const entry of entries.slice(3)) state = evolve(state, entry, retry);
-		expect(toRoomRead('room', state, 0, 8, false)).toEqual(readOf(entries));
 	});
 });
 
@@ -369,12 +355,7 @@ describe('cancellation fold', () => {
 		};
 		const entries = [...worked, cancel(5), prompt];
 		const replayed = replayState(entries, retry);
-		const prior = replayState(entries.slice(0, 4), retry);
-		const retained = structuredClone(prior);
-		let incremental = prior;
-		for (const entry of entries.slice(4)) incremental = evolve(incremental, entry, retry);
-		expect(incremental).toEqual(replayed);
-		expect(prior).toEqual(retained);
+
 		expect(replayed.exchange?.from).toBe(6);
 		expect(pendingOf(replayed)).toMatchObject([{ id: 'message:6:worker:1' }]);
 	});

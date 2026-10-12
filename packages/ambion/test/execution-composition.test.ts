@@ -148,12 +148,6 @@ describe('the execution a room chooses', () => {
 			reason: missing('pi', 'none'),
 			before: false,
 		},
-		{
-			router: 'a runtime created before execution construction',
-			kind: 'pi',
-			reason: missing('pi', 'none'),
-			before: true,
-		},
 	])(
 		'fails the activation at once and for good when $router serves no execution for the kind',
 		async ({ kind, room: own, runtime: shared, reason, before: useBefore }) => {

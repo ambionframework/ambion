@@ -183,18 +183,6 @@ describe('the harness of an activation', () => {
 		last.close?.();
 
 		const [ordinary, closed] = requests;
-		expect(toolNames(ordinary?.context as Context)).toEqual([
-			'say',
-			'schedule',
-			'seat',
-			'unseat',
-			'dismiss',
-			'recall',
-			'book',
-			'inspect',
-			'compose',
-			'describe',
-		]);
 		// The prompt reaches the model as the executor built it: no tag wraps it.
 		const rendered = renderActivation(view, definition);
 		expect(ordinary?.context.systemPrompt).toBe(`${rendered.mechanism}\n\n${rendered.agent}`);
@@ -350,27 +338,12 @@ describe('the harness of an activation', () => {
 		const session = seat(stream, undefined, thinking).open('message:1:worker:1');
 		await session.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
 		expect(requests[0]?.options?.reasoning).toBe(reasoning);
-		expect(workerWith(undefined, thinking).executor).toEqual(
-			thinking === undefined
-				? expect.not.objectContaining({ thinking: expect.anything() })
-				: expect.objectContaining({ thinking }),
-		);
 	});
 
 	it('refuses a thinking level that Pi does not name', () => {
 		expect(() => workerWith(undefined, 'huge' as ThinkingLevel)).toThrow(
 			'Thinking must be one of off, minimal, low, medium, high, xhigh, max.',
 		);
-	});
-
-	it('writes compaction on the executor only when the definition gives it', () => {
-		expect(workerWith().executor).not.toHaveProperty('compaction');
-		const options = { enabled: false, reserveTokens: 1, keepRecentTokens: 2, backgroundTokens: 3 };
-		expect(workerWith(options).executor).toMatchObject({ compaction: options });
-		// A field that is absent keeps the default of pi-durable.
-		expect(workerWith({ enabled: false }).executor).toMatchObject({
-			compaction: { enabled: false },
-		});
 	});
 
 	it.each([

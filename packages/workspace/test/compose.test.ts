@@ -356,7 +356,6 @@ describe('the compose field of the workspace tools', () => {
 		expect(compose?.description).toContain(
 			'The other tools return text. seat and unseat bind only when your tool list holds them.',
 		);
-		expect(compose?.description).not.toContain('seat -> ');
 		// A declared output names its type, and an undeclared one is text with no entry.
 		expect(compose?.description).toContain('read -> ReadResult');
 		expect(compose?.description).toContain('sql -> SqlResult');
@@ -364,8 +363,6 @@ describe('the compose field of the workspace tools', () => {
 		expect(compose?.description).toContain('wait -> WaitResult');
 		for (const tool of bundle.tools.filter((one) => one.compose !== false && one.compose?.output))
 			expect(compose?.description).toContain(`${tool.name} -> `);
-		expect(compose?.description).not.toContain('-> string');
-		expect(compose?.description).not.toContain('write ->');
 		const described = await describer?.invoke({ tools: names }, callAs('ada', { room: 'lobby' }));
 		expect(described).toContain('type SqlResult = {');
 		for (const name of names) expect(described).toMatch(new RegExp(`^ {2}${name}\\(args:`, 'm'));

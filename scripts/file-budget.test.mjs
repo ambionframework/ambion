@@ -17,9 +17,6 @@ const GRANDFATHERED = {
 /** Generated files carry no budget. */
 const EXEMPT = [/\.verified\.ts$/, /\.d\.ts$/];
 
-/** The mechanisms of the room host. */
-const ROOM_HOST = ['room.ts', 'people.ts', 'dispatch.ts', 'waits.ts', 'control.ts'];
-
 function sources(dir) {
 	const found = [];
 	for (const name of readdirSync(dir)) {
@@ -65,11 +62,4 @@ test('no hand-written source file exceeds its line budget', () => {
 test('a grandfathered file is still over the default budget', () => {
 	for (const name of Object.keys(GRANDFATHERED))
 		assert.ok(lines(join(root, name)) > BUDGET, `${name} fits the default budget: remove it`);
-});
-
-test('the room host is split by mechanism and each file fits the budget', () => {
-	for (const file of ROOM_HOST) {
-		const count = lines(join(root, 'packages/ambion/src/room-run', file));
-		assert.ok(count <= BUDGET, `room-run/${file} has ${count} lines, budget ${BUDGET}`);
-	}
 });

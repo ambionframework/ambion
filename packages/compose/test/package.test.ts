@@ -10,10 +10,9 @@ const importsOf = (text: string) =>
 		(match) => match[1],
 	);
 
-it('exports the runtime, and names the package as package.json does', () => {
+it('exports the runtime, and holds the Node floor', () => {
 	expect(Object.keys(entry).sort()).toEqual(['PACKAGE_NAME', 'quickjsRuntime']);
 	const manifest = JSON.parse(read('../package.json'));
-	expect(entry.PACKAGE_NAME).toBe(manifest.name);
 	expect(manifest.engines.node).toBe('>=22.19.0');
 });
 

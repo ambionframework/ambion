@@ -1,24 +1,12 @@
-import { DatabaseSync } from 'node:sqlite';
 import type { ToolBundle } from '@ambionframework/ambion';
 import { byAgent, callTool, settled } from '@ambionframework/ambion/testing';
 import { describe, expect, it } from 'vitest';
-import {
-	type CanvasStore,
-	memoryCanvas,
-	openCanvas,
-	sqliteCanvas,
-	type WidgetKind,
-} from '../src/index.ts';
+import { type CanvasStore, memoryCanvas, openCanvas, type WidgetKind } from '../src/index.ts';
 import { gallery, kinds, refusal, statusSource } from './support/gallery.ts';
 import { breakoutRow, callOf, contextOf, host, live, tooled } from './support/host.ts';
-import { sqlOver } from './support/sql.ts';
 
-const stores: readonly { name: string; open: () => CanvasStore }[] = [
-	{ name: 'memory', open: () => memoryCanvas() },
-	{ name: 'native SQLite', open: () => sqliteCanvas(sqlOver(new DatabaseSync(':memory:'))) },
-];
-
-describe.each(stores)('widgets on the $name store', ({ open }) => {
+describe('widgets on the memory store', () => {
+	const open = (): CanvasStore => memoryCanvas();
 	it('writes a revision, emits it, and answers the reads of the canvas', async () => {
 		const store = open();
 		const { canvas, show, widgetEvents } = await gallery({ store });

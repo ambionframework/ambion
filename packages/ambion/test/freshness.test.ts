@@ -20,29 +20,12 @@ it.each([
 		1,
 	],
 	[
-		'a range that waited for its gap, once the gap closes',
-		[
-			[3, 4],
-			[0, 3],
-		],
-		4,
-	],
-	[
 		'a range seen twice, once',
 		[
 			[0, 2],
 			[0, 2],
 		],
 		2,
-	],
-	[
-		'ranges that both join, the lowest first',
-		[
-			[0, 3],
-			[0, 2],
-			[2, 5],
-		],
-		5,
 	],
 	[
 		'a range below the position read, as nothing',

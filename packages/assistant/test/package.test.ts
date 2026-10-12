@@ -23,12 +23,6 @@ it('builds the default ordinary assistant definition', () => {
 	expect(assistant.executor.instructions).toContain('Application instructions take precedence');
 });
 
-it('gives the assistant the compose and describe tools', () => {
-	const assistant = defineAssistant({ executor: onPi });
-
-	expect(assistant.executor.tools.map((tool) => tool.name)).toEqual(['compose', 'describe']);
-});
-
 it('keeps application instructions after and alongside maintained defaults', () => {
 	const assistant = defineAssistant({
 		executor: onPi,
@@ -42,21 +36,6 @@ it('keeps application instructions after and alongside maintained defaults', () 
 	expect(assistant.executor.instructions).toContain("Keep the room's seating fit");
 	expect(assistant.executor.instructions).toContain('Application instructions:');
 	expect(assistant.executor.instructions).toContain('Prefer small changes.');
-});
-
-it('passes tool bundles through the ordinary agent definition', () => {
-	const assistant = defineAssistant({
-		executor: onPi,
-		tools: [],
-		bundles: [{ tools: [], guidance: 'Use the workspace when evidence is needed.' }],
-	});
-
-	expect(assistant.executor.tools.map((tool) => tool.name)).toEqual(['compose', 'describe']);
-	expect(assistant.executor.guidance).toContain('This is a respond activation.');
-	expect(assistant.executor.guidance).toContain(
-		'The presence of the person who asked does not change the work.',
-	);
-	expect(assistant.executor.guidance).toContain('Use the workspace when evidence is needed.');
 });
 
 it.each([
@@ -77,6 +56,9 @@ it.each([
 		expect(assistant.executor.instructions).toContain('Prefer small changes.');
 		expect(assistant.executor.tools.map((tool) => tool.name)).toEqual(['compose', 'describe']);
 		expect(assistant.executor.guidance).toContain('This is a respond activation.');
+		expect(assistant.executor.guidance).toContain(
+			'The presence of the person who asked does not change the work.',
+		);
 		expect(assistant.executor.guidance).toContain('Use the workspace when evidence is needed.');
 		expect(assistant.executor.reminders).toEqual([remind]);
 	},

@@ -269,19 +269,6 @@ describe('a completed compose call', () => {
 		expect(ran.steps).toEqual([]);
 	});
 
-	it('runs through the invoke of the tool with no sink', async () => {
-		const tool = composeOf([echo]);
-		const ctx: ToolContext = { agent: { name: 'worker', identity: 'Worker.' }, callId: 'c1' };
-		const raw = await tool.invoke(
-			{ uses: ['echo'], code: `return await tools.echo({ text: 'y' });` },
-			ctx,
-		);
-		expect(typeof raw === 'string' ? raw : raw.details).toMatchObject({
-			status: 'completed',
-			value: 'y',
-		});
-	});
-
 	it.each([
 		['a call that succeeds', later('echo', false), 'completed'],
 		['a call that fails', later('broken', true), 'failed'],

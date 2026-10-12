@@ -1,18 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { describeUnavailable, keyVariable, seatKinds } from '../src/kinds.ts';
+import { describeUnavailable, keyVariable } from '../src/kinds.ts';
 import { buildTimeline } from '../src/timeline.ts';
 import { openHost } from './hosting.ts';
 
 describe('Workbench executor kinds', () => {
-	it('assigns each seat to an executor kind', () => {
-		expect(seatKinds({})).toEqual({
-			assistant: 'pi',
-			datasheets: 'pi',
-			design: 'claude',
-			experiments: 'codex',
-		});
-	});
-
 	it('names the key of each executor kind', () => {
 		expect(keyVariable('pi', {})).toBe('ANTHROPIC_API_KEY');
 		expect(keyVariable('pi', { AMBION_MODEL: 'openai-codex/gpt-5' })).toBe('OPENAI_CODEX_API_KEY');

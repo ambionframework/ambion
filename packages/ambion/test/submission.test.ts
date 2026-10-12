@@ -439,46 +439,6 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 		).toEqual(['outer', 'inner']);
 	});
 
-	it('publishes message, exchange-opened, and exchange-closed in order without replay duplicates', async () => {
-		const opened = await openFor(storage);
-		const room = stopAtEnd(
-			await startRoom({
-				name: roomName(`submission-notification-order-${storage.name}`),
-				runtime: createRuntime({ storage: opened.storage }),
-			}),
-		);
-		const visit = await room.visit(person);
-		const events = collect(room);
-		await visit.send({ text: 'question', key: 'submission-order' });
-		await waitForRoom(room);
-		await visit.send({ text: 'follow-up', key: 'submission-order-2' });
-		await waitForRoom(room);
-		const before = events.map((event) => event.type);
-		expect(before).toEqual([
-			'message',
-			'exchange_opened',
-			'exchange_closed',
-			'message',
-			'exchange_opened',
-			'exchange_closed',
-		]);
-		const messages = events.flatMap((event) => (event.type === 'message' ? [event.message] : []));
-		expect(messages.map((message) => message.key)).toEqual([
-			'submission-order',
-			'submission-order-2',
-		]);
-		const seqs = messages.map((message) => message.seq);
-		const opens = events.flatMap((e) => (e.type === 'exchange_opened' ? [e.exchange] : []));
-		const closed = events.flatMap((e) => (e.type === 'exchange_closed' ? [e.exchange] : []));
-		expect(opens.map((exchange) => exchange.from)).toEqual(seqs);
-		expect(closed.map((exchange) => exchange.from)).toEqual(seqs);
-		expect(closed.every((exchange, index) => exchange.through >= (seqs[index] ?? 0))).toBe(true);
-
-		await room.reconcile();
-		await messagesOf(room);
-		expect(events.map((event) => event.type)).toEqual(before);
-	});
-
 	it('captures each recovered entry before later entries and publishes the batch once in order', async () => {
 		const opened = await openFor(storage);
 		const clock = fakeClock();

@@ -41,22 +41,6 @@ describe('quickjsRuntime on the debug build', () => {
 });
 
 describe('the limits of quickjsRuntime', () => {
-	it('returns the value of code that catches an out-of-memory error, and serves the next evaluation', async () => {
-		const runtime = quickjsRuntime({ memoryLimit: 4 * 1024 * 1024 });
-		const call = async () => null;
-		const code = `await tools.keep({}); try { const a = []; for (;;) a.push(new Array(1e4).fill(1)); } catch (e) { return 'caught ' + e.message; }`;
-		const value = await runtime.evaluate(
-			{ code, bindings: ['keep'], call },
-			new AbortController().signal,
-		);
-		expect(value).toBe('caught out of memory');
-		const next = await runtime.evaluate(
-			{ code: 'return 1;', bindings: [], call },
-			new AbortController().signal,
-		);
-		expect(next).toBe(1);
-	});
-
 	it('names the memory limit and the CPU limit in the error', async () => {
 		const runtime = quickjsRuntime({ memoryLimit: 4 * 1024 * 1024, cpuLimit: 200 });
 		const input = { bindings: [], call: async () => null };

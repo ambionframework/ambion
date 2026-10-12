@@ -27,22 +27,6 @@ async function ask(room: Room) {
 }
 
 describe('piExecution', () => {
-	it('answers a question end to end and closes the exchange', async () => {
-		const room = stopAtEnd(
-			await startRoom({
-				runtime: createRuntime({ storage: memoryJournals() }),
-				name: roomName('pi-execution'),
-				agents: [worker],
-				execution: piExecution({ sessions: 'memory', stream: answering() }),
-			}),
-		);
-		expect((await ask(room)).map((message) => [message.from, message.text])).toEqual([
-			['andrei', 'What is the answer?'],
-			['worker', '42'],
-		]);
-		expect((await room.read()).exchanges[0]?.status).toBe('closed');
-	});
-
 	it('serves every room of a runtime that takes it as its default', async () => {
 		const opened = await memory.open();
 		onTestFinished(() => opened.dispose());

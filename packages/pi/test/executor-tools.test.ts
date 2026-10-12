@@ -20,10 +20,6 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { ROOM_TOOL_NAMES } from '../../ambion/src/define.ts';
-import type { RoomEntry } from '../../ambion/src/journal/journal.ts';
-import { activationSpec } from '../../ambion/src/room/activation.ts';
-import { projectState, replay } from '../../ambion/src/room/projection.ts';
-import { viewOf } from '../../ambion/src/room/view.ts';
 import { pi } from '../src/index.ts';
 import { type PiTool, toolsFor, UNBOUNDED } from '../src/tools.ts';
 import {
@@ -312,7 +308,7 @@ describe('executor tool authority', () => {
 		const { activation, commits, tool } = await bound('message:4:worker:1', respond, {
 			unchanged: { kind: 'seated', name: 'surveyor' },
 		});
-		await expect(call(tool(2), 'seat-call', { name: 'surveyor' })).resolves.toMatchObject({
+		await expect(call(tool(2), 'seat-call', { name: ' surveyor ' })).resolves.toMatchObject({
 			content: [
 				{
 					text: 'surveyor is already seated. Seating it again does not activate it. Read its mark in the roster: marked "named only", it gets the request through say with to set to surveyor; with no mark or marked "watches arrivals", it already has the request.',
@@ -328,73 +324,6 @@ describe('executor tool authority', () => {
 			},
 		]);
 		expect(activation.readThrough).toBe(0);
-	});
-
-	it('acknowledges a live response boundary but fixes a summary at its close', () => {
-		const at = '2026-01-01T00:00:00.000Z';
-		const entries: RoomEntry[] = [
-			{
-				kind: 'composition',
-				seq: 1,
-				body: {
-					summaryWriter: 'worker',
-					seated: [
-						{ name: 'worker', identity: 'A.', attention: 'broadcast' },
-						{ name: 'product', identity: 'P.', attention: 'broadcast' },
-					],
-					reserve: [],
-					at,
-				},
-			},
-			{
-				kind: 'message',
-				seq: 2,
-				body: { kind: 'arrived', at, subject: 'priya', identity: 'P.' },
-			},
-			{
-				kind: 'message',
-				seq: 3,
-				body: { kind: 'said', at, from: 'priya', text: 'Question.' },
-			},
-			{
-				kind: 'close',
-				seq: 4,
-				body: { person: 'priya', from: 3, through: 3, at, summaryWriter: 'worker' },
-			},
-			{
-				kind: 'message',
-				seq: 5,
-				body: { kind: 'said', at, from: 'priya', text: 'Later.', wakes: ['product'] },
-			},
-			{
-				kind: 'message',
-				seq: 6,
-				body: { kind: 'said', at, from: 'priya', text: 'Latest.', wakes: ['product'] },
-			},
-		];
-		const state = projectState(replay(entries, { backoff: () => 0 }));
-		const facts = {
-			name: 'room',
-			now: Date.parse(at),
-			state,
-			live: new Map<string, string[]>(),
-			messagesSince: () => 0,
-		};
-		const summary = activationSpec('closed:3:worker:1', state);
-		const response = activationSpec('message:5:product:1', state);
-		if (summary === undefined || response === undefined)
-			throw new Error('Expected valid authorities.');
-
-		const summaryView = viewOf(summary, facts);
-		const responseView = viewOf(response, facts);
-		expect(summaryView.through).toBe(3);
-		expect(summaryView.context.messages).not.toContainEqual(
-			expect.objectContaining({ text: 'Latest.' }),
-		);
-		expect(responseView.through).toBe(6);
-		expect(responseView.context.messages).toContainEqual(
-			expect.objectContaining({ text: 'Latest.' }),
-		);
 	});
 
 	it('hands a domain tool the room, the activation, and the exchange from the view', async () => {

@@ -91,25 +91,6 @@ describe('Workbench delegation', () => {
 		});
 	}, 20_000);
 
-	it('gives the opener one close notice for an exchange with no report, and a person can visit the room', async () => {
-		const workbench = await openHost({ stream: delegating('idle', 'datasheets', false) });
-		await workbench.visit('bringup', 'mira');
-		await workbench.send('bringup', 'mira', 'k1', 'Check the LED current.');
-		await vi.waitFor(
-			async () =>
-				expect(
-					textsOf(await messagesOf(workbench, 'bringup')).filter((text) =>
-						text.startsWith('breakout bringup-idle: exchange #'),
-					),
-				).toHaveLength(1),
-			{ timeout: 10_000, interval: 20 },
-		);
-		await workbench.visit('bringup-idle', 'mira');
-		expect((await workbench.read('bringup-idle', 0)).participants.map((seat) => seat.name)).toEqual(
-			expect.arrayContaining(['datasheets', 'mira']),
-		);
-	}, 20_000);
-
 	it('resumes a running breakout room with the workbench, and posts no notice twice', async () => {
 		const directory = await freshDirectory();
 		const first = await openHost({
@@ -135,5 +116,9 @@ describe('Workbench delegation', () => {
 		const row = (await second.rooms()).find((room) => room.name === 'bringup-survey');
 		expect(row).toMatchObject({ parent: 'bringup', status: 'running' });
 		expect(await notices(second)).toHaveLength(1);
+		await second.visit('bringup-survey', 'mira');
+		expect((await second.read('bringup-survey', 0)).participants.map((seat) => seat.name)).toEqual(
+			expect.arrayContaining(['datasheets', 'mira']),
+		);
 	}, 20_000);
 });

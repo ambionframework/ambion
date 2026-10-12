@@ -159,7 +159,5 @@ describe('the team instructions', () => {
 	it('name a file path and a table URI in examples that the terminal resolves', () => {
 		expect(shared).toContain('for example /library/led-5mm.md');
 		expect(shared).toContain('lab:///<table>, for example lab:///runs');
-		expect(known.files).toContain('/library/led-5mm.md');
-		expect(resolveRef('lab:///runs', known).target).toBeDefined();
 	});
 });

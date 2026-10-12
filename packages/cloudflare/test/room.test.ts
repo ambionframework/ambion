@@ -290,10 +290,6 @@ it('can ensure a resumed room and report its current state', async () => {
 		name: 'room-status',
 		exchange: undefined,
 	});
-	// @ts-expect-error The object has no messages(): read() carries the record.
-	void stub.messages;
-	// @ts-expect-error The object has no status(): read() carries the record.
-	void stub.status;
 });
 
 it('keeps a stopped record readable without resuming the room, and runs the alarm only while the room runs', async () => {

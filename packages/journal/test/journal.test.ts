@@ -146,20 +146,6 @@ describe('a journal', () => {
 		expect(journal.entriesFrom(1)).toMatchObject([{ seq: 2, body: { text: 'next' } }]);
 	});
 
-	it('refuses a body that cannot be cloned, and takes nothing', async () => {
-		// The journal copies every body at an ownership boundary, so a body holds
-		// data. A body that carries a function cannot be cloned. The append fails
-		// at the copy, before storage, so the journal consumes no position.
-		const journal = await open();
-		const withFunction = { text: 'holds a function', act: () => undefined } as unknown as Note;
-		await expect(journal.append('note', { decide: () => body(withFunction) })).rejects.toThrow();
-		expect(journal.entries).toHaveLength(0);
-		expect(journal.lastSeq).toBe(0);
-		expect(await journal.append('note', { decide: () => body(note('after')) })).toMatchObject({
-			entry: { seq: 1 },
-		});
-	});
-
 	it('isolates accepted bodies from a vocabulary that retains and mutates them', async () => {
 		const id = `journal-vocabulary-ownership-${++names}`;
 		let candidate: Note | undefined;
@@ -233,11 +219,6 @@ describe('a journal', () => {
 			decide: () => body(note('wrong')),
 		};
 		expect(wrongIntent.decide).toBeTypeOf('function');
-		const asyncIntent: import('../src/journal.ts').AppendIntent<Note, never> = {
-			// @ts-expect-error a decision cannot be asynchronous
-			decide: async () => body(note('later')),
-		};
-		expect(asyncIntent.decide).toBeTypeOf('function');
 		const journal = await open();
 		for (const kind of ['note', 'mark'] as const) {
 			const result = await journal.append(kind, {

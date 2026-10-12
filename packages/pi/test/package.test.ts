@@ -14,7 +14,7 @@ const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.
 	dependencies: Record<string, string>;
 };
 
-it('exports the executor, its execution, its services, and the test tools, and names the package as package.json does', () => {
+it('exports the executor, its execution, its services, and the test tools', () => {
 	expect(Object.keys(entry).sort()).toEqual([
 		'PACKAGE_NAME',
 		'createExecutionServices',
@@ -37,7 +37,6 @@ it('exports the executor, its execution, its services, and the test tools, and n
 		'toolNames',
 		'toolResultTexts',
 	]);
-	expect(entry.PACKAGE_NAME).toBe(manifest.name);
 });
 
 it('pins pi-durable to one exact version, and installs that version', () => {

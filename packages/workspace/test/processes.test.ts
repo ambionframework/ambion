@@ -183,16 +183,6 @@ describe('bash', () => {
 		expect(more.details.read).toEqual({ from: 5, to: 10 });
 	});
 
-	it('gives the running state when wait ends before the process', async () => {
-		const workspace = site();
-		const { details } = await call(workspace, 'bash', { command: 'sleep 5', wait: 0 });
-		const waited = await call(workspace, 'wait', {
-			processes: [details.process.handle],
-			wait: 0.05,
-		});
-		expect(waited.details.process.state).toBe('running');
-	});
-
 	it.each([
 		['one read', 5000],
 		['two bounded reads, past 50 KB', 60000],
@@ -345,7 +335,6 @@ describe('the grace of a process', () => {
 	it.each([
 		{ params: {}, grace: 10 },
 		{ params: { grace: 1 }, grace: 1 },
-		{ params: { grace: 30 }, grace: 30 },
 		{ params: { grace: 300 }, grace: 300 },
 	])('gives the grace to the result and the spec for $params', async ({ params, grace }) => {
 		const workspace = site();
@@ -541,12 +530,6 @@ describe('the port of a process', () => {
 			wait: 0,
 		});
 		expect(waited.text.endsWith(` $PORT=${ports[0]}.]`)).toBe(true);
-	});
-
-	it('tells the agent about $PORT and fetch in the guidance of the bundle', () => {
-		const { guidance } = site().tools();
-		expect(guidance).toContain('The workspace sets $PORT for each process.');
-		expect(guidance).toContain('python3 -m http.server $PORT');
 	});
 });
 

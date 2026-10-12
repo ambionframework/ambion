@@ -59,6 +59,12 @@ export function conformanceSuite<Subject extends { dispose?(): void | Promise<vo
 /** The storage a case writes to, and how the case releases it. */
 export interface OpenedBackend {
 	readonly opener: JournalOpener;
+	/**
+	 * A second opener over the same storage, for a backend that shares one
+	 * database between openers. A backend that keeps its journals in the
+	 * opener leaves it out, and the cases that need it return at once.
+	 */
+	readonly peer?: () => JournalOpener;
 	dispose?(): void | Promise<void>;
 }
 
@@ -127,7 +133,11 @@ const JSON_VALUES: readonly unknown[] = [
 	[],
 ];
 
-type Body = (opener: JournalOpener, fresh: () => string) => Promise<void>;
+type Body = (
+	opener: JournalOpener,
+	fresh: () => string,
+	peer?: () => JournalOpener,
+) => Promise<void>;
 
 const cases: readonly (readonly [string, Body])[] = [
 	[
@@ -185,6 +195,24 @@ const cases: readonly (readonly [string, Body])[] = [
 			const two = await second.append({ writer: 'second' }, seen.position);
 			same(two, { position: 2, entry: { writer: 'second' } }, 'the next append');
 			same(await first.read(0), { entries: [one, two], position: 2 }, 'the first handle');
+		},
+	],
+	[
+		'refuses a stale position on one opener after another opener over the same storage wrote',
+		async (opener, fresh, peer) => {
+			if (peer === undefined) return;
+			const name = fresh();
+			const first = await opener.open(name);
+			const second = await peer().open(name);
+			const one = landed(await first.append({ writer: 'first' }, 0));
+			const two = landed(await second.append({ writer: 'second' }, one.position));
+			check(two.position === 2, 'the second opener did not append after the first');
+			check((await first.append({ writer: 'first' }, one.position)) === undefined, 'stale lands');
+			same(
+				await first.read(0),
+				{ entries: [one, two], position: 2 },
+				'the journal after the stale append',
+			);
 		},
 	],
 	[
@@ -348,6 +376,6 @@ export function storageConformance(
 	};
 	return conformanceSuite(
 		fixture,
-		cases.map(([name, body]) => [name, ({ opener }) => body(opener, fresh)] as const),
+		cases.map(([name, body]) => [name, ({ opener, peer }) => body(opener, fresh, peer)] as const),
 	);
 }

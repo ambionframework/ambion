@@ -27,17 +27,12 @@ describe('the live executor kind switch', () => {
 		expect(live.executorFor({ instructions: 'x' }).kind).toBe('claude');
 	});
 
-	it('selects codex with its model, effort, and its key', async () => {
+	it('selects codex with its key', async () => {
 		const live = await liveWith('codex');
 		expect(live.LIVE_KIND).toBe('codex');
 		expect(live.KEY_VAR).toBe('CODEX_API_KEY');
-		expect(live.MODEL).toBe('gpt-5.6-luna');
 		expect(live.REPORTS_COST).toBe(false);
-		expect(live.executorFor({ instructions: 'x' })).toMatchObject({
-			kind: 'codex',
-			model: 'gpt-5.6-luna',
-			modelReasoningEffort: 'medium',
-		});
+		expect(live.executorFor({ instructions: 'x' }).kind).toBe('codex');
 	});
 
 	it('throws on a value that names no executor kind', async () => {

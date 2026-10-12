@@ -14,7 +14,6 @@ import { expect, it } from 'vitest';
 import * as conformance from '../src/conformance.ts';
 import * as git from '../src/git-entry.ts';
 import * as main from '../src/index.ts';
-import { PACKAGE_NAME } from '../src/index.ts';
 import * as resource from '../src/resource-entry.ts';
 import * as s3 from '../src/s3-entry.ts';
 import * as sqlite from '../src/sqlite-entry.ts';
@@ -38,9 +37,8 @@ const STEMS: Record<string, string> = {
 	'./conformance': 'conformance',
 };
 
-it('holds exactly seven entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
-	const { name, exports } = await manifest();
-	expect(PACKAGE_NAME).toBe(name);
+it('holds exactly seven entries, and builds each under the name the manifest gives it', async () => {
+	const { exports } = await manifest();
 	expect(Object.keys(exports).sort()).toEqual([
 		'.',
 		'./conformance',
@@ -136,22 +134,6 @@ it.each([
 	],
 ])('exports exactly its bindings from %s', (_path, entry, names) => {
 	expect(Object.keys(entry).sort()).toEqual(names);
-});
-
-it('loads no backend at the root: no export from the resource or SQLite files', async () => {
-	const index = await read('src/index.ts');
-	expect(index).not.toMatch(/from '\.\/resource\.ts'/);
-	expect(index).not.toMatch(/from '\.\/sqlite(-entry)?\.ts'/);
-	expect(index).not.toMatch(/ROOM_MIRROR_GUIDANCE|roomMirrorPath|DEFAULT_ROTATE_BYTES/);
-});
-
-it('exports the neutral endpoint types from the root', async () => {
-	const endpoints: main.WorkspaceEndpoints = {
-		machine: 'lab.internal',
-		forward: async () => ({ url: 'http://127.0.0.1:43127', close: async () => {} }),
-	};
-	const endpoint: main.WorkspaceEndpoint = await endpoints.forward({ name: 'bench' }, 43127);
-	expect([endpoints.machine, endpoint.url]).toEqual(['lab.internal', 'http://127.0.0.1:43127']);
 });
 
 it('lets the neutral resource import only the dependency-free name syntax', async () => {

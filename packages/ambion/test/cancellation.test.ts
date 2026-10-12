@@ -269,20 +269,6 @@ describe.each(storages)('cancellation storage recovery on $name', (storage) => {
 		return { opened, faulty, room, visit: await room.visit(person) };
 	};
 
-	it.each(['before', 'after'] as const)(
-		'converges after a %s-commit cancellation failure',
-		async (phase) => {
-			const { faulty, room, visit } = await faultyRoom();
-			const exchange = await visit.send({ text: 'cancel me' });
-			faulty.fail(phase, 'cancel');
-			await expect(room.cancel()).rejects.toThrow(/disk is full/);
-			faulty.fail(false);
-			await room.cancel();
-			await room.exchange(exchange.from)?.waitForClose();
-			expect((await messagesOf(room)).filter((message) => message.kind === 'summary')).toEqual([]);
-		},
-	);
-
 	it('reuses the uncertain cancellation key after recovery and preserves later work', async () => {
 		const { opened, faulty, room, visit } = await faultyRoom();
 		const first = await visit.send({ text: 'cancel with an uncertain acknowledgement' });

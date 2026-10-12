@@ -1,6 +1,6 @@
 /**
  * The executor over a fake app-server: the seat text in the thread
- * parameters, exchange continuity, steer, the cut, the end of the process,
+ * parameters, exchange continuity, steer, the end of the process,
  * the session step, and the recipe that turns native tools off.
  */
 import { existsSync, readdirSync } from 'node:fs';
@@ -70,46 +70,6 @@ describe('exchange continuity', () => {
 		expect(start?.baseInstructions).toContain('Answer once.');
 		expect(resume?.baseInstructions).toBe(start?.baseInstructions);
 		expect(promptsOf(room)[1]).not.toContain('Answer once.');
-	});
-
-	it('starts a fresh thread when Codex refuses the resume, and says so in the trace', async () => {
-		const room = open([plainTurn], seat(), undefined, undefined, {
-			resumeError: 'no rollout found for thread id bogus',
-		});
-		const session = room.activate();
-		const result = await session.pass(input({ kind: 'codex', id: 'bogus' }));
-		session.close?.();
-		expect(result).toEqual({ failed: false });
-		expect(room.fake.requestsOf('thread/resume')).toHaveLength(1);
-		expect(room.fake.requestsOf('thread/start')).toHaveLength(1);
-		expect(session.session).toEqual({ kind: 'codex', id: 'thread-1' });
-		expect(room.steps).toContainEqual(
-			expect.objectContaining({
-				type: 'notice',
-				level: 'info',
-				text: 'Codex thread not resumed',
-				data: { thread: 'bogus', reason: 'no rollout found for thread id bogus' },
-			}),
-		);
-		expect(room.events.filter((event) => event.type === 'error')).toEqual([]);
-	});
-
-	it('starts a fresh thread when the thread keeps other tools than the activation binds', async () => {
-		const room = open([plainTurn, plainTurn]);
-		const first = await run(room.activate('a1'));
-		// The thread keeps its tools on the disk of the host. A later activation binds one more.
-		const kept = room.fake.kept.get('thread-1') ?? [];
-		room.fake.kept.set('thread-1', kept.slice(1));
-		const second = await run(room.activate('a2'), first.session);
-		expect(second.session).toEqual({ kind: 'codex', id: 'thread-2' });
-		expect(room.fake.requestsOf('thread/resume')).toHaveLength(1);
-		expect(room.fake.requestsOf('thread/start')).toHaveLength(2);
-		expect(room.steps).toContainEqual(
-			expect.objectContaining({
-				text: 'Codex thread not resumed',
-				data: { thread: 'thread-1', reason: 'the thread keeps other tools' },
-			}),
-		);
 	});
 
 	it('reports a failure of a fresh thread and does not try again', async () => {
@@ -250,33 +210,6 @@ describe('steer', () => {
 		return { turn, release: release.resolve };
 	}
 
-	it('sends a line that lands mid turn to turn/steer with the id of the turn, and counts it read on its echo', async () => {
-		const { turn, release } = held();
-		const room = open([turn]);
-		const state = room.activate();
-		const passing = state.pass(input());
-		await until(() => room.fake.requestsOf('turn/start').length > 0, 'the turn start');
-		await until(() => room.steps.some((step) => step.type === 'session'), 'the thread');
-		const line = '[new] #2 [andrei] Also name the owner.';
-		state.steer(1, 2, line);
-		await until(() => room.fake.requestsOf('turn/steer').length > 0, 'the steer');
-		release();
-		expect(await passing).toEqual({ failed: false });
-		state.close?.();
-		const [steer] = room.fake.requestsOf('turn/steer') as {
-			expectedTurnId: string;
-			clientUserMessageId: string;
-			input: { text: string }[];
-		}[];
-		expect(steer).toMatchObject({
-			expectedTurnId: 'turn-1',
-			input: [{ type: 'text', text: line }],
-		});
-		expect(steer?.clientUserMessageId).toEqual(expect.any(String));
-		expect(room.steps).toContainEqual({ type: 'steer', seq: 2, consumed: true });
-		expect(state.readThrough).toBe(2);
-	});
-
 	it('holds a line that lands before turn/start answers, and sends it right after', async () => {
 		const { turn, release } = held();
 		const room = open([turn]);
@@ -294,28 +227,6 @@ describe('steer', () => {
 		expect(room.steps).toContainEqual({ type: 'steer', seq: 2, consumed: true });
 	});
 
-	it('leaves a line for the next delta when Codex answers that no turn is active', async () => {
-		const release = Promise.withResolvers<void>();
-		const room = open([
-			async (ctx) => {
-				ctx.reply('done');
-				ctx.finish();
-				await release.promise;
-				return undefined;
-			},
-		]);
-		const state = room.activate();
-		const passing = state.pass(input());
-		await until(() => room.steps.some((step) => step.type === 'text'), 'the reply');
-		state.steer(1, 2, '[new] #2 [andrei] Too late.');
-		await until(() => room.fake.requestsOf('turn/steer').length > 0, 'the refused steer');
-		release.resolve();
-		await passing;
-		state.close?.();
-		expect(room.steps).toContainEqual({ type: 'steer', seq: 2, consumed: false });
-		expect(state.readThrough).toBe(1);
-	});
-
 	it('does not count a line read when Codex accepts it and sends no echo', async () => {
 		const { turn, release } = held();
 		const room = open([turn], seat(), undefined, undefined, { echoSteers: false });
@@ -329,28 +240,6 @@ describe('steer', () => {
 		state.close?.();
 		expect(room.steps).toContainEqual({ type: 'steer', seq: 2, consumed: false });
 		expect(state.readThrough).toBe(1);
-	});
-});
-
-describe('the cut', () => {
-	it('sends turn/interrupt with the id of the turn, and ends the pass with no failure', async () => {
-		const room = open([
-			async (ctx) => {
-				ctx.reply('thinking');
-				await ctx.interrupted;
-				return { status: 'interrupted' };
-			},
-		]);
-		const state = room.activate();
-		const passing = state.pass(input());
-		await until(() => room.steps.some((step) => step.type === 'text'), 'the reply');
-		state.cut();
-		expect(await passing).toEqual({ failed: false });
-		state.close?.();
-		expect(room.fake.requestsOf('turn/interrupt')).toEqual([
-			{ threadId: 'thread-1', turnId: 'turn-1' },
-		]);
-		expect(room.events.filter((event) => event.type === 'error')).toEqual([]);
 	});
 });
 

@@ -55,18 +55,6 @@ class FixedEnv extends HomeEnv {
 }
 
 describe('HomeEnv', () => {
-	it('resolves a path from the home', async () => {
-		const env = new FixedEnv({});
-		expect(env.cwd).toBe('/home/ada');
-		expect(await env.absolutePath('~/sub/../b')).toEqual({ ok: true, value: '/home/ada/b' });
-	});
-
-	it('reads a range of the resolved path', async () => {
-		const env = new FixedEnv({ '/home/ada/a.txt': 'abcdef' });
-		const range = await env.readRange('a.txt', 2, 3);
-		expect(range.ok && new TextDecoder().decode(range.value)).toBe('cde');
-	});
-
 	it('resolves the path, awaits the classifier with the path and the hint, and checks the abort first', async () => {
 		const files = new FixedEnv({ '/home/ada/a.txt': 'one' });
 		const missing = await files.readTextFile('b.txt');

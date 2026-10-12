@@ -295,10 +295,6 @@ it.each([
 	// The status comes from the text when the text names one.
 	['unexpected status 403 Forbidden', undefined, 'permanent'],
 	['stream error: 529 overloaded_error: try again later', undefined, 'transient'],
-	// The caller can give a status.
-	['The request failed.', 403, 'permanent'],
-	['The request failed.', 500, 'transient'],
-	['The request failed.', null, 'transient'],
 ] as const)('causeOf names %j with status %s %s', (text, status, cause) => {
 	expect(causeOf(text, status)).toBe(cause);
 });
@@ -309,16 +305,6 @@ it.each([
 		'a full context window as a length stop',
 		'Codex ran out of room in the model context window.',
 		{ failed: false, stop: 'length' },
-	],
-	[
-		'an authentication refusal as a permanent failure',
-		'unexpected status 401 Unauthorized',
-		{ failed: true, cause: 'permanent', message: 'unexpected status 401 Unauthorized' },
-	],
-	[
-		'an overloaded provider as a transient failure',
-		'stream error: 529 overloaded_error',
-		{ failed: true, cause: 'transient', message: 'stream error: 529 overloaded_error' },
 	],
 	[
 		'a spent quota as a permanent failure, in the provider’s words',

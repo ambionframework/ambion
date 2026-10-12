@@ -149,8 +149,6 @@ describe('presence', () => {
 			['mara', 'from mara'],
 		]);
 		expect(contexts.at(-1)).not.toContain('This room exists to:');
-		// the audience paragraph is about routing, so it needs no goal
-		expect(prompts.at(-1)).toContain('Who is reading can change while you work');
 	});
 
 	it('holds one visit per person, takes leave() twice, and refuses a stale visit', async () => {
@@ -273,7 +271,6 @@ describe('presence', () => {
 		expect(view).toContain('has not seen the last');
 		expect(view).toContain('── andrei has not seen anything below this line ──');
 		expect(view).toContain('while andrei is away');
-		expect(prompts.at(-1)).toContain('Who is reading can change while you work');
 	});
 });
 

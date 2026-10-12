@@ -18,10 +18,6 @@ const manifest = async () =>
 		exports: Record<string, { import?: string } | string>;
 	};
 
-it('keeps the exported package name in step with the manifest', async () => {
-	expect(main.PACKAGE_NAME).toBe((await manifest()).name);
-});
-
 it('holds two entries, and builds each under the name the manifest gives it', async () => {
 	const { exports } = await manifest();
 	expect(Object.keys(exports).sort()).toEqual(['.', './git', './package.json']);

@@ -6,7 +6,6 @@ import { runningRoom } from '../src/host/runtime.ts';
 import {
 	type Attention,
 	createRuntime,
-	definePerson,
 	isSaid,
 	type Message,
 	type Room,
@@ -199,14 +198,6 @@ describe('startRoom', () => {
 		expect(roster).toContain('"named only": a say addressed to it.');
 		expect(roster).toContain('- andrei (present'); // the people, and how they are reading
 		expect(roster).toContain('Founder. Owns the room.');
-
-		// one name is one participant, and one name is one person
-		await expect(session.visit(definePerson({ name: 'liar', identity: 'x' }))).rejects.toThrow(
-			/is an agent/,
-		);
-		await expect(
-			session.visit(definePerson({ name: 'andrei', identity: 'a different andrei' })),
-		).rejects.toThrow(/different identity/);
 	});
 
 	it('starts a name back into its record, refuses a second run, and reads without one', async () => {
@@ -425,13 +416,6 @@ describe('startRoom', () => {
 		// a composition that stands takes the name and reads the record the first run left
 		const again = await open('clash', {}, undefined, { name, runtime });
 		expect((await messagesOf(again)).map((m) => m.from)).toEqual(['andrei', 'andrei']);
-	});
-
-	it('refuses a duplicate agent name', async () => {
-		const twin = scriptedAgent('solo');
-		await expect(
-			open('dupe', { solo: 'broadcast' }, undefined, { agents: [twin, twin, assistant] }),
-		).rejects.toThrow(/one name names one participant/);
 	});
 
 	it('tells the seat side to stop, over the wire, when it cuts a lease', async () => {

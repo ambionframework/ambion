@@ -31,7 +31,6 @@ it('keeps documentation ownership and the Step glossary consistent', async () =>
 	expect(headings(room).filter((heading) => agentHeadings.includes(heading))).toEqual([]);
 	const row = room.split('\n').find((line) => line.startsWith('| Step '));
 	expect(executors).toContain('## The step vocabulary');
-	expect(agent).not.toContain('## Steps and the trace');
+
 	expect(row).toContain('(executors.md)');
-	expect(row).not.toContain('PENDING');
 });

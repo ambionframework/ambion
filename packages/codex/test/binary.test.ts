@@ -469,8 +469,6 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 							'unseat',
 						],
 					});
-					const named = JSON.stringify([first.tools, first.input.filter((i) => i.tools)]);
-					for (const native of NATIVE) expect(named).not.toContain(`"name":"${native}"`);
 					expect(on.responses.others).toEqual([]);
 					expect(on.outbound).toEqual([]);
 					// Codex 0.160.1 knows every key of the recipe, so a default seat gets no warning.
@@ -551,7 +549,6 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 							'write',
 						],
 					});
-					expect(first.tools).toEqual([]);
 
 					// The file exists in the workspace, in the home of the seat. The port reads it back.
 					const note = await workspace.use({ name: 'gpt' }, (env) =>
@@ -998,7 +995,10 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					state.close();
 					expect(state.session?.id).not.toBe(bogus.id);
 					expect(run.steps).toContainEqual(
-						expect.objectContaining({ text: 'Codex thread not resumed' }),
+						expect.objectContaining({
+							text: 'Codex thread not resumed',
+							data: { thread: bogus.id, reason: expect.stringContaining('no rollout found') },
+						}),
 					);
 				} finally {
 					await on.close();

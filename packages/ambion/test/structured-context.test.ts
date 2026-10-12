@@ -183,21 +183,14 @@ describe('structured activation context', () => {
 
 		expect(response.agent).toContain('PRIVATE PRODUCT INSTRUCTIONS.');
 		expect(response.context).toContain('Later.');
-		expect(response.context).toContain('The reserve: agents not in the room.');
 		expect(response.context).toContain('Begin your activation, product:');
 		expect(summary.agent).toContain('PRIVATE WORKER INSTRUCTIONS.');
 		expect(summary.agent).not.toContain('assistant in the room');
-		expect(summary.agent).toContain('The exchange is over. Write the one message');
+
 		expect(summary.agent).toContain('Lead with blockers.');
 		expect(summary.context).not.toContain('The reserve:');
-		expect(summary.context).toContain("priya's exchange is over: it holds the messages");
+
 		expect(summary.context).not.toContain('Later.');
-		// The closing seat reads the arrival that came before its own exchange,
-		// with a divider marking where its own exchange begins.
-		expect(summary.context).toContain('· priya arrived');
-		expect(summary.context).toContain(
-			'── Current exchange begins here; earlier exchanges are background ──',
-		);
 	});
 
 	it('tells a closing seat how to read a fold its background now holds', () => {

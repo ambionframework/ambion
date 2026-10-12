@@ -821,17 +821,11 @@ own tests: the options, the config flags, and the failure classification.
 **The live tier proves the claims that a scripted model cannot.** Each file
 holds the smallest room that proves one claim.
 
-| File                            | Claim                                                                                               |
-| ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `test/live/loop.test.ts`        | A seat speaks through `say`; no approval error; usage above zero                                    |
-| `test/live/tools.test.ts`       | A seat writes a file and runs a command through the workspace tools, and says what the command read |
-| `test/live/exclusive.test.ts`   | A seat has exactly the room tools and its own; it reads no host file                                |
-| `test/live/image.test.ts`       | An image from a tool of the default seat reaches the model, and the seat names its color            |
-| `test/live/steer.test.ts`       | A line sent during a pass reaches the model in that pass                                            |
-| `test/live/memory.test.ts`      | Each exchange starts a fresh thread and records it; a bogus id falls back                           |
-| `test/live/mixed.test.ts`       | A Pi seat and a Codex seat both speak                                                               |
-| `test/live/visibility.test.ts`  | The trace holds the session step and the reasoning summary, and one notice names the thread         |
-| `test/live/conformance.test.ts` | The executor suite of `@ambionframework/ambion/conformance`, with steer and no usage plan           |
+| File                            | Claim                                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `test/live/exclusive.test.ts`   | A seat has exactly the room tools and its own; it reads no host file                      |
+| `test/live/image.test.ts`       | An image from a tool of the default seat reaches the model, and the seat names its color  |
+| `test/live/conformance.test.ts` | The executor suite of `@ambionframework/ambion/conformance`, with steer and no usage plan |
 
 **Run the live tier in one of two modes.** Every definition sets the model
 `gpt-5.6-luna` and `modelReasoningEffort: 'medium'`.
@@ -849,21 +843,12 @@ CODEX_API_KEY=... pnpm --filter @ambionframework/codex run test:live
 pnpm --filter @ambionframework/codex run test:live   # on the login
 ```
 
-**The full live tier passed once on a ChatGPT login.** On 2 October 2026
-the owner's Mac ran every live file on the `login` mode, with Codex 0.159.2
-and no `CODEX_API_KEY`. The `session` step of each seat reported `chatgpt`.
-The first run passed 19 of 20 tests.
+**No live test covers the token refresh** (`account/chatgptAuthTokens/refresh`).
+No live run expires a token, so no test covers the refresh.
 
-**The one failure was in the dump.** The wrapper of `AMBION_LIVE_DUMP` did
-not pass the steer to the executor, so the steer case of the suite failed.
-After the fix, the conformance file passed all 10 cases. No test covers the
-token refresh (`account/chatgptAuthTokens/refresh`), because no token
-expired during the run.
-
-The mixed file also needs the key of the Pi model (`AMBION_MODEL`, default
-`anthropic/claude-sonnet-5`). A live run costs money: run one file with
+A live run costs money: run one file with
 `pnpm --filter @ambionframework/codex exec vitest run --config
-vitest.live.config.ts test/live/loop.test.ts`.
+vitest.live.config.ts test/live/image.test.ts`.
 
 ## Troubleshooting
 

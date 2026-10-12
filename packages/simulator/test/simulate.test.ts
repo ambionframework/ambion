@@ -17,7 +17,6 @@ import {
 	type Actor,
 	LIST_ENDED,
 	type Move,
-	PACKAGE_NAME,
 	type Seen,
 	scriptedActor,
 	simulate,
@@ -52,6 +51,7 @@ describe('simulate', () => {
 			'desk',
 		]);
 		expect(simulation.error).toBeUndefined();
+		expect(structuredClone(simulation)).toEqual(simulation);
 	});
 
 	it('ends with `limit` after `messages` messages, one exchange for each, and leaves the room running', async () => {
@@ -288,16 +288,6 @@ describe('simulate', () => {
 		expect(simulation.usage.actor).toEqual(usage);
 	});
 
-	it('returns a detached value', async () => {
-		const room = await open(answering, ['desk']);
-		const simulation = await simulate(room, {
-			person: priya,
-			actor: scriptedActor(['Can we pour?']),
-			messages: 1,
-		});
-		expect(structuredClone(simulation)).toEqual(simulation);
-	});
-
 	it.each([
 		[{ messages: 0 }, /`messages`/],
 		[{ messages: 1.5 }, /`messages`/],
@@ -308,10 +298,5 @@ describe('simulate', () => {
 			simulate(room, { person: priya, actor: scriptedActor([]), ...bounds }),
 		).rejects.toThrow(error);
 		expect((await room.read()).messages).toEqual([]);
-	});
-
-	it('keeps the package name in step with the manifest', async () => {
-		const { default: manifest } = await import('../package.json', { with: { type: 'json' } });
-		expect(PACKAGE_NAME).toBe(manifest.name);
 	});
 });

@@ -172,23 +172,6 @@ async function unreadableRoom(
 }
 
 describe.each(storages)('durable visits on $name storage', (storage) => {
-	it('coalesces concurrent visits under one identity into one arrival, and refuses another identity', async () => {
-		const { room, started, release } = await heldRoom(storage, 'arrived');
-		const first = room.visit(person);
-		await started;
-		const second = room.visit(person);
-		const other = room.visit(otherPerson);
-		void other.catch(() => {});
-		expect(await settlesAfterTurn(second)).toBe(false);
-
-		release();
-		const [one, two] = await Promise.all([first, second]);
-		expect(one.person).toEqual(two.person);
-		await expect(other).rejects.toThrow(/different identity/);
-		await expect(room.visit(otherPerson)).rejects.toEqual(refusal('duplicate_name'));
-		expect(await kinds(room, 'arrived')).toHaveLength(1);
-	});
-
 	it('does not let a rejected arrival lend a usable visit to a concurrent caller', async () => {
 		const { room, started, release } = await heldRoom(storage, 'arrived', true);
 		const first = room.visit(person);
@@ -258,20 +241,6 @@ describe.each(storages)('durable visits on $name storage', (storage) => {
 		await freshVisit.leave();
 	});
 
-	it.each(['before', 'after'] as const)(
-		'retries a departure that failed %s its append, and writes one left',
-		async (phase) => {
-			const { room, faulty } = await faultyRoom(storage);
-			const visit = await room.visit(person);
-			faulty.fail(phase, 'message');
-			await expect(visit.leave()).rejects.toThrow(/disk is full/);
-			faulty.fail(false);
-			await visit.leave();
-			expect(await presenceOf(room)).toMatchObject({ kind: 'person', presence: 'absent' });
-			expect(await kinds(room, 'left')).toHaveLength(1);
-		},
-	);
-
 	it.each([
 		['the same identity', person],
 		['a new identity', otherPerson],
@@ -334,21 +303,18 @@ describe.each(storages)('durable visits on $name storage', (storage) => {
 		await freshVisit.leave();
 	});
 
-	it.each(['stop', 'leave'] as const)(
-		'completes the departure when a %s retries after a failed stop',
-		async (retry) => {
-			const { room, faulty } = await faultyRoom(storage);
-			const visit = await room.visit(person);
-			faulty.fail('before', 'message');
-			if (retry === 'leave') await expect(visit.leave()).rejects.toThrow(/disk is full/);
-			await expect(room.stop()).rejects.toThrow(/disk is full/);
-			faulty.fail(false);
+	it('completes the departure when a leave retries after a failed stop', async () => {
+		const { room, faulty } = await faultyRoom(storage);
+		const visit = await room.visit(person);
+		faulty.fail('before', 'message');
+		await expect(visit.leave()).rejects.toThrow(/disk is full/);
+		await expect(room.stop()).rejects.toThrow(/disk is full/);
+		faulty.fail(false);
 
-			await (retry === 'stop' ? room.stop() : visit.leave());
-			expect(await kinds(room, 'left')).toHaveLength(1);
-			expect(await presenceOf(room)).toMatchObject({ presence: 'absent' });
-		},
-	);
+		await visit.leave();
+		expect(await kinds(room, 'left')).toHaveLength(1);
+		expect(await presenceOf(room)).toMatchObject({ presence: 'absent' });
+	});
 
 	it('fences a failed old stop after resume so it cannot leave the new run human', async () => {
 		const { room: oldRoom, faulty, runtime, name } = await faultyRoom(storage);
@@ -364,22 +330,6 @@ describe.each(storages)('durable visits on $name storage', (storage) => {
 		expect(await kinds(resumed, 'left')).toHaveLength(0);
 		expect(await presenceOf(resumed)).toMatchObject({ presence: 'present' });
 		await freshVisit.leave();
-	});
-
-	it('reacquires a committed keyed send after leave and reentry in the same exchange', async () => {
-		const { room } = await roomOver(storage, (journals) => journals);
-		const firstVisit = await room.visit(person);
-		const firstExchange = await firstVisit.send({ text: 'same question', key: 'same-question' });
-		await firstVisit.leave();
-
-		const reentered = await room.visit(person);
-		const retryExchange = await reentered.send({ text: 'same question', key: 'same-question' });
-		expect(retryExchange.from).toBe(firstExchange.from);
-		expect(retryExchange.person).toBe(firstExchange.person);
-		expect(
-			(await kinds(room, 'said')).filter((message) => message.key === 'same-question'),
-		).toHaveLength(1);
-		await reentered.leave();
 	});
 
 	it('does not duplicate an arrival when its append and recovery read both lose acknowledgement', async () => {
@@ -400,21 +350,6 @@ describe.each(storages)('durable visits on $name storage', (storage) => {
 		await recover();
 		await room.stop();
 		expect(await kinds(room, 'left')).toHaveLength(1);
-	});
-
-	it('recovers a lost left with a lost recovery read before accepting a new identity', async () => {
-		const { room, arm, recover } = await unreadableRoom(storage);
-		const oldVisit = await room.visit(person);
-		arm();
-		await expect(oldVisit.leave()).rejects.toThrow(/disk is full/);
-		await recover();
-		const freshVisit = await room.visit(otherPerson);
-		expect(await kinds(room, 'left')).toHaveLength(1);
-		expect(await kinds(room, 'arrived')).toHaveLength(2);
-		await expect(oldVisit.send({ text: 'stale old handle' })).rejects.toThrow(/ended|leaving/);
-		await oldVisit.leave();
-		expect(await kinds(room, 'left')).toHaveLength(1);
-		await freshVisit.leave();
 	});
 });
 

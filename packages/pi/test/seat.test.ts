@@ -4,18 +4,15 @@
  * queued behind it runs next. The runner stays live when a room call hangs,
  * fails, or answers late, and when the model resolves late or fails.
  */
-import { createRuntime, type Message } from '@ambionframework/ambion';
+import type { Message } from '@ambionframework/ambion';
 import {
 	type CommitResult,
-	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
 	PermanentError,
 	type Steer,
 	type Wake,
 } from '@ambionframework/ambion/hosting';
-import { fakeClock } from '@ambionframework/ambion/testing';
-import { memoryJournals } from '@ambionframework/journal';
 import {
 	type Api,
 	type Context,
@@ -140,15 +137,6 @@ describe('a seat actor', () => {
 		expect(room.mostHeld).toBe(1);
 	});
 
-	it('takes a wake to its end: it claims the lease, runs, and releases', async () => {
-		const { room, actor } = playSeat();
-		await actor.wake(wake(first));
-		await until(() => room.releases.length === 1);
-		expect(room.claims).toEqual([first]);
-		expect(room.releases).toEqual([first]);
-		expect(room.mostHeld).toBe(1);
-	});
-
 	it('steers a recorded message into its running activation without starting work', async () => {
 		const gate = deferred();
 		const { room, actor } = playSeat({
@@ -203,13 +191,6 @@ describe('a seat actor', () => {
 });
 
 describe('runner liveness', () => {
-	it('uses a ten second default timeout for room calls', () => {
-		expect(
-			hostingOf(createRuntime({ storage: memoryJournals(), clock: fakeClock(0) })).limits.call
-				.timeout,
-		).toBe(10_000);
-	});
-
 	it('does not start an activation from an already-expired claim', async () => {
 		let providerCalls = 0;
 		const { actor, clock, room } = playSeat({

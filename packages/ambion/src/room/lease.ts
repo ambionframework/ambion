@@ -48,19 +48,6 @@ export type LeaseHold = RuleLease & {
 };
 
 /**
- * Every lease the changes fold to. The complete journal remains available,
- * so a lease's attempt history is reconstructed directly from its changes.
- */
-export function foldLeases(
-	changes: readonly Entry<Lease>[],
-	held: readonly LeaseHold[] = [],
-): Map<string, LeaseHold> {
-	const leases = new Map<string, LeaseHold>(held.map((lease) => [lease.id, lease]));
-	for (const entry of changes) applyLease(leases, entry);
-	return leases;
-}
-
-/**
  * Apply one change to a private lease builder. Callers must not share this
  * map. The validator refuses a lease entry whose id the room did not derive,
  * so the fold holds no lease that it cannot decode.

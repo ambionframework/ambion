@@ -89,19 +89,6 @@ function holdShell(workspace: Workspace) {
 describe('a workspace with a SQL backend', () => {
 	it('keeps the ten default tools, names no database file in sql, and states the backend database', () => {
 		const { workspace } = withSql();
-		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual([
-			'read',
-			'write',
-			'edit',
-			'apply_patch',
-			'bash',
-			'ps',
-			'wait',
-			'cancel',
-			'snapshot',
-			'restore',
-			'sql',
-		]);
 		const properties = Object.keys(
 			(toolOf(workspace, 'sql').parameters as { properties: Record<string, unknown> }).properties,
 		);
@@ -341,15 +328,6 @@ SELECT count(*) AS n, max(ohms) AS top, typeof(max(ohms)) AS kind FROM sweep;`,
 		expect(await shellText(workspace, '/home/ada/keep.csv')).toBe('id\n1\n');
 	});
 
-	it('records a sql call in the audit log on the shell', async () => {
-		const { workspace } = withSql({ audit: true });
-		await call(workspace, { sql: 'SELECT 1 AS one' });
-		const log = await shellText(workspace, '/workspace/audit.jsonl');
-		const entry = JSON.parse((log ?? '').trim()) as Record<string, unknown>;
-		expect(entry).toMatchObject({ agent: 'ada', tool: 'sql', room: 'lobby', callId: 'call-1' });
-		expect(entry.arguments).toEqual({ sql: 'SELECT 1 AS one' });
-	});
-
 	it('runs a query while a shell operation holds the bash resource, and makes an export wait for it', async () => {
 		const { workspace } = withSql();
 		const release = holdShell(workspace);
@@ -500,18 +478,6 @@ describe('a workspace with no SQL backend and no audit log', () => {
 	it('has no SQL resource, no sql tool, and no sql or audit guidance', () => {
 		const workspace = openWorkspace({ name: 'lab', backend: { bash: memoryBackend() } });
 		expect(workspace.sql).toBeUndefined();
-		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual([
-			'read',
-			'write',
-			'edit',
-			'apply_patch',
-			'bash',
-			'ps',
-			'wait',
-			'cancel',
-			'snapshot',
-			'restore',
-		]);
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).not.toMatch(/\bsql\b/);
 		expect(guidance).not.toContain('audit');

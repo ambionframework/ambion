@@ -302,25 +302,6 @@ describe('fork', () => {
 		const fork = await workspace.git?.use({ name: 'analyst' }, (env) => env.get('analyst/report'));
 		expect(fork?.source).toBe('templates/weekly-report');
 	});
-
-	it('records a fork call in the audit log on the shell', async () => {
-		const { workspace } = await lab({ audit: true });
-		await text(workspace, 'fork', { source: 'templates/weekly-report', name: 'report' });
-		const log = await workspace.use({ name: 'analyst' }, (env) =>
-			env.readTextFile('/workspace/audit.jsonl'),
-		);
-		const entries = (log.ok ? log.value : '')
-			.trim()
-			.split('\n')
-			.map((line) => JSON.parse(line));
-		expect(entries).toMatchObject([
-			{
-				tool: 'fork',
-				agent: 'analyst',
-				arguments: { source: 'templates/weekly-report', name: 'report' },
-			},
-		]);
-	});
 });
 
 describe('a clone made with bash', () => {

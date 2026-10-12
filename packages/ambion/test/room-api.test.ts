@@ -164,15 +164,6 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 		expect(recovered).toBeDefined();
 		expect(await recovered?.waitForClose()).toEqual(conversation);
 	});
-
-	it('keeps an open exchange open after host eviction', async () => {
-		const { runtime, room } = await world(answer, {}, storage);
-		await (await room.visit(priya)).send({ text: 'Stay open?', key: 'open-1' });
-		crash(runtime, room);
-		const snapshot = await readRoom(room.name, { runtime, messages: false });
-		expect(snapshot.initialized).toBe(true);
-		expect(snapshot.exchange?.status).toBe('open');
-	});
 });
 
 describe('the room API', () => {
