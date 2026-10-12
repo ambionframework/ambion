@@ -15,7 +15,7 @@ const ProcessState = Type.Union([
 	Type.Literal('failed'),
 ]);
 
-/** The schema of `Process`. A type test pins that the two stay assignable. */
+/** The schema of `Process`, which `process-files.ts` derives its type from. */
 export const ProcessFacts = Type.Object(
 	{
 		handle: Type.String({ description: 'The key of the process, such as bash-1a2b3c4d5e6f.' }),

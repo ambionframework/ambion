@@ -15,43 +15,16 @@
  * `docs/processes.md` is the design contract.
  */
 
+import type { Static } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
 import { runScript, shellQuote } from './execution-env.ts';
-
-/** Where a process is in its life. Every state but `running` is final. */
-export type ProcessState = 'running' | 'exited' | 'timed_out' | 'cancelled' | 'failed';
+import type { ProcessFacts } from './process-schema.ts';
 
 /** What the files of one process say about it. A caller gets a frozen value. */
-export interface Process {
-	/** The key of the process. */
-	readonly handle: string;
-	/** The label the agent gave the process, when it gave one. */
-	readonly name?: string;
-	/** The owner agent: the agent whose call started the process. */
-	readonly agent: string;
-	/** The command as the agent gave it. */
-	readonly command: string;
-	/** The port that the workspace set in `$PORT` for the command. Zero for a spec written before ports. */
-	readonly port: number;
-	readonly state: ProcessState;
-	/** The absolute path of the file that holds the whole output. */
-	readonly output: string;
-	/** Seconds the process may run before the table cancels it. */
-	readonly timeout: number;
-	/** Seconds from `SIGTERM` to `SIGKILL` when the table cancels the process. */
-	readonly grace: number;
-	/** The room of the call that started the process, when it had one. Metadata alone. */
-	readonly room?: string;
-	readonly startedAt: string;
-	/** Set when the state is final and the files name the time of the end. */
-	readonly endedAt?: string;
-	/** Set when the state is `exited`. */
-	readonly exitCode?: number;
-	/** Set when the state is `failed`. */
-	readonly error?: string;
-	/** True while the state is `running` and a cancel of the table waits for the end. */
-	readonly stopping?: boolean;
-}
+export type Process = Readonly<Static<typeof ProcessFacts>>;
+
+/** Where a process is in its life. Every state but `running` is final. */
+export type ProcessState = Process['state'];
 
 /** What `spec` holds: the facts of a process at its start. */
 export interface ProcessSpec {

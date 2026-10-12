@@ -7,7 +7,6 @@ import { tempDir } from '../../just-bash/test/support/backends.ts';
 import type { ShellOutputTruncation } from '../src/port.ts';
 import {
 	LOST,
-	type Process,
 	type ProcessFiles,
 	processesDir,
 	statusOf,
@@ -18,7 +17,6 @@ import {
 } from '../src/process-files.ts';
 import type {
 	ProcessDetails,
-	ProcessFacts,
 	PsDetails,
 	TruncationFacts,
 	WaitDetails,
@@ -34,11 +32,9 @@ import { openWorkspace, type Workspace } from '../src/workspace.ts';
 import { callAs, invokeText, toolOf, wrapped } from './support/backends.ts';
 
 describe('the declared output of a process', () => {
-	it('keeps ShellOutputTruncation and Process assignable to their schemas, and the schemas to them', () => {
+	it('keeps ShellOutputTruncation assignable to its schema, and the schema to it', () => {
 		expectTypeOf<ShellOutputTruncation>().toExtend<Static<typeof TruncationFacts>>();
 		expectTypeOf<Static<typeof TruncationFacts>>().toExtend<ShellOutputTruncation>();
-		expectTypeOf<Process>().toExtend<Static<typeof ProcessFacts>>();
-		expectTypeOf<Static<typeof ProcessFacts>>().toExtend<Process>();
 	});
 });
 
