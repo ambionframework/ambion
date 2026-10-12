@@ -92,6 +92,7 @@ it('exports one resource, its two logs, the port values, the environment helpers
 		'openWorkspace',
 		'randomName',
 		'resolvePath',
+		'resolveProcess',
 		'runScript',
 		'shellQuote',
 		'sqlImport',

@@ -55,6 +55,17 @@ export interface ProcessTable {
 	/** One process of `agent`. Throws when `agent` has no process `handle`. */
 	find(agent: WorkspaceAgent, handle: string, signal?: AbortSignal): Promise<Process>;
 	/**
+	 * The handles of `refs`, in order. A ref is a handle, or the name of one
+	 * process of `agent`: `resolveProcess` finds it among the processes of
+	 * `agent`. Refs that are all handles read nothing and come back as they
+	 * are, so `find` and `wait` report a handle that `agent` does not hold.
+	 */
+	resolve(
+		agent: WorkspaceAgent,
+		refs: readonly string[],
+		signal?: AbortSignal,
+	): Promise<readonly string[]>;
+	/**
 	 * Wait up to `seconds` for the first of the processes `handles` of
 	 * `agent` to end, and return their statuses in the same order. Each
 	 * status is `running` when the time ends first. An abort of `signal`

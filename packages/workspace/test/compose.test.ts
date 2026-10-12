@@ -155,7 +155,6 @@ return { quick, long };`,
 				state: 'exited',
 				exitCode: 0,
 				command: 'echo hi',
-				kind: 'bash',
 				agent: 'ada',
 			}),
 			text: 'hi',
@@ -165,23 +164,23 @@ return { quick, long };`,
 		expect(value.long.truncation).toMatchObject({ truncated: true, truncatedBy: 'lines' });
 	});
 
-	it('gives the processes of ps, and the details of cancel and wait, for one handle, for one handle with timeout 0, and for several', async () => {
+	it('gives the processes of ps, and the details of cancel and wait, for one handle, for one handle with wait 0, and for several', async () => {
 		const { workspace } = await lab();
 		const value = (await returned(
 			workspace,
 			['bash', 'ps', 'cancel', 'wait'],
 			`const sleeper = await tools.bash({ command: 'sleep 30', wait: 0 });
 const quick = await tools.bash({ command: 'echo done', wait: 0 });
-const one = await tools.wait({ handles: [quick.process.handle], timeout: 20 });
+const one = await tools.wait({ processes: [quick.process.handle], wait: 20 });
 const running = await tools.ps({});
 const several = await tools.wait({
-  handles: [sleeper.process.handle, quick.process.handle],
-  timeout: 20,
+  processes: [sleeper.process.handle, quick.process.handle],
+  wait: 20,
 });
-const read = await tools.wait({ handles: [sleeper.process.handle], timeout: 0 });
+const read = await tools.wait({ processes: [sleeper.process.handle], wait: 0 });
 let cancelled;
 try {
-  cancelled = await tools.cancel({ handle: sleeper.process.handle });
+  cancelled = await tools.cancel({ process: sleeper.process.handle });
 } catch (error) {
   cancelled = error.details;
 }

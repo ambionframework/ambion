@@ -65,7 +65,7 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		const command = "trap 'echo cleanup; exit 0' TERM\nsleep 30 & wait";
 		const running = await invoke(workspace, 'bash', { command, wait: 0 });
 		const handle = running.process?.handle ?? '';
-		const cancelled = await invoke(workspace, 'cancel', { handle });
+		const cancelled = await invoke(workspace, 'cancel', { process: handle });
 		// The cancel ended the process, so the result has no line that says it stopped nothing.
 		expect(cancelled.text).toMatch(/^cleanup\n\n\[Process bash-[0-9a-f]{12} exited with code 0\./);
 		expect(cancelled.process).toMatchObject({ state: 'exited', exitCode: 0 });
@@ -82,12 +82,12 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		// does for a list. The child's 0 shows because the subshell waits for it.
 		const forked = 'sh -c \'trap "exit 0" TERM; sleep 30 & wait\'; code=$?; exit $code';
 		const child = await invoke(workspace, 'bash', { command: forked, wait: 0 });
-		const stopped = await invoke(workspace, 'cancel', { handle: child.process?.handle ?? '' });
+		const stopped = await invoke(workspace, 'cancel', { process: child.process?.handle ?? '' });
 		expect(stopped.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		// A loop of builtins runs no program at the signal, so it ends with the
 		// code of its last command.
 		const loop = await invoke(workspace, 'bash', { command: 'while true; do :; done', wait: 0 });
-		const looped = await invoke(workspace, 'cancel', { handle: loop.process?.handle ?? '' });
+		const looped = await invoke(workspace, 'cancel', { process: loop.process?.handle ?? '' });
 		expect(looped.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		expect(await readFile(join(dirname(looped.process?.output ?? ''), 'stop'), 'utf8')).toMatch(
 			/^cancelled /,
@@ -103,8 +103,8 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		expect((await invoke(workspace, 'ps', {}, 'bob')).text).toContain('bash-0000000000b1');
 		const began = Date.now();
 		const cancels = Promise.all([
-			invoke(workspace, 'cancel', { handle }),
-			invoke(workspace, 'cancel', { handle: 'bash-0000000000b1' }, 'bob'),
+			invoke(workspace, 'cancel', { process: handle }),
+			invoke(workspace, 'cancel', { process: 'bash-0000000000b1' }, 'bob'),
 		]);
 		// While the grace runs, a read of the process reads running, and names the cancel that waits.
 		let listed: Process | undefined;
@@ -112,7 +112,7 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 			[listed] = await workspace.processes.list({ agent: 'ada' });
 		}
 		expect(listed).toMatchObject({ handle, state: 'running', stopping: true });
-		expect((await invoke(workspace, 'wait', { handles: [handle], timeout: 0 })).text).toContain(
+		expect((await invoke(workspace, 'wait', { processes: [handle], wait: 0 })).text).toContain(
 			'is running, and the table stopped it. It has not ended yet.',
 		);
 		const [ownedEnd, adoptedEnd] = await cancels;
@@ -142,7 +142,7 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 					spawnSync('test', ['-s', join(dirname(running.process?.output ?? ''), 'pid')]).status ===
 					0,
 			);
-			const cancelled = await invoke(workspace, 'cancel', { handle });
+			const cancelled = await invoke(workspace, 'cancel', { process: handle });
 			expect(cancelled.process?.state).toBe(state);
 		},
 		20_000,
@@ -163,12 +163,12 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		const handle = stubborn.process?.handle ?? '';
 		expect(stubborn.process?.grace).toBe(30);
 		const began = Date.now();
-		const first = invoke(workspace, 'cancel', { handle });
+		const first = invoke(workspace, 'cancel', { process: handle });
 		// A second cancel of the same process joins the cancel that runs.
-		const joined = invoke(workspace, 'cancel', { handle });
+		const joined = invoke(workspace, 'cancel', { process: handle });
 		await new Promise((resolve) => setTimeout(resolve, 1_000));
 		// The grace of the first cancel does not hold the chain of the agent.
-		const second = await invoke(workspace, 'cancel', { handle: quick.process?.handle ?? '' });
+		const second = await invoke(workspace, 'cancel', { process: quick.process?.handle ?? '' });
 		expect(Date.now() - began).toBeLessThan(10_000);
 		expect(second.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		const early = await first;
@@ -178,7 +178,7 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		expect(early.process).toMatchObject({ state: 'running', stopping: true });
 		expect(early.text).toContain('is running, and the table stopped it. It has not ended yet.');
 		// The host timer sends SIGKILL after the full grace.
-		const ending = await invoke(workspace, 'wait', { handles: [handle], timeout: 25 });
+		const ending = await invoke(workspace, 'wait', { processes: [handle], wait: 25 });
 		expect(ending.process?.state).toBe('cancelled');
 	}, 60_000);
 
@@ -189,7 +189,7 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		expect((await invoke(workspace, 'ps', {})).text).toContain('bash-0000000000a1');
 		expect((await workspace.processes.list({ agent: 'ada' }))[0]).toMatchObject({ grace: 2 });
 		const began = Date.now();
-		const cancelled = await invoke(workspace, 'cancel', { handle: 'bash-0000000000a1' });
+		const cancelled = await invoke(workspace, 'cancel', { process: 'bash-0000000000a1' });
 		// The default grace of 10 s would hold the cancel longer.
 		expect(Date.now() - began).toBeLessThan(9_000);
 		expect(cancelled.process?.state).toBe('cancelled');
@@ -222,7 +222,7 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		const workspace = workspaceOn(started);
 		await invoke(workspace, 'ps', {});
 		const began = Date.now();
-		const cancelled = await invoke(workspace, 'cancel', { handle: 'bash-0000000000a2' });
+		const cancelled = await invoke(workspace, 'cancel', { process: 'bash-0000000000a2' });
 		expect(Date.now() - began).toBeLessThan(10_000);
 		expect(cancelled.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		expect(ended(pid)).toBe(true);

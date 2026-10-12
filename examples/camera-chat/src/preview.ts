@@ -1,5 +1,10 @@
 import type { Canvas, CanvasEvent, CanvasWidget } from '@ambionframework/canvas';
-import type { ProcessEvent, Workspace } from '@ambionframework/workspace';
+import {
+	type Process,
+	type ProcessEvent,
+	resolveProcess,
+	type Workspace,
+} from '@ambionframework/workspace';
 
 /** The preview reads a frame at this interval. */
 const FRAME_MS = 200;
@@ -34,7 +39,8 @@ interface Target {
 	readonly name: string;
 	readonly title: string | undefined;
 	readonly author: string;
-	readonly handle: string;
+	/** The handle or the name that the widget gives. */
+	readonly process: string;
 	readonly path: string;
 }
 
@@ -95,7 +101,7 @@ function targetsOf(widgets: readonly CanvasWidget[]): Target[] {
 						name: widget.name,
 						title: widget.title,
 						author: widget.author,
-						handle: widget.source.handle,
+						process: widget.source.process,
 						path: widget.source.path,
 					},
 				]
@@ -127,6 +133,11 @@ interface Hooks {
 	readonly followed: () => void;
 }
 
+/** Whether the widget of `target` names `process`, by its handle or its name. */
+const names = (process: Process, target: Target): boolean =>
+	process.agent === target.author &&
+	(process.handle === target.process || process.name === target.process);
+
 /** One widget of the room bound to one process, with its own timer, cap, and abort. */
 function frameBinding(workspace: Workspace, first: Target, hooks: Hooks) {
 	let target = first;
@@ -137,9 +148,9 @@ function frameBinding(workspace: Workspace, first: Target, hooks: Hooks) {
 	let controller = new AbortController();
 	let reading = false;
 	let closed = false;
-	/** Whether the handle was checked against the processes of the author. */
+	/** Whether the process of the widget was looked up among the processes of the author. */
 	let checked = false;
-	/** Whether the process of the handle ended. */
+	/** Whether the process of the widget ended. */
 	let ended = false;
 	const stopTimer = () => {
 		clearInterval(timer);
@@ -179,18 +190,22 @@ function frameBinding(workspace: Workspace, first: Target, hooks: Hooks) {
 		failure = frame ? undefined : STARTING;
 		hooks.changed();
 	}
-	const follow = () => {
-		if (closed || handle === target.handle) return;
+	const follow = (next: string) => {
+		if (closed || handle === next) return;
 		if (handle) clear();
-		handle = target.handle;
+		handle = next;
 		hooks.followed();
 		hooks.changed();
 		startTimer();
 	};
-	/** Whether the author runs the process of the handle. */
+	/** The handle of the running process that the widget names, or false when the author runs none. */
 	const runs = async (asked: Target) => {
 		const running = await workspace.processes.list({ agent: asked.author, running: true });
-		return running.some((process) => process.handle === asked.handle);
+		try {
+			return resolveProcess(asked.process, running, 'The author runs no such process.').handle;
+		} catch {
+			return false;
+		}
 	};
 	return {
 		get name() {
@@ -211,7 +226,9 @@ function frameBinding(workspace: Workspace, first: Target, hooks: Hooks) {
 		/** Take the widget as it is now. A moved source drops the old process. */
 		retarget(next: Target) {
 			const moved =
-				next.author !== target.author || next.handle !== target.handle || next.path !== target.path;
+				next.author !== target.author ||
+				next.process !== target.process ||
+				next.path !== target.path;
 			const retitled = next.title !== target.title;
 			target = next;
 			if (moved) {
@@ -220,19 +237,19 @@ function frameBinding(workspace: Workspace, first: Target, hooks: Hooks) {
 				if (handle) clear();
 			} else if (retitled) hooks.changed();
 		},
-		/** Check once that the author runs the handle, then follow it. A failed list is tried again. */
+		/** Check once that the author runs the process, then follow its handle. A failed list is tried again. */
 		async verify() {
 			if (checked || closed) return;
 			checked = true;
 			const asked = target;
 			const found = await runs(asked).catch(() => undefined);
 			if (found === undefined) checked = false;
-			if (!found || closed || ended || asked.handle !== target.handle) return;
-			follow();
+			if (!found || closed || ended || asked.process !== target.process) return;
+			follow(found);
 		},
 		/** The end of the bound process clears the frame, and the binding stays until a new `show`. */
 		observe(event: ProcessEvent) {
-			if (event.type !== 'ended' || event.process.handle !== target.handle) return;
+			if (event.type !== 'ended' || !names(event.process, target)) return;
 			ended = true;
 			if (handle) clear();
 		},
@@ -257,11 +274,11 @@ export type PreviewBinding = Pick<
 
 /**
  * Show the frames of the shown `frame` widgets of `room`, one binding for each widget name, and
- * `MAX_BINDINGS` at most. A widget names the handle of a process of its author and a path. A
- * binding checks once that the author runs the handle, then reads the path of that process by
- * handle with `workspace.fetch`, with no retention. The preview reads the widgets again on the
- * `started` event of the room and on each `widget` event. A `show` with another handle binds the
- * new handle. A hidden widget removes its binding. The `ended` event of the bound process clears
+ * `MAX_BINDINGS` at most. A widget names a process of its author, by handle or by name, and a
+ * path. A binding checks once that the author runs the process, then reads the path of that
+ * process by handle with `workspace.fetch`, with no retention. The preview reads the widgets again
+ * on the `started` event of the room and on each `widget` event. A `show` with another process
+ * binds the new process. A hidden widget removes its binding. The `ended` event of the bound process clears
  * the frame of its binding, and the binding waits for a new `show`. It touches no other binding.
  */
 export function cameraPreview(

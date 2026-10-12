@@ -528,7 +528,6 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			await mkdir(dir, { recursive: true });
 			const spec = {
 				handle,
-				kind: 'bash',
 				agent: 'ada',
 				command: 'exec sleep 30',
 				timeout,
@@ -561,7 +560,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		// A process whose shell ended and left no end in the files: no run runs it.
 		const lost = join(home, '.processes', 'bash-00000000000e');
 		await mkdir(lost, { recursive: true });
-		const spec = { handle: 'bash-00000000000e', kind: 'bash', agent: 'ada', command: 'true' };
+		const spec = { handle: 'bash-00000000000e', agent: 'ada', command: 'true' };
 		await writeFile(
 			join(lost, 'spec'),
 			JSON.stringify({
@@ -594,14 +593,14 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			['bash-00000000000d', 'running'],
 			['bash-00000000000c', 'running'],
 		]);
-		expect(await call('wait', { handles: ['bash-00000000000c'], timeout: 0 })).toBe('running');
+		expect(await call('wait', { processes: ['bash-00000000000c'], wait: 0 })).toBe('running');
 		// The read that found the lost process wrote its stop. Its pid is not in /proc, so no later
 		// listing runs ps for it.
 		expect(await readFile(join(lost, 'stop'), 'utf8')).toMatch(
 			/^failed \S+ The host run ended before the process did\.\n$/,
 		);
 		// A lost process ended badly, so a read of it fails, and the text states the loss.
-		await expect(call('wait', { handles: ['bash-00000000000e'], timeout: 0 })).rejects.toThrow(
+		await expect(call('wait', { processes: ['bash-00000000000e'], wait: 0 })).rejects.toThrow(
 			/Process bash-00000000000e failed: The host run ended before the process did\./,
 		);
 		// A spec with no pid gets no stop, so the read after its shell writes the pid adopts it.
@@ -610,15 +609,15 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		const otherEnv = await other.connect({ name: 'ada' });
 		cleanups.push(() => otherEnv.cleanup());
 		const slowPid = await shell(slow, otherEnv);
-		expect(await call('wait', { handles: ['bash-00000000000f'], timeout: 0 })).toBe('running');
-		expect(await call('cancel', { handle: 'bash-00000000000f' })).toBe('cancelled');
+		expect(await call('wait', { processes: ['bash-00000000000f'], wait: 0 })).toBe('running');
+		expect(await call('cancel', { process: 'bash-00000000000f' })).toBe('cancelled');
 		expect(ended(slowPid)).toBe(true);
 		await until(() => ended(late), 15_000);
 		// A process that timed out fails the read, and the text states the timeout.
-		await expect(call('wait', { handles: ['bash-00000000000d'], timeout: 0 })).rejects.toThrow(
+		await expect(call('wait', { processes: ['bash-00000000000d'], wait: 0 })).rejects.toThrow(
 			/Process bash-00000000000d timed out/,
 		);
-		expect(await call('cancel', { handle: 'bash-00000000000c' })).toBe('cancelled');
+		expect(await call('cancel', { process: 'bash-00000000000c' })).toBe('cancelled');
 		expect(ended(kept)).toBe(true);
 	});
 
@@ -646,16 +645,16 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		);
 		// Each read gives the output after the last one. The test writes the next part itself.
 		await appendFile(process.output, 'second\n');
-		const later = await call('wait', { handles: [process.handle], timeout: 0 });
+		const later = await call('wait', { processes: [process.handle], wait: 0 });
 		expect(later).toMatch(
 			/^second\n\n\[Process .* is running\..* starts at byte 6 of the output\./s,
 		);
-		expect(await call('wait', { handles: [process.handle], timeout: 0 })).toMatch(
+		expect(await call('wait', { processes: [process.handle], wait: 0 })).toMatch(
 			/^\(no new output\)\n\n/,
 		);
-		expect(await call('cancel', { handle: process.handle })).toContain('is cancelled.');
+		expect(await call('cancel', { process: process.handle })).toContain('is cancelled.');
 		// A wait on one handle gives the result of a read, at once for a process that ended.
-		expect(await call('wait', { handles: [process.handle], timeout: 5 })).toMatch(
+		expect(await call('wait', { processes: [process.handle], wait: 5 })).toMatch(
 			/^\(no new output\)\n\n\[Process .* is cancelled\./,
 		);
 		expect(await readFile(process.output, 'utf8')).toBe('first\nsecond\n');

@@ -17,9 +17,9 @@ const Source = Type.Union(
 		Type.Object(
 			{
 				type: Type.Literal('process'),
-				handle: Type.String({
+				process: Type.String({
 					description:
-						'The handle of one of your running processes, from the bash result or the process reminder.',
+						'The handle or the name of one of your running processes, from the bash result or the process reminder.',
 				}),
 				path: Type.String({
 					description: 'The path that the process serves on its port, such as /status.',

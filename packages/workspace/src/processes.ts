@@ -43,6 +43,7 @@ import {
 	writeSpec,
 	writeStop,
 } from './process-files.ts';
+import { resolveProcess } from './process-ref.ts';
 import {
 	endOfRun,
 	MAX_TIMER_SECONDS,
@@ -237,6 +238,12 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	const list: ProcessTable['list'] = async (agent, signal) =>
 		(await bash(agent, (env) => read(agent.name, env), signal)).map((found) => found.status);
 
+	const resolve: ProcessTable['resolve'] = async (agent, refs, signal) => {
+		if (refs.every(isHandle)) return refs;
+		const own = await list(agent, signal);
+		return refs.map((ref) => resolveProcess(ref, own, unknown(ref).message).handle);
+	};
+
 	// -- the run of a process ---------------------------------------------------
 
 	/**
@@ -352,7 +359,6 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		const spec: ProcessSpec = Object.freeze({
 			handle: `bash-${randomName()}`,
 			...(request.name === undefined ? {} : { name: request.name }),
-			kind: 'bash',
 			agent: agent.name,
 			command: request.command,
 			port: pickPort(new Set([...live.values()].map((one) => one.spec.port))),
@@ -495,6 +501,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		start,
 		list,
 		find,
+		resolve,
 		wait,
 		cancel,
 		markSeen,

@@ -10,6 +10,7 @@
 
 import type { WorkspaceEndpoint, WorkspaceEndpoints } from './backend.ts';
 import { isHandle, type Process } from './process-files.ts';
+import { resolveProcess } from './process-ref.ts';
 import type { ProcessTable } from './process-table.ts';
 
 /** What the tool and the host use to read a process. */
@@ -58,10 +59,6 @@ function until<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise
 	});
 }
 
-/** The text that names the processes of a refused name: `<handle> of <agent>`, in order. */
-const named = (found: readonly Process[]): string =>
-	found.map((one) => `${one.handle} of ${one.agent}`).join(', ');
-
 /**
  * Open the forward cache over the process table and the endpoints of the
  * bash backend. `processes.hostList` covers the agents that used the
@@ -109,21 +106,11 @@ export function createProcessFetch(options: {
 		const live = isHandle(process) ? processes.running(process) : undefined;
 		if (live !== undefined) return live;
 		const running = await processes.hostList({ running: true });
-		const found = running.filter((one) =>
-			isHandle(process) ? one.handle === process : one.name === process,
+		return resolveProcess(
+			process,
+			running,
+			`No running process is named '${process}'. A process of an agent that has not acted since the host started is not listed yet.`,
 		);
-		const [only, ...more] = found;
-		if (only === undefined) {
-			throw new Error(
-				`No running process is named '${process}'. A process of an agent that has not acted since the host started is not listed yet.`,
-			);
-		}
-		if (more.length > 0) {
-			throw new Error(
-				`Two running processes are named '${process}': ${named(found)}. Give the handle.`,
-			);
-		}
-		return only;
 	};
 
 	const send: ProcessFetch['send'] = async (process, path, init = {}) => {

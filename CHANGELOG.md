@@ -14,6 +14,21 @@ and `configure` of `@ambionframework/cloudflare` takes no `estimators`.
 `defineAgent` throws when `estimateTokens` is not a function. The room still
 computes the window of a seat room-side, from the function of the agent.
 
+**One noun names a process, and one word names a wait.** `cancel` takes
+`{ process }`, and `wait` takes `{ processes, wait? }`. `fetch` keeps
+`{ process, path }`. A `process` value is a handle or the name of one process.
+`fetch`, `wait`, and `cancel` find it through one resolver, `resolveProcess`,
+which `@ambionframework/workspace` exports. `cancel` and `wait` look among the
+processes of the caller. A name that more than one process holds is refused
+with the list of their handles. When some of the processes with a name run,
+only the running ones count. The wait window has one name, `wait`, in seconds,
+on `bash` and on the `wait` tool. `timeout` of `wait` is gone, and `timeout`
+of `bash` stays the lifetime of the process. The `source` of a `show` widget
+holds `process` in place of `handle`, and takes a handle or a name. `Process`,
+`ProcessSpec`, the `spec` file, and the `Process` schema of `compose` have no
+`kind` field, and `ProcessKind` is gone. The text of the guidance, the
+reminder, and the state line names `wait 0`, `processes`, and `process`.
+
 ### Fixes
 
 **A question stays open when the asker schedules a check-in.** An agent that

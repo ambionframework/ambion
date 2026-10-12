@@ -1190,7 +1190,7 @@ inside them.
 | `bash`     | `ProcessResult`  | `process`, `text`, `read`, and `truncation` and `omitted` when the result cut the output.                            |
 | `cancel`   | `ProcessResult`  | The same facts as `bash`.                                                                                            |
 | `ps`       | `PsResult`       | `processes`: the facts of each process of the caller.                                                                |
-| `wait`     | `WaitResult`     | On one handle, the facts of `bash`. On several, `processes` and `ended`.                                             |
+| `wait`     | `WaitResult`     | On one process, the facts of `bash`. On several, `processes` and `ended`.                                            |
 | `repos`    | `ReposResult`    | `server`, and `repositories` with the id, branches, and clone URL of each.                                           |
 | `fork`     | `ForkResult`     | `repository`, `source`, `url`, and `clone` when the call made a working copy.                                        |
 | `fetch`    | `FetchResult`    | `process`, `handle`, `owner`, `path`, `status`, `mediaType`, `bytes`, `sha256`, `ref`, `file`, and `json` or `text`. |
@@ -1239,8 +1239,8 @@ as text, and a number that is not finite is its text.
 state, the command, and the times of one process. `text` holds the new
 output that the result shows, with no bracketed line. `read` holds the
 `from` and `to` of those bytes as offsets in the output file. `wait` on
-several handles gives `processes`, with every state in the order of the
-handles, and `ended`, with the details of each process that ended. A call
+several processes gives `processes`, with every state in the order of the
+refs, and `ended`, with the details of each process that ended. A call
 that fails on a process that ended badly throws a `ToolFailure` with
 the same facts in `details`. A binding copies them to `error.details`. The
 `bash` description states this rule for the model.

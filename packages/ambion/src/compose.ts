@@ -192,7 +192,7 @@ export class ComposeFailure extends Error {
 
 /**
  * What the arguments of a call break in a schema, as the model reads it:
- * each property path and its rule, such as `handles must not have fewer
+ * each property path and its rule, such as `processes must not have fewer
  * than 1 items`. A rule on the whole value has no path.
  */
 export function mismatchOf(schema: TSchema, value: unknown): string {

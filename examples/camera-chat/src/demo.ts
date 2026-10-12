@@ -13,7 +13,7 @@ const PATH = '/camera/observe';
 const viewfinder = (handle: string) => ({
 	name: NAME,
 	kind: 'frame',
-	source: { type: 'process', handle, path: PATH },
+	source: { type: 'process', process: handle, path: PATH },
 	title: 'Front door',
 	actions: [{ id: 'look', label: 'Look now' }],
 });

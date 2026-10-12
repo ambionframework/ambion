@@ -150,7 +150,7 @@ live('the workspace', () => {
 				To answer a question about the checks, start two processes with the
 				bash tool and wait 0: "sleep 4; echo alpha-ok" with the name alpha,
 				and "sleep 8; echo beta-ok" with the name beta. Then call the wait
-				tool with the handles of the processes that still run, until both
+				tool with the processes that still run, until both
 				have ended. Then answer with one say, in one sentence, that quotes
 				the output of each process.
 			`,
@@ -170,10 +170,10 @@ live('the workspace', () => {
 		);
 		expect(waits.length).toBeGreaterThanOrEqual(1);
 		for (const call of waits) {
-			expect(call.input).toMatchObject({ handles: expect.any(Array) });
-			const { handles } = call.input as { handles: unknown[] };
-			expect(handles.length).toBeGreaterThanOrEqual(1);
-			expect(handles.length).toBeLessThanOrEqual(16);
+			expect(call.input).toMatchObject({ processes: expect.any(Array) });
+			const { processes } = call.input as { processes: unknown[] };
+			expect(processes.length).toBeGreaterThanOrEqual(1);
+			expect(processes.length).toBeLessThanOrEqual(16);
 		}
 		expect(failed).toEqual([]);
 		const running = await store.processes.list({ agent: 'runner', running: true });

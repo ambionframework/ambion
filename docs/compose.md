@@ -714,7 +714,7 @@ const started = await Promise.all(
 const states = [];
 for (const { process } of started) {
   // wait rejects when the process fails, and the error keeps the details.
-  const ended = await tools.wait({ handles: [process.handle] }).catch((error) => error.details);
+  const ended = await tools.wait({ processes: [process.handle] }).catch((error) => error.details);
   states.push({ suite: process.name, state: ended.process.state, tail: ended.text.slice(-200) });
 }
 return states;

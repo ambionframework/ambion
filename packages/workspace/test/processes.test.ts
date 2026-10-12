@@ -140,13 +140,13 @@ describe('bash', () => {
 		const workspace = site();
 		const { text, details } = await call(workspace, 'bash', { command: 'echo out; echo err >&2' });
 		const { handle, output } = details.process;
-		expect(details.process).toMatchObject({ kind: 'bash', state: 'exited', exitCode: 0 });
+		expect(details.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		expect(output).toBe(`/home/alpha/.processes/${handle}/out`);
 		expect(text).toBe(`out\nerr\n\n[Process ${handle} exited with code 0. Output: ${output}.]`);
 		expect(await fileOf(workspace, 'alpha', output)).toBe('out\nerr\n');
 	});
 
-	it('returns a running process at once with wait 0, and a wait with timeout 0, a wait, and the output file reach it', async () => {
+	it('returns a running process at once with wait 0, and a wait of 0 seconds, a wait, and the output file reach it', async () => {
 		const workspace = site();
 		const started = await call(workspace, 'bash', {
 			command: 'sleep 0.3; echo done',
@@ -156,27 +156,27 @@ describe('bash', () => {
 		expect(started.details.process.state).toBe('running');
 		expect(started.text).toContain(`Process ${handle} is running.`);
 		expect(started.text).toContain(
-			'Call wait with its handle, and timeout 0 to read it at once. Call cancel with its handle, or ps to list your processes.',
+			'Call wait with its handle, and wait 0 to read it at once. Call cancel with its handle, or ps to list your processes.',
 		);
 		// Outside a room there is no say, so the result points to none.
 		expect(started.text).not.toContain(LATER_LINE);
 		expect(
-			(await call(workspace, 'wait', { handles: [handle], timeout: 0 })).details.process.state,
+			(await call(workspace, 'wait', { processes: [handle], wait: 0 })).details.process.state,
 		).toBe('running');
 		// A running process holds no operation of the bash resource.
 		expect(await workspace.use({ name: 'alpha' }, () => 'free')).toBe('free');
-		const waited = await call(workspace, 'wait', { handles: [handle], timeout: 5 });
+		const waited = await call(workspace, 'wait', { processes: [handle], wait: 5 });
 		expect(waited.details.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		expect(waited.text.startsWith('done\n\n[Process')).toBe(true);
-		// The cursor stands after what wait showed, so wait with timeout 0 gives no output twice.
-		const again = await call(workspace, 'wait', { handles: [handle], timeout: 0 });
+		// The cursor stands after what wait showed, so a wait of 0 seconds gives no output twice.
+		const again = await call(workspace, 'wait', { processes: [handle], wait: 0 });
 		expect(again.text.startsWith('(no new output)\n\n[Process')).toBe(true);
 		expect(again.details.read).toEqual({ from: 5, to: 5 });
 		// Output past the cursor comes back alone, with the byte it starts at.
 		await workspace.use({ name: 'alpha' }, (env) =>
 			env.writeFile(waited.details.process.output, 'done\nmore\n'),
 		);
-		const more = await call(workspace, 'wait', { handles: [handle], timeout: 0 });
+		const more = await call(workspace, 'wait', { processes: [handle], wait: 0 });
 		expect(more.text).toMatch(
 			/^more\n\n\[Process .* The text above starts at byte 5 of the output\./s,
 		);
@@ -187,8 +187,8 @@ describe('bash', () => {
 		const workspace = site();
 		const { details } = await call(workspace, 'bash', { command: 'sleep 5', wait: 0 });
 		const waited = await call(workspace, 'wait', {
-			handles: [details.process.handle],
-			timeout: 0.05,
+			processes: [details.process.handle],
+			wait: 0.05,
 		});
 		expect(waited.details.process.state).toBe('running');
 	});
@@ -230,7 +230,7 @@ describe('bash', () => {
 			await workspace.use({ name: 'alpha' }, (env) =>
 				env.writeFile(details.process.output, `${whole}extra\n`),
 			);
-			const next = await call(workspace, 'wait', { handles: [details.process.handle], timeout: 0 });
+			const next = await call(workspace, 'wait', { processes: [details.process.handle], wait: 0 });
 			expect(next.text.startsWith('extra\n\n[Process')).toBe(true);
 			expect(next.details.read).toEqual({ from: whole.length, to: whole.length + 6 });
 		},
@@ -244,8 +244,8 @@ describe('bash', () => {
 		const burst = Array.from({ length: 5000 }, (_, index) => `burst ${index + 1}`).join('\n');
 		await workspace.use({ name: 'alpha' }, (env) => env.writeFile(output, `${before}${burst}\n`));
 		const next = await call(workspace, 'wait', {
-			handles: [first.details.process.handle],
-			timeout: 0,
+			processes: [first.details.process.handle],
+			wait: 0,
 		});
 		expect(next.details.omitted).toEqual({ offset: 1011, limit: 3000 });
 		expect(next.details.truncation).toMatchObject({ totalLines: 5000, outputLines: 2000 });
@@ -311,14 +311,14 @@ describe('bash', () => {
 			'(no new output)',
 		],
 	])(
-		'fails the call on %s with the output, and wait with timeout 0 fails on the same process',
+		'fails the call on %s with the output, and a wait of 0 seconds fails on the same process',
 		async (_case, params, state, output, after) => {
 			const workspace = site();
 			const error = await failure(() => toolOf(workspace, 'bash').invoke(params, callAs('alpha')));
 			expect(error).toContain(output);
 			const handle = HANDLE.exec(error)?.[0] ?? 'none';
 			const read = await failure(() =>
-				toolOf(workspace, 'wait').invoke({ handles: [handle], timeout: 0 }, callAs('alpha')),
+				toolOf(workspace, 'wait').invoke({ processes: [handle], wait: 0 }, callAs('alpha')),
 			);
 			expect(read).toContain(`Process ${handle} ${state}.`);
 			expect(read.startsWith(`ToolFailure: ${after}\n\n[Process`)).toBe(true);
@@ -331,7 +331,7 @@ describe('bash', () => {
 		['bash', { command: 'true', grace: 0 }],
 		['bash', { command: 'true', grace: 301 }],
 		['bash', { command: 'true', grace: 'long' }],
-		['wait', { handles: ['bash-000000000000'], timeout: 601 }],
+		['wait', { processes: ['bash-000000000000'], wait: 601 }],
 		['bash', { command: 'true', name: 'Not A Name' }],
 	])('refuses an invalid number of seconds or an invalid name in %s', async (tool, params) => {
 		const workspace = site();
@@ -364,17 +364,17 @@ describe('wait and cancel', () => {
 		const { details } = await call(workspace, 'bash', { command, wait: 0 });
 		const { handle } = details.process;
 		const started = Date.now();
-		const cancelled = await call(workspace, 'cancel', { handle });
+		const cancelled = await call(workspace, 'cancel', { process: handle });
 		expect(Date.now() - started).toBeLessThan(5_000);
 		expect(cancelled.details.process.state).toBe('cancelled');
 		expect(cancelled.text).toContain(`Process ${handle} is cancelled.`);
 		expect(cancelled.text).not.toContain('cleanup');
-		expect((await call(workspace, 'cancel', { handle })).details.process).toEqual(
+		expect((await call(workspace, 'cancel', { process: handle })).details.process).toEqual(
 			cancelled.details.process,
 		);
 		// A cancel of a process that ended first says that it stopped nothing.
 		const done = (await call(workspace, 'bash', { command: 'true' })).details.process.handle;
-		expect((await call(workspace, 'cancel', { handle: done })).text).toMatch(
+		expect((await call(workspace, 'cancel', { process: done })).text).toMatch(
 			new RegExp(`^Process ${done} had ended before the cancel, so the cancel stopped nothing\\.`),
 		);
 	});
@@ -384,8 +384,8 @@ describe('wait and cancel', () => {
 		const { details } = await call(workspace, 'bash', { command: 'true' });
 		const handle = details.process.handle;
 		for (const [tool, params] of [
-			['wait', { handles: [handle] }],
-			['cancel', { handle }],
+			['wait', { processes: [handle] }],
+			['cancel', { process: handle }],
 		] as const) {
 			await expect(invokeText(toolOf(workspace, tool), params, callAs('beta'))).rejects.toThrow(
 				`You have no process ${handle}.`,
@@ -405,7 +405,7 @@ describe('the process table', () => {
 			for (let i = 1; i < MAX_FINISHED_PROCESSES; i++) {
 				const startedAt = new Date(Date.parse(first.startedAt) + i).toISOString();
 				const handle = `bash-${i.toString(16).padStart(12, '0')}`;
-				const spec = { handle, kind: 'bash' as const, agent: 'alpha', command: 'true' };
+				const spec = { handle, agent: 'alpha', command: 'true' };
 				const grace = 10;
 				await writeExit(
 					env,
@@ -416,11 +416,10 @@ describe('the process table', () => {
 		});
 		expect(await workspace.processes.list({ agent: 'alpha' })).toHaveLength(MAX_FINISHED_PROCESSES);
 		expect(
-			(await call(workspace, 'wait', { handles: [first.handle], timeout: 0 })).details.process
-				.state,
+			(await call(workspace, 'wait', { processes: [first.handle], wait: 0 })).details.process.state,
 		).toBe('exited');
 		await call(workspace, 'bash', { command: 'true' });
-		await expect(call(workspace, 'wait', { handles: [first.handle], timeout: 0 })).rejects.toThrow(
+		await expect(call(workspace, 'wait', { processes: [first.handle], wait: 0 })).rejects.toThrow(
 			'You have no process',
 		);
 		await expect(fileOf(workspace, 'alpha', first.output)).rejects.toThrow();
@@ -441,7 +440,7 @@ describe('the process table', () => {
 		// The files of an earlier run: the table did not start this process, and it never saw it end.
 		const earlier = 'bash-000000000001';
 		await bash.use(alpha, async (env) => {
-			const spec = { handle: earlier, kind: 'bash' as const, agent: 'alpha', command: 'true' };
+			const spec = { handle: earlier, agent: 'alpha', command: 'true' };
 			const startedAt = new Date().toISOString();
 			const dir = await writeSpec(env, await processesDir(env), {
 				...spec,
@@ -481,7 +480,7 @@ describe('the process table', () => {
 		const started = Date.now();
 		await workspace.dispose();
 		expect(Date.now() - started).toBeLessThan(5000);
-		await expect(call(workspace, 'wait', { handles: [handles[0]], timeout: 0 })).rejects.toThrow();
+		await expect(call(workspace, 'wait', { processes: [handles[0]], wait: 0 })).rejects.toThrow();
 	});
 });
 
@@ -538,8 +537,8 @@ describe('the port of a process', () => {
 		for (const port of ports) expect(listed.text).toContain(`| ${port} |`);
 		expect(listed.text).toContain('| Handle | Name | Port | Runs for | Command |');
 		const waited = await call(workspace, 'wait', {
-			handles: [started[0]?.details.process.handle ?? ''],
-			timeout: 0,
+			processes: [started[0]?.details.process.handle ?? ''],
+			wait: 0,
 		});
 		expect(waited.text.endsWith(` $PORT=${ports[0]}.]`)).toBe(true);
 	});
@@ -652,7 +651,7 @@ describe('the reminder', () => {
 					`^- ${failed} exited with code 3 at \\d\\d:\\d\\d:\\d\\d UTC: until .*; sleep 0.05; exit 3$`,
 				),
 			),
-			'Call wait with a list of handles, and timeout 0 to read at once. Call cancel with a handle. Call ps to list processes.',
+			'Call wait with a list of processes, and wait 0 to read at once. Call cancel with a process. Call ps to list processes.',
 		]);
 		expect(text).not.toContain(shown);
 		// The reminder wrote seen for the finished process, so the next one names the running ones alone.
@@ -707,7 +706,7 @@ describe('a process on a backend that misbehaves', () => {
 	});
 });
 
-describe('a wait on several handles', () => {
+describe('a wait on several processes', () => {
 	it('returns when the first process ends, with its output and the state of the others', async () => {
 		const workspace = site();
 		const start = async (command: string) =>
@@ -717,7 +716,7 @@ describe('a wait on several handles', () => {
 		const other = await start('sleep 30');
 		const before = Date.now();
 		const result = await toolOf(workspace, 'wait').invoke(
-			{ handles: [slow, fast, other, fast], timeout: 20 },
+			{ processes: [slow, fast, other, fast], wait: 20 },
 			callAs('alpha'),
 		);
 		if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
@@ -728,7 +727,7 @@ describe('a wait on several handles', () => {
 			expect.stringMatching(new RegExp(`^\\[Process ${fast} exited with code 0\\.`)),
 			expect.stringMatching(new RegExp(`^\\[Process ${slow} is running\\.`)),
 			expect.stringMatching(new RegExp(`^\\[Process ${other} is running\\.`)),
-			`[Drop ${fast} from handles: it has ended, and a wait that holds one returns at once.]`,
+			`[Drop ${fast} from processes: it has ended, and a wait that holds one returns at once.]`,
 		]);
 		const details = result.details as WaitDetails;
 		expect(details.processes.map((process) => process.handle)).toEqual([slow, fast, other]);
@@ -736,7 +735,7 @@ describe('a wait on several handles', () => {
 		// With none ended, the time ends first, and each process gives its state.
 		const waited = await invokeText(
 			toolOf(workspace, 'wait'),
-			{ handles: [slow, other], timeout: 0.1 },
+			{ processes: [slow, other], wait: 0.1 },
 			callAs('alpha'),
 		);
 		expect(waited.split('\n\n')).toHaveLength(2);
@@ -745,7 +744,7 @@ describe('a wait on several handles', () => {
 		const bad = await start('sleep 0.2; echo broke; exit 3');
 		await expect(
 			Promise.resolve(
-				toolOf(workspace, 'wait').invoke({ handles: [slow, bad], timeout: 20 }, callAs('alpha')),
+				toolOf(workspace, 'wait').invoke({ processes: [slow, bad], wait: 20 }, callAs('alpha')),
 			),
 		).rejects.toThrow(
 			new RegExp(
@@ -776,46 +775,46 @@ describe('a wait on several handles', () => {
 		);
 		const both = await invokeText(
 			toolOf(workspace, 'wait'),
-			{ handles: [one, two] },
+			{ processes: [one, two] },
 			callAs('alpha'),
 		);
 		expect(both).toContain(`[Process ${two} exited with code 0.`);
-		expect(both).toContain('call wait with its handle and timeout 0 to read it.');
-		expect(both).toContain(`[Drop ${one}, ${two} from handles: they have ended`);
+		expect(both).toContain('call wait on it with wait 0 to read it.');
+		expect(both).toContain(`[Drop ${one}, ${two} from processes: they have ended`);
 		expect(new TextEncoder().encode(both).length).toBeLessThan(60_000);
-		// The cursor of the held process did not move, so wait with timeout 0 gives its output.
+		// The cursor of the held process did not move, so a wait of 0 seconds gives its output.
 		expect(
-			await invokeText(toolOf(workspace, 'wait'), { handles: [two], timeout: 0 }, callAs('alpha')),
+			await invokeText(toolOf(workspace, 'wait'), { processes: [two], wait: 0 }, callAs('alpha')),
 		).toContain(LINE);
 	});
 
 	it.each([
 		[
 			'a handle of no process',
-			{ handles: ['bash-000000000001'] },
+			{ processes: ['bash-000000000001'] },
 			/You have no process bash-000000000001/,
 		],
 		[
 			'a handle of no process beside a known one, through the listing',
-			{ handles: ['KNOWN', 'bash-000000000001'] },
+			{ processes: ['KNOWN', 'bash-000000000001'] },
 			/You have no process bash-000000000001/,
 		],
 		[
-			'one handle given as handle',
+			'one process given as handle',
 			{ handle: 'KNOWN' },
-			"Invalid arguments for tool 'wait': must have required properties handles.",
+			"Invalid arguments for tool 'wait': must have required properties processes.",
 		],
 		[
-			'no handles',
-			{ handles: [] },
-			"Invalid arguments for tool 'wait': handles must not have fewer than 1 items.",
+			'no processes',
+			{ processes: [] },
+			"Invalid arguments for tool 'wait': processes must not have fewer than 1 items.",
 		],
 		[
-			'17 handles',
-			{ handles: Array.from({ length: 17 }, () => 'KNOWN') },
-			"Invalid arguments for tool 'wait': handles must not have more than 16 items.",
+			'17 processes',
+			{ processes: Array.from({ length: 17 }, () => 'KNOWN') },
+			"Invalid arguments for tool 'wait': processes must not have more than 16 items.",
 		],
-	])('refuses %s', async (_case, params: { handle?: string; handles?: string[] }, message) => {
+	])('refuses %s', async (_case, params: { handle?: string; processes?: string[] }, message) => {
 		const workspace = site();
 		const known = (await call(workspace, 'bash', { command: 'true' })).details.process.handle;
 		const given = JSON.parse(JSON.stringify(params).replaceAll('KNOWN', known));
@@ -848,7 +847,7 @@ describe('a wait near the end of the activation', () => {
 		const before = Date.now();
 		const waited = await invokeText(
 			toolOf(workspace, 'wait'),
-			{ handles: [handle], timeout: 60 },
+			{ processes: [handle], wait: 60 },
 			late,
 		);
 		expect(Date.now() - before).toBeLessThan(2_000);
@@ -876,16 +875,16 @@ describe('the note that points to a scheduled say', () => {
 		);
 		if (typeof started === 'string') throw new Error('A process tool gives a structured result.');
 		const { handle } = (started.details as ProcessDetails).process;
-		// Two processes run, under the limit of four. The ended one makes wait with handles return at once.
+		// Two processes run, under the limit of four. The ended one makes a wait on several processes return at once.
 		const other = (await call(workspace, 'bash', { command: 'sleep 30', timeout, wait: 0 })).details
 			.process.handle;
 		const ended = (await call(workspace, 'bash', { command: 'true' })).details.process.handle;
 		const wait = toolOf(workspace, 'wait');
 		const texts = [
 			started.content.map((part) => (part.type === 'text' ? part.text : '')).join(''),
-			await invokeText(wait, { handles: [handle], timeout: 0 }, inside),
-			await invokeText(wait, { handles: [other, handle], timeout: 0 }, inside),
-			await invokeText(wait, { handles: [ended, other, handle], timeout: 0 }, inside),
+			await invokeText(wait, { processes: [handle], wait: 0 }, inside),
+			await invokeText(wait, { processes: [other, handle], wait: 0 }, inside),
+			await invokeText(wait, { processes: [ended, other, handle], wait: 0 }, inside),
 		];
 		for (const text of texts) {
 			const left = /Your activation ends in (\d+) seconds\./.exec(text)?.[1];
@@ -909,7 +908,7 @@ describe('an aborted wait', () => {
 		const controller = new AbortController();
 		const waiting = Promise.resolve(
 			toolOf(workspace, 'wait').invoke(
-				{ handles: [handle], timeout: 30 },
+				{ processes: [handle], wait: 30 },
 				callAs('alpha', { signal: controller.signal }),
 			),
 		);
@@ -956,7 +955,6 @@ describe('the files as the source of truth', () => {
 		({ files, live, state, stopping }) => {
 			const spec = {
 				handle: 'bash-00000000000b',
-				kind: 'bash' as const,
 				agent: 'alpha',
 				command: 'true',
 				port: 20002,
@@ -986,7 +984,7 @@ describe('the files as the source of truth', () => {
 		const lost = 'bash-00000000000a';
 		const home = join(dir, 'home', 'alpha', '.processes', lost);
 		await mkdir(home, { recursive: true });
-		const spec = { handle: lost, kind: 'bash', agent: 'alpha', command: 'sleep 99' };
+		const spec = { handle: lost, agent: 'alpha', command: 'sleep 99' };
 		await writeFile(
 			join(home, 'spec'),
 			JSON.stringify({ ...spec, timeout: 600, grace: 10, startedAt: '2026-01-01T00:00:00.000Z' }),
@@ -1007,7 +1005,7 @@ describe('the files as the source of truth', () => {
 		const second = openWorkspace({ name: 'files-two', backend: { bash: directoryBackend(dir) } });
 		const live = new AbortController().signal;
 		onTestFinished(() => second.dispose());
-		const read = await call(second, 'wait', { handles: [done.handle], timeout: 0 });
+		const read = await call(second, 'wait', { processes: [done.handle], wait: 0 });
 		expect(read.details.process).toMatchObject({
 			state: 'exited',
 			exitCode: 0,
@@ -1020,7 +1018,7 @@ describe('the files as the source of truth', () => {
 		const doneDir = done.output.slice(0, done.output.lastIndexOf('/'));
 		await second.use({ name: 'alpha' }, (env) => writeStop(env, doneDir, stopLine('cancelled')));
 		expect(
-			(await call(second, 'wait', { handles: [done.handle], timeout: 0 })).details.process.state,
+			(await call(second, 'wait', { processes: [done.handle], wait: 0 })).details.process.state,
 		).toBe('exited');
 		await expect(fileOf(second, 'alpha', `${doneDir}/stop`)).rejects.toThrow();
 		const reminded =
@@ -1036,7 +1034,7 @@ describe('the files as the source of truth', () => {
 			await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a2' }, live),
 		).toBeUndefined();
 		const lostStatus = await failure(() =>
-			toolOf(second, 'wait').invoke({ handles: [lost], timeout: 0 }, callAs('alpha')),
+			toolOf(second, 'wait').invoke({ processes: [lost], wait: 0 }, callAs('alpha')),
 		);
 		expect(lostStatus).toContain(`Process ${lost} failed: ${LOST}`);
 		// The host's cancel finds the owner from the files, and gives the final state again.
@@ -1044,5 +1042,91 @@ describe('the files as the source of truth', () => {
 		expect(lostState).toMatchObject({ state: 'failed', error: LOST });
 		expect(lostState.endedAt).toBeUndefined();
 		expect((await call(second, 'ps', {})).text).toBe('No running processes.');
+	});
+});
+
+describe('a process named by its handle or its name', () => {
+	/** Start `name` with `sleep 30`, and return its handle. */
+	const sleeper = async (workspace: Workspace, name: string, agent = 'alpha'): Promise<string> =>
+		(await call(workspace, 'bash', { command: 'sleep 30', name, wait: 0 }, agent)).details.process
+			.handle;
+
+	it('lets wait and cancel take a handle or a unique name, and a wait of 0 seconds returns at once', async () => {
+		const workspace = site();
+		const handle = await sleeper(workspace, 'server');
+		const began = Date.now();
+		const byName = await call(workspace, 'wait', { processes: ['server'], wait: 0 });
+		const byHandle = await call(workspace, 'wait', { processes: [handle], wait: 0 });
+		const both = await call(workspace, 'wait', { processes: ['server', handle], wait: 0 });
+		expect(Date.now() - began).toBeLessThan(5_000);
+		expect(byName.details.process).toMatchObject({ handle, name: 'server', state: 'running' });
+		expect(byHandle.details.process).toMatchObject({ handle, state: 'running' });
+		// A name and the handle of the same process count once.
+		expect(both.details.process).toMatchObject({ handle, state: 'running' });
+		const cancelled = await call(workspace, 'cancel', { process: 'server' });
+		expect(cancelled.details.process).toMatchObject({ handle, state: 'cancelled' });
+		// The name still finds the process after the cancel, since no other process holds it.
+		const after = await call(workspace, 'wait', { processes: ['server'], wait: 0 });
+		expect(after.details.process).toMatchObject({ handle, state: 'cancelled' });
+	});
+
+	it('takes several names in one wait, and a bash call with a wait', async () => {
+		const workspace = site();
+		const slow = await sleeper(workspace, 'slow');
+		const quick = await call(workspace, 'bash', { command: 'echo hi', name: 'quick', wait: 5 });
+		expect(quick.details.process).toMatchObject({ state: 'exited', exitCode: 0 });
+		const waited = await call(workspace, 'wait', { processes: ['slow', 'quick'], wait: 0 });
+		expect((waited.details as unknown as WaitDetails).processes.map((one) => one.handle)).toEqual([
+			slow,
+			quick.details.process.handle,
+		]);
+		await call(workspace, 'cancel', { process: slow });
+	});
+
+	it('names the running process when an earlier process of the same name has ended', async () => {
+		const workspace = site();
+		const first = (await call(workspace, 'bash', { command: 'true', name: 'tests', wait: 5 }))
+			.details.process.handle;
+		const second = await sleeper(workspace, 'tests');
+		const found = await call(workspace, 'wait', { processes: ['tests'], wait: 0 });
+		expect(found.details.process).toMatchObject({ handle: second, state: 'running' });
+		await call(workspace, 'cancel', { process: 'tests' });
+		const ended = await failure(() => call(workspace, 'wait', { processes: ['tests'], wait: 0 }));
+		expect(ended).toContain(
+			`Two processes are named 'tests': ${first} of alpha, ${second} of alpha.`,
+		);
+	});
+
+	it('refuses a name that two processes hold, with their handles, and a name that none holds', async () => {
+		const workspace = site();
+		const one = await sleeper(workspace, 'twin');
+		const two = await sleeper(workspace, 'twin');
+		const message = `Two running processes are named 'twin': ${one} of alpha, ${two} of alpha. Give the handle.`;
+		await expect(call(workspace, 'wait', { processes: ['twin'], wait: 0 })).rejects.toThrow(
+			message,
+		);
+		await expect(call(workspace, 'cancel', { process: 'twin' })).rejects.toThrow(message);
+		await expect(call(workspace, 'wait', { processes: [one, 'twin'], wait: 0 })).rejects.toThrow(
+			message,
+		);
+		await expect(call(workspace, 'cancel', { process: 'nobody' })).rejects.toThrow(
+			'You have no process nobody.',
+		);
+		// The refusal stopped nothing, and the handle reaches each process.
+		expect((await call(workspace, 'cancel', { process: one })).details.process.state).toBe(
+			'cancelled',
+		);
+		expect((await call(workspace, 'cancel', { process: 'twin' })).details.process.handle).toBe(two);
+	});
+
+	it('finds a name among the processes of the caller alone', async () => {
+		const workspace = site();
+		await sleeper(workspace, 'camera', 'beta');
+		await expect(call(workspace, 'cancel', { process: 'camera' })).rejects.toThrow(
+			'You have no process camera.',
+		);
+		expect(
+			(await call(workspace, 'cancel', { process: 'camera' }, 'beta')).details.process.state,
+		).toBe('cancelled');
 	});
 });

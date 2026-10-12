@@ -211,7 +211,7 @@ workspace.processes.subscribe((event) => {
   room
     .post({
       to: agent,
-      text: `lab: process ${name ?? handle} is ${state}. Call wait with ${handle} and timeout 0.`,
+      text: `lab: process ${name ?? handle} is ${state}. Call wait with ${handle} and wait 0.`,
       key: `process-ended:${handle}`,
     })
     .catch((error: unknown) => log.error(error));

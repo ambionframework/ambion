@@ -15,7 +15,7 @@ export const kinds: readonly WidgetKind[] = [
 	{ name: 'note', description: 'A line of text.', sources: [], actions: false },
 ];
 
-export const statusSource = { type: 'process', handle: 'bash-1', path: '/status' } as const;
+export const statusSource = { type: 'process', process: 'bash-1', path: '/status' } as const;
 
 export const refusal = (promise: Promise<unknown>, cause?: RegExp) =>
 	expect(promise).rejects.toMatchObject({

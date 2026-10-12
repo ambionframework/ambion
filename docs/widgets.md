@@ -78,7 +78,7 @@ interface CanvasWidget {
 }
 
 type WidgetSource =
-  | { readonly type: 'process'; readonly handle: string; readonly path: string }
+  | { readonly type: 'process'; readonly process: string; readonly path: string }
   | { readonly type: 'file'; readonly path: string }
   | { readonly type: 'snapshot'; readonly ref: string };
 
@@ -147,15 +147,16 @@ does not pass its `max`. A choice field has 1 to 10 options, each one line
 of 40 characters at most, with no repeat. The guidance tells each agent which
 kinds take actions.
 
-**A process source names the handle of a process of the author, and a path
-that the process serves on its port.** The agent takes the handle from the
-bash result or the process reminder. The canvas keeps the handle and the
-path as text, and holds no index of processes. The host checks once that
-the handle is in the author's process list and runs, then reads the path
+**A process source names a process of the author, and a path that the
+process serves on its port.** The `process` value is a handle or a name. The
+agent takes the handle from the bash result or the process reminder. The
+canvas keeps the value and the path as text, and holds no index of
+processes. The host checks once that the author runs one process with that
+handle or name, using `resolveProcess` from the workspace, then reads the path
 by handle, as `fetch` does. A widget never reads the process of another
 agent. The end of the process leaves the widget in place, and the host
 draws nothing for it. A new process has a new handle, so the agent calls
-`show` with the new handle. A `show` with another handle binds the new
+`show` with the new process. A `show` with another process binds the new
 process.
 
 **A file source is read as the author.** The host checks the size first
@@ -224,8 +225,8 @@ cancels it.
 the revisions that it loads, and an adopted process fires no process event.
 So on each room `started` event, the host reads `canvas.widgets(room)` and
 lists the processes of each author. An adopted process keeps its handle, so
-the handle of a widget still binds. The host reads the widgets again on each
-widget event. A process `ended` event for a bound handle clears that
+the process of a widget still binds. The host reads the widgets again on each
+widget event. A process `ended` event for a bound process clears that
 binding alone.
 
 ### The store
