@@ -4,6 +4,18 @@
 
 ### Breaking changes
 
+**`sqliteBackend` has no append-only guard and no provenance stamp.** The
+options `appendOnly` and `provenance` are gone, and so are the type
+`SqlProvenance` and the field `SqlRunOptions.provenance`. The `sql` tool
+passes no provenance. A call can UPDATE, DELETE, or DROP any table, and
+create a trigger. The backend keeps its refusals of an `ATTACH` of a file
+and of `VACUUM INTO`, the `schema` option, `import`, `export`, the time
+limit, and the size limit of `import`. The guidance of the backend no longer names
+append-only tables. The workbench lab writes the provenance columns of
+`operations` from the instrument tool, and its `test_plans`, `runs`, and
+`results` tables have no provenance columns. A run is unique by its project
+and label.
+
 **No package exports `PACKAGE_NAME`.** The constant of the ten library packages
 is gone, and nothing read it.
 

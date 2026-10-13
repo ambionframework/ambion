@@ -639,8 +639,7 @@ deadline.
 
 **A nested call keeps its provenance.** Its `ToolContext` names the same
 agent, room, activation, and exchange as the `compose` call. Its call id is
-its own. A row that a nested call inserts carries the provenance of the
-activation, as a direct call does.
+its own.
 
 **Each nested call records its steps.** The core records a `tool_call`
 step and a `tool_result` step for each nested call, with a `parent` field

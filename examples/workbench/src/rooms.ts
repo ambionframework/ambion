@@ -38,7 +38,7 @@ import {
 import { answeredPins, PIN_KINDS, type Pins } from './pins.ts';
 import { WORKSPACE } from './refs.ts';
 import { labRepositories } from './repositories.ts';
-import { instruments, labAppendOnly, labSchema, scenarios, seedWorkspace } from './scenarios.ts';
+import { instruments, labSchema, scenarios, seedWorkspace } from './scenarios.ts';
 import { sqlOf } from './sql.ts';
 import { stepLog } from './steps.ts';
 import { unavailable } from './unavailable.ts';
@@ -169,11 +169,7 @@ export async function openRooms(
 				git: labRepositories(resolve(directory, 'git.db')),
 			}),
 			// The lab records live in their own file, apart from the journal database.
-			sql: sqliteBackend(resolve(directory, 'lab.db'), {
-				schema: labSchema,
-				appendOnly: labAppendOnly,
-				provenance: true,
-			}),
+			sql: sqliteBackend(resolve(directory, 'lab.db'), { schema: labSchema }),
 		},
 		audit: {},
 		rooms: true,
@@ -182,7 +178,7 @@ export async function openRooms(
 	if (lab === undefined) fail('The workspace has no lab database.');
 	try {
 		await seedWorkspace(workspacePath);
-		// The first call opens the lab database, runs its schema, and guards its tables.
+		// The first call opens the lab database and runs its schema.
 		await lab.use(workspace.mirrorAgent, (env) => env.run('SELECT 1', { maxRows: 0 }));
 	} catch (error) {
 		await workspace.dispose().catch(() => {});

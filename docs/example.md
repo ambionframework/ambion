@@ -124,12 +124,12 @@ the manufacturer datasheets.
 
 **The lab records live in `lab.db`, apart from the journal.** The
 `projects`, `test_plans`, `runs`, `results`, and `operations` tables hold
-them. The host opens `sqliteBackend` with the lab schema, these five
-tables as `appendOnly`, and `provenance`. Each table accepts INSERT alone,
-and the database fills the provenance columns of every new row (see
-[Resources](resources.md)). So an agent can add a project, and no agent
-can change or delete one. The host opens the database at its start, so
-the terminal shows the tables before the first question.
+them. The host opens `sqliteBackend` with the lab schema. The `runs`
+table has a UNIQUE constraint on its project and label, so a retried
+INSERT fails and records no run twice. The instrument writes the agent, the
+room, the activation, the exchange, and the time into each `operations`
+row. The host opens the database at its start, so the terminal shows the
+tables before the first question.
 
 **Two simulated instruments sit on the lab database.** `led-current` has a
 limit of 20 mA. `bench-supply` has a limit of 5 V. The Design specialist calls
@@ -144,8 +144,9 @@ limit of 20 mA. `bench-supply` has a limit of 5 V. The Design specialist calls
   `approve_operation`. The tool appends an `approved` or `denied` row with
   the `request_id`.
 
-The table is append-only. The status of an operation is its latest row. The
-instrument checks the numeric limit only. It does not verify who approved.
+The instrument only appends to the `operations` table. The status of an
+operation is its latest row. The instrument checks the numeric limit only. It
+does not verify who approved.
 The terminal shows a `requested` operation to the `person` of the exchange
 until a later row answers it.
 
@@ -199,7 +200,7 @@ automated test yet.
 | A person adds a constraint while an agent works                             | Steering an open exchange                  | By hand: the thread shows the message in order                                                                                                                                                                                        |
 | The host stops, fails to stop, and resumes                                  | Resume keeps the question and the files    | Scripted: clean stop, failed stop, failed save of the stopped state with retry, and resume from the journal                                                                                                                           |
 | Two people work the kit through separate rooms                              | Visits, presence, and catch-up by position | Scripted                                                                                                                                                                                                                              |
-| One specialist records a run and another reads it back                      | Records apart from the journal             | Scripted: an INSERT through `sql` gets its provenance, and a SELECT reads the row from `lab.db`                                                                                                                                       |
+| One specialist records a run and another reads it back                      | Records apart from the journal             | Scripted: an INSERT through `sql` lands, a SELECT reads the row from `lab.db`, and a second INSERT of the label fails                                                                                                                 |
 | The Design specialist drives an instrument above its limit                  | An action that waits for a person          | Scripted: `operate` records a request, `approve_operation` records the answer                                                                                                                                                         |
 | The terminal shows the cost of an exchange                                  | Cost per exchange is real                  | Scripted: formatting from synthetic usage. Live: `usage.cost` is positive                                                                                                                                                             |
 | A message cites a snapshot, a commit, a file, a table, a room, or a message | Every ref kind opens where it belongs      | Scripted: refs resolve; a snapshot previews as text, a picture, tables, or a binary note; a commit previews its log entry, its changes, and where its branch points now; a room and a message open their room; a host path stays shut |

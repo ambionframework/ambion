@@ -109,10 +109,9 @@ spoke in it. It is absent when no exchange was open. All three are absent
 outside a room. A binding stamps them where its data allows.
 
 The workspace records calls in its opt-in
-[audit log](workspace.md#record-every-tool-call). The SQL backend stamps
-[append-only records](sql.md#records-append-only-tables-with-provenance).
-A backend defines where it stores provenance. Host code supplies its own
-provenance for direct operations.
+[audit log](workspace.md#record-every-tool-call). A backend defines where
+it stores provenance. Host code supplies its own provenance for direct
+operations.
 
 **Provenance grants no authority.** A tool does not check it to allow or
 refuse a call. A tool that needs current state reads the room.

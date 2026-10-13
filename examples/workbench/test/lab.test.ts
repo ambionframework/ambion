@@ -7,7 +7,7 @@ import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { readApprovals } from '../src/approvals.ts';
 import { openInstrument } from '../src/instrument.ts';
-import { instruments, labAppendOnly, labSchema } from '../src/scenarios.ts';
+import { instruments, labSchema } from '../src/scenarios.ts';
 import { freshDirectory, openHost } from './hosting.ts';
 
 function contextOf(agent: string, activation: string, person = 'mira'): ToolContext {
@@ -26,11 +26,7 @@ function openLab(location = ':memory:') {
 		name: 'lab',
 		backend: {
 			bash: memoryBackend(),
-			sql: sqliteBackend(location, {
-				schema: labSchema,
-				appendOnly: labAppendOnly,
-				provenance: true,
-			}),
+			sql: sqliteBackend(location, { schema: labSchema }),
 		},
 	});
 	onTestFinished(() => workspace.dispose());
@@ -79,26 +75,21 @@ const textOf = (result: unknown): string =>
 				.join('');
 
 describe('the lab database', () => {
-	it('lets one agent record a run with sql and another agent read it back', async () => {
+	it('lets one agent record a run with sql and another agent read it back, and refuses the same label twice', async () => {
 		const { workspace } = openLab(join(await freshDirectory(), 'lab.db'));
 		const call = caller(workspace.tools().tools);
-		const at = (agent: string, activation: string) => ({
-			...contextOf(agent, activation, 'theo'),
-			room: 'sensing',
-		});
-		await call(
-			'sql',
-			{ sql: "INSERT INTO runs (project, label) VALUES ('sensing', 'range at 50 cm')" },
-			at('experiments', 'act-1'),
-		);
+		const insert = {
+			sql: "INSERT INTO runs (project, label) VALUES ('sensing', 'range at 50 cm')",
+		};
+		await call('sql', insert, contextOf('experiments', 'act-1', 'theo'));
 		const shown = await call(
 			'sql',
-			{ sql: 'SELECT project, label, agent, room, activation FROM runs' },
-			at('design', 'act-2'),
+			{ sql: 'SELECT project, label FROM runs' },
+			contextOf('design', 'act-2', 'theo'),
 		);
-		expect(textOf(shown)).toContain('| sensing | range at 50 cm | experiments | sensing | act-1 |');
-		expect(workspace.tools().guidance).toContain(
-			'The tables projects, test_plans, runs, results, operations accept INSERT alone',
+		expect(textOf(shown)).toContain('| sensing | range at 50 cm |');
+		await expect(call('sql', insert, contextOf('experiments', 'act-3', 'theo'))).rejects.toThrow(
+			/UNIQUE constraint failed/,
 		);
 	});
 
@@ -113,10 +104,9 @@ describe('the lab database', () => {
 });
 
 describe('the instrument resource', () => {
-	it('names approve_operation in the guidance, and keeps operations append-only', () => {
+	it('names approve_operation in the guidance', () => {
 		const { bundle } = bench();
 		expect(bundle.guidance).toContain('approve_operation');
-		expect(labAppendOnly).toContain('operations');
 	});
 
 	it('performs an operation at or below the limit and records provenance', async () => {

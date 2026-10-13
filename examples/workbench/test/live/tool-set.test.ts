@@ -34,7 +34,7 @@ import { describe, expect, it } from 'vitest';
 import { people, team } from '../../src/definitions.ts';
 import { openInstrument } from '../../src/instrument.ts';
 import { type ExecutorKind, hasKey, seatKinds } from '../../src/kinds.ts';
-import { instruments, labAppendOnly, labSchema } from '../../src/scenarios.ts';
+import { instruments, labSchema } from '../../src/scenarios.ts';
 import { bundleCanvas } from '../hosting.ts';
 
 const QUIET_MS = 150_000;
@@ -91,11 +91,7 @@ async function openRoom(seats: readonly string[]) {
 		name: 'workbench',
 		backend: {
 			bash: memoryBackend(),
-			sql: sqliteBackend(join(directory, 'lab.db'), {
-				schema: labSchema,
-				appendOnly: labAppendOnly,
-				provenance: true,
-			}),
+			sql: sqliteBackend(join(directory, 'lab.db'), { schema: labSchema }),
 		},
 	});
 	const lab = workspace.sql;
