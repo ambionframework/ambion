@@ -47,6 +47,10 @@ risk that a compose child process outlives its host closes with the code.
 **`@ambionframework/ambion/hosting` exports no `SeatContext` type.** An
 executor package has no use for it. `AgentRunner` still takes the context.
 
+**`edit` returns one diff.** The `details` of an `edit` result hold `patch`,
+the unified diff, and no longer hold `diff` and `firstChangedLine`. A trace
+or an audit log that an earlier build wrote still holds them.
+
 ### Fixes
 
 **The `schedule` tool states what a returned say opens.** The description said

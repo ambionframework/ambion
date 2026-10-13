@@ -27,7 +27,6 @@ import type { WorkspaceEnv } from './backend.ts';
 import {
 	applyEdits,
 	detectLineEnding,
-	diffText,
 	normalizeToLF,
 	restoreLineEndings,
 	stripBom,
@@ -307,11 +306,8 @@ async function editFile(
 	);
 	if (!written.ok) throw accessError(path, written.error);
 	assertLive(signal);
-	const { diff, firstChangedLine } = diffText(baseContent, newContent);
 	return text(`Successfully replaced ${edits.length} block(s) in ${path}.`, {
-		diff,
 		patch: unifiedPatch(path, baseContent, newContent),
-		firstChangedLine,
 	});
 }
 

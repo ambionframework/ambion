@@ -33,12 +33,6 @@ import {
 /** The limits of each half of a cut view. */
 const HALF = { maxLines: DEFAULT_MAX_LINES / 2, maxBytes: DEFAULT_MAX_BYTES / 2 };
 
-/**
- * The most bytes a script returns. A read takes at most 50 KB of the file,
- * and invalid UTF-8 can grow to three times that size in the text.
- */
-const SCRIPT_BYTES = 4 * DEFAULT_MAX_BYTES;
-
 /** A range of lines in the output file, in the terms of `read`. */
 export interface LineRange {
 	/** The first line of the range, counted from 1. */
@@ -116,13 +110,13 @@ async function endsOf(env: WorkspaceEnv, path: string, from: number, size: numbe
 	const count = size - from;
 	if (count <= 0) return { headRaw: '', tailRaw: '' };
 	if (count <= DEFAULT_MAX_BYTES) {
-		const raw = await bytesOf(env, path, size, count);
+		const raw = await bytesOf(env, path, from, count);
 		return { headRaw: raw, tailRaw: raw };
 	}
-	const first = await bytesOf(env, path, from + DEFAULT_MAX_BYTES, DEFAULT_MAX_BYTES);
+	const first = await bytesOf(env, path, from, DEFAULT_MAX_BYTES);
 	return {
 		headRaw: first.slice(0, first.lastIndexOf('\n') + 1),
-		tailRaw: await bytesOf(env, path, size, DEFAULT_MAX_BYTES),
+		tailRaw: await bytesOf(env, path, size - DEFAULT_MAX_BYTES, DEFAULT_MAX_BYTES),
 	};
 }
 
@@ -190,35 +184,26 @@ async function writeCursor(env: WorkspaceEnv, dir: string, offset: number): Prom
 }
 
 /**
- * The last `count` bytes of the first `size` bytes of the file. `head`
- * fixes the end at the size the read saw, so output that the process
- * writes during the read waits for the next read. just-bash's `tail`
- * refuses `--` and reads `-c +N` as `-c N`, so the command uses neither.
- * The path is absolute, so it cannot read as an option. The error text of
- * `head` goes nowhere, so a file that goes away reads as empty.
+ * The text of `count` bytes of the file from the byte `start`. The caller
+ * fixes the end of the range at the size the read saw, so output that the
+ * process writes during the read waits for the next read. A file that goes
+ * away reads as empty. A byte range can cut a UTF-8 character, and the
+ * decoder then gives a replacement mark.
  */
 async function bytesOf(
 	env: WorkspaceEnv,
 	path: string,
-	size: number,
+	start: number,
 	count: number,
 ): Promise<string> {
-	const ran = await runScript(
-		env,
-		`head -c ${size} ${shellQuote(path)} 2>/dev/null | tail -c ${count}`,
-		{
-			capture: {
-				limits: { maxBytes: SCRIPT_BYTES, maxLines: Number.MAX_SAFE_INTEGER, retain: 'tail' },
-			},
-		},
-	);
-	return ran.ok ? ran.value.output : '';
+	const read = await env.readRange(path, start, count);
+	return read.ok ? new TextDecoder('utf-8', { ignoreBOM: true }).decode(read.value) : '';
 }
 
 /**
  * The count of newlines in the first `from` bytes and in the first `size`
  * bytes of the file, or undefined when the script gives none. The path is
- * absolute and quoted, and the error text goes nowhere, as in `bytesOf`.
+ * absolute and quoted, and the error text goes nowhere.
  */
 async function newlinesOf(
 	env: WorkspaceEnv,

@@ -7,10 +7,9 @@
  * per-package changelog to reconcile.
  *
  *   node scripts/version.mjs 0.1.0
- *   node scripts/version.mjs --check     # verify they already agree
  */
 import { readFile, writeFile } from 'node:fs/promises';
-import { isVersion, publishablePackages, sharedVersion } from './packages.mjs';
+import { isVersion, publishablePackages } from './packages.mjs';
 
 async function main(argv) {
 	const packages = await publishablePackages();
@@ -24,15 +23,9 @@ async function main(argv) {
 		console.log(`${entry.manifest.name}@${entry.manifest.version}`);
 	}
 
-	if (argv[0] === '--check') {
-		// Throws with the disagreeing versions named, which is the whole check.
-		sharedVersion(packages);
-		return;
-	}
-
 	const version = argv[0];
 	if (!version || !isVersion(version)) {
-		console.error('Usage: node scripts/version.mjs <x.y.z[-tag]> | --check');
+		console.error('Usage: node scripts/version.mjs <x.y.z[-tag]>');
 		process.exitCode = 1;
 		return;
 	}

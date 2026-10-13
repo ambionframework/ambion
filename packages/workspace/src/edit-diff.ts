@@ -1,6 +1,6 @@
 /**
  * The text work of the `edit` tool: line endings and the byte order mark,
- * the match of each `oldText` in a file, and the diff of the change.
+ * the match of each `oldText` in a file, and the unified patch of the change.
  *
  * Every `oldText` is matched against the original content, never against
  * the result of another edit. A match is exact. When no match is exact, the
@@ -11,7 +11,7 @@
  * (earendil-works/pi, MIT License, Mario Zechner).
  */
 
-import { createTwoFilesPatch, diffLines, FILE_HEADERS_ONLY } from 'diff';
+import { createTwoFilesPatch, FILE_HEADERS_ONLY } from 'diff';
 
 /** One replacement of the `edit` tool. */
 export interface Edit {
@@ -19,7 +19,7 @@ export interface Edit {
 	readonly newText: string;
 }
 
-/** The lines of unchanged text that the diff shows on each side of a change. */
+/** The lines of unchanged text that the patch shows on each side of a change. */
 const CONTEXT_LINES = 4;
 
 /** A matched replacement: where in the matched content, how long, and what replaces it. */
@@ -287,97 +287,4 @@ export function unifiedPatch(
 		context: CONTEXT_LINES,
 		headerOptions: FILE_HEADERS_ONLY,
 	});
-}
-
-/** The line numbers of the diff walk, and the lines it has written. */
-interface Walk {
-	readonly output: string[];
-	readonly width: number;
-	oldLine: number;
-	newLine: number;
-}
-
-function numbered(sign: string, line: number, width: number, text: string): string {
-	return `${sign}${String(line).padStart(width, ' ')} ${text}`;
-}
-
-/** Write the added or removed lines of one part. */
-function writeChange(walk: Walk, lines: readonly string[], added: boolean): void {
-	for (const text of lines) {
-		walk.output.push(
-			added
-				? numbered('+', walk.newLine++, walk.width, text)
-				: numbered('-', walk.oldLine++, walk.width, text),
-		);
-	}
-}
-
-function writeContext(walk: Walk, lines: readonly string[]): void {
-	for (const text of lines) {
-		walk.output.push(numbered(' ', walk.oldLine++, walk.width, text));
-		walk.newLine++;
-	}
-}
-
-/**
- * Write the unchanged lines of one part: the first `head` lines, a gap
- * marker for the `skipped` lines, and the last `tail` lines.
- */
-function writeUnchanged(walk: Walk, lines: readonly string[], head: number, tail: number): void {
-	const skipped = lines.length - head - tail;
-	writeContext(walk, lines.slice(0, head));
-	if (skipped > 0 && (head > 0 || tail > 0)) {
-		walk.output.push(` ${''.padStart(walk.width, ' ')} ...`);
-	}
-	walk.oldLine += skipped;
-	walk.newLine += skipped;
-	writeContext(walk, lines.slice(lines.length - tail));
-}
-
-/** How many lines of an unchanged part show at its start and at its end. */
-function shownLines(
-	length: number,
-	afterChange: boolean,
-	beforeChange: boolean,
-): { head: number; tail: number } {
-	if (afterChange && beforeChange) {
-		return length <= CONTEXT_LINES * 2
-			? { head: length, tail: 0 }
-			: { head: CONTEXT_LINES, tail: CONTEXT_LINES };
-	}
-	if (afterChange) return { head: Math.min(length, CONTEXT_LINES), tail: 0 };
-	return { head: 0, tail: beforeChange ? Math.min(length, CONTEXT_LINES) : 0 };
-}
-
-/**
- * A diff for the model to read: each changed line with its number and a sign,
- * and the lines around a change. `firstChangedLine` is the line number of the
- * first change in the new content.
- */
-export function diffText(
-	oldContent: string,
-	newContent: string,
-): { diff: string; firstChangedLine: number | undefined } {
-	const parts = diffLines(oldContent, newContent);
-	const width = String(
-		Math.max(oldContent.split('\n').length, newContent.split('\n').length),
-	).length;
-	const walk: Walk = { output: [], width, oldLine: 1, newLine: 1 };
-	let firstChangedLine: number | undefined;
-	let afterChange = false;
-	for (const [i, part] of parts.entries()) {
-		const lines = part.value.split('\n');
-		if (lines.at(-1) === '') lines.pop();
-		const changed = part.added || part.removed;
-		if (changed) {
-			firstChangedLine ??= walk.newLine;
-			writeChange(walk, lines, part.added);
-		} else {
-			const next = parts[i + 1];
-			const shown = shownLines(lines.length, afterChange, next?.added || next?.removed || false);
-			writeUnchanged(walk, lines, shown.head, shown.tail);
-		}
-		afterChange = changed;
-	}
-	return { diff: walk.output.join('\n'), firstChangedLine };
 }

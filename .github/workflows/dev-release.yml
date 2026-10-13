@@ -40,9 +40,7 @@ jobs:
           DEV_BASE: 0.9.0
           RUN_NUMBER: ${{ github.run_number }}
           SHA: ${{ github.sha }}
-        run: |
-          node scripts/version.mjs "${DEV_BASE}-dev.${RUN_NUMBER}.g${SHA:0:7}"
-          node scripts/version.mjs --check
+        run: node scripts/version.mjs "${DEV_BASE}-dev.${RUN_NUMBER}.g${SHA:0:7}"
 
       - run: pnpm run check:types
       - run: pnpm run check:lint

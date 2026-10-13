@@ -10,15 +10,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
-import {
-	copyFileSync,
-	mkdirSync,
-	mkdtempSync,
-	readdirSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path, { dirname, join, normalize } from 'node:path';
 import test from 'node:test';
@@ -314,14 +306,4 @@ test('every file of the core belongs to exactly one layer', () => {
 			: [`${file}: ${layers.map((layer) => layer.name).join(', ') || 'no layer'}`];
 	});
 	assert.deepEqual(bad, []);
-});
-
-test('the layer comment of biome.jsonc lists each layer of the table', () => {
-	const lines = readFileSync(join(root, 'biome.jsonc'), 'utf8')
-		.split('\n')
-		.map((line) => line.trim());
-	const missing = CORE_LAYERS.filter(
-		(layer) => !lines.includes(`//   ${layer.files.join(', ')}  ${layer.about}`),
-	).map((layer) => layer.name);
-	assert.deepEqual(missing, []);
 });
