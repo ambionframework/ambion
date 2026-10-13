@@ -346,4 +346,46 @@ describe('the schema option', () => {
 		const rows = await run(second, 'SELECT body FROM log ORDER BY id');
 		expect(rows.ok && rows.rows).toEqual([{ body: 'noted kept' }, { body: 'noted again' }]);
 	});
+
+	it('rejects the call that opens the database when the schema fails, and opens again at the next call', async () => {
+		const location = join(await tempDir(), 'failing.db');
+		const site = openWorkspace({
+			name: 'failing',
+			backend: {
+				bash: memoryBackend(),
+				sql: sqliteBackend(location, { schema: 'CREATE INDEX IF NOT EXISTS by_a ON absent (a)' }),
+			},
+		});
+		cleanups.push(() => site.dispose());
+		await expect(run(site, 'SELECT 1')).rejects.toThrow(/absent/);
+		const created = new DatabaseSync(location);
+		created.exec('CREATE TABLE absent (a)');
+		created.close();
+		expect((await run(site, 'INSERT INTO absent VALUES (1)')).ok).toBe(true);
+	});
+});
+
+describe('one backend for two workspaces', () => {
+	it('runs one call at a time, so an import in progress does not nest a transaction', async () => {
+		const sql = sqliteBackend(':memory:', { schema: 'CREATE TABLE runs (label TEXT)' });
+		const [one, two] = ['one', 'two'].map((name) => {
+			const site = openWorkspace({ name, backend: { bash: memoryBackend(), sql } });
+			cleanups.push(() => site.dispose());
+			return site;
+		});
+		if (one === undefined || two === undefined) throw new Error('Two workspaces open.');
+		await one.use({ name: 'design' }, (env) =>
+			env.writeFile('/home/design/in.csv', 'label\nimported\n'),
+		);
+		const outcomes = await Promise.all([
+			run(one, 'INSERT INTO runs (label) SELECT label FROM import.rows', {
+				agent: 'design',
+				import: 'in.csv',
+			}),
+			run(two, "INSERT INTO runs (label) VALUES ('other')", { agent: 'experiments' }),
+		]);
+		expect(outcomes.map((outcome) => outcome.ok)).toEqual([true, true]);
+		const rows = await run(two, 'SELECT label FROM runs ORDER BY label');
+		expect(rows.ok && rows.rows).toEqual([{ label: 'imported' }, { label: 'other' }]);
+	});
 });

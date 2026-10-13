@@ -144,8 +144,9 @@ limit of 20 mA. `bench-supply` has a limit of 5 V. The Design specialist calls
   `approve_operation`. The tool appends an `approved` or `denied` row with
   the `request_id`.
 
-The instrument only appends to the `operations` table. The status of an operation is its latest row. The
-instrument checks the numeric limit only. It does not verify who approved.
+The instrument only appends to the `operations` table. The status of an
+operation is its latest row. The instrument checks the numeric limit only. It
+does not verify who approved.
 The terminal shows a `requested` operation to the `person` of the exchange
 until a later row answers it.
 
