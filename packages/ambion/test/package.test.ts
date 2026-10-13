@@ -49,7 +49,6 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'COMPOSE_GUIDANCE',
 		'DEFAULT_RESPOND_POLICY',
 		'DEFAULT_SUMMARY_POLICY',
-		'PACKAGE_NAME',
 		'REF_LIMITS',
 		'addUsage',
 		'awaitingFor',

@@ -44,6 +44,3 @@ export type {
 	StoredEntry,
 } from './storage.ts';
 export { namespaced } from './storage.ts';
-
-/** Kept in step with package.json by a test. */
-export const PACKAGE_NAME = '@ambionframework/journal';

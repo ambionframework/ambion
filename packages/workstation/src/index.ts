@@ -28,6 +28,3 @@ export type {
 export { workstationGitBackend } from './git-backend.ts';
 export type { WorkstationCredential } from './session.ts';
 export { fingerprint } from './session.ts';
-
-/** Kept in step with package.json by a test. */
-export const PACKAGE_NAME = '@ambionframework/workstation';

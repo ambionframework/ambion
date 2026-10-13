@@ -75,7 +75,6 @@ it('exports one resource, its two logs, the port values, the environment helpers
 		'FileError',
 		'HomeEnv',
 		'MAX_TIMER_SECONDS',
-		'PACKAGE_NAME',
 		'SNAPSHOT_LIMITS',
 		'ShellError',
 		'ToolFailure',

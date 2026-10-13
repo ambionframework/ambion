@@ -16,6 +16,9 @@ append-only tables. The workbench lab writes the provenance columns of
 `results` tables have no provenance columns. A run is unique by its project
 and label.
 
+**No package exports `PACKAGE_NAME`.** The constant of the ten library packages
+is gone, and nothing read it.
+
 **A canvas room row has no `depth`.** `CanvasRoom` holds no `depth` field, and
 `start.kind` says whether a room is a root room or a breakout room. The table
 `canvas_rooms` of `sqliteCanvas` has no `depth` column, so a database that an
