@@ -122,7 +122,7 @@ import: sweep/results.csv
   outcome, so no write from a later call lands inside it.
 - **The backend runs one call at a time.** A call waits for the call
   before it, also when two workspaces share one backend. So a call keeps
-  its transaction and its provenance to itself.
+  its transaction to itself.
 - **A result keeps one value per column name.** A last statement with two
   columns of one name gives an `ok: false` outcome that asks for `AS`.
 - **A call stops between statements and between rows.** `sqlResult` yields
@@ -141,97 +141,31 @@ import: sweep/results.csv
   early. For example, an aggregate over an unbounded recursive query does
   not return.
 
-### Records: append-only tables with provenance
+### The schema option
 
-**Three options make the database hold records.** A record is a row that
-no agent changes after it lands, with the agent, the room, the
-activation, and the exchange that wrote it.
+**`schema` prepares the database at each open.** It holds the tables,
+views, triggers, and seed rows that the agents share.
 
 ```ts
 const sql = sqliteBackend('./data/lab.db', {
-  schema:
-    'CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY, label TEXT, agent TEXT, activation TEXT, at TEXT)',
-  appendOnly: ['runs'],
-  provenance: true,
+  schema: 'CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY, label TEXT, UNIQUE (label))',
 });
 ```
 
-| Option       | Meaning                                                               |
-| ------------ | --------------------------------------------------------------------- |
-| `schema`     | Statements that run at each open: tables, views, and seed rows        |
-| `appendOnly` | The tables that accept INSERT alone. Each must exist after the schema |
-| `provenance` | Fill the provenance columns of each append-only table from the call   |
-
 - **The schema runs at each open.** Write it to run again, with
   `CREATE TABLE IF NOT EXISTS` and `INSERT OR IGNORE`. A failure of the
-  schema, or an append-only table that does not exist, rejects the call
-  that opens the database, and the next call opens it again. The backend
-  finds an append-only table by its name in any case, as SQLite does.
-- **An append-only table accepts INSERT alone.** An UPDATE, a DELETE, a
-  REPLACE, and an upsert that changes a row fail. Temporary triggers on
-  the one connection hold the rule, and `recursive_triggers` is on, so a
-  REPLACE fires the delete trigger.
-- **The backend refuses the statements that lift the guard.** It refuses
-  a DROP or an ALTER of an append-only table, a DROP of its triggers, and
-  a PRAGMA of `recursive_triggers`, `writable_schema`, or `query_only`.
-  The flag `query_only` would stop the writes of every agent on the
-  database. The backend reads a name as the SQLite tokenizer does. It
-  refuses a DROP, an ALTER, or a PRAGMA whose target it cannot read, for
-  example one with a comment inside it. The call stops at that statement.
-  [Trust](trust.md) states the limit of the guard.
-- **The backend also checks the engine.** SQLite changes a flag PRAGMA
-  when it compiles the statement, also under `EXPLAIN`. So after each
-  compile the backend reads `recursive_triggers`, `writable_schema`, and
-  `query_only`, sets back a flag that changed, and refuses the statement.
-- **No temporary table hides an append-only table.** SQLite reads an
-  unqualified name in `temp` first. After each statement the backend
-  drops a temporary table or view with the name of an append-only table,
-  and refuses the statement.
-- **No call creates a trigger.** A trigger runs in the call of the agent
-  that fires it. So a trigger of one agent could insert a row under the
-  provenance of another agent, or skip the stamp. With `appendOnly`, the
-  backend refuses `CREATE TRIGGER` and `CREATE TEMP TRIGGER`, also the
-  `INSTEAD OF` trigger of a view. The text check reads the keywords with
-  white space or comments between them. On a Node whose `node:sqlite` has
-  `setAuthorizer`, the engine also denies each trigger. On Node 22 the text
-  check holds alone. The `schema` can create a trigger, because it runs
-  before the guard. That trigger runs in each call.
-- **The guard triggers alone call the guard functions.** The stamp calls
-  `ambion_provenance`, `ambion_stamp`, and `ambion_stamped`. The backend
-  refuses a statement that names one of them, in any quotes. The engine
-  also denies a call outside a guard trigger, where Node has an authorizer.
-- **Provenance fills the columns that a table declares.** The columns are
-  `agent`, `room`, `activation`, `exchange_person`, `exchange_from`, and
-  `at`. The `sql` tool passes the provenance of each tool call in
-  `SqlRunOptions.provenance`, and a guard trigger after each INSERT writes
-  it. An INSERT that sets one of these columns fails. An exchange with no
-  person leaves `exchange_person` NULL. A host call with no provenance
-  leaves them all NULL. A RETURNING clause gives the row before the
-  stamp fills it, so a caller reads the provenance with a SELECT.
-- **Provenance needs a table that the stamp can fill.** The stamp finds
-  the new row by its rowid, so the backend refuses a table WITHOUT ROWID
-  when it opens the database. SQLite writes a DEFAULT before the guard
-  reads the new row, so the backend also refuses a provenance column with
-  a DEFAULT other than NULL. The message names the table or the column.
-- **The stamp fills only the row that its INSERT added.** The guard lets
-  the UPDATE of the stamp through: it sets each provenance column from
-  NULL to the value of the running call. The stamp marks its row before
-  the UPDATE, and the guard refuses an UPDATE of a row with no mark. The
-  backend clears the marks before each statement.
-- **Only the host writes a row with no provenance.** A seed row of the
-  schema and a row of a host call with no provenance keep NULL in each
-  provenance column. A row of an agent keeps NULL only where its call has
-  no value, such as `exchange_person`. No later call fills a NULL, and no
-  UPDATE changes a data column.
+  schema rejects the call that opens the database, and the next call opens
+  it again.
+- **A call can change any table.** The backend keeps no table from an
+  UPDATE, a DELETE, a DROP, or a trigger. [Trust](trust.md) states the
+  limit. A trigger runs in the call of the agent that fires it.
 - **The backend does not deduplicate.** A retried activation that inserts
   again inserts again. Give the table a UNIQUE constraint when a row must
   appear once.
-- **The records share no journal transaction.** A crash between an INSERT
+- **The rows share no journal transaction.** A crash between an INSERT
   and the journal write of the activation can leave a row for an
   activation that the journal never committed. The journal stays the
   record of the room.
-- **The guidance names the append-only tables and the provenance
-  columns,** so an agent leaves those columns out of an INSERT.
 
 ### The SqlBackend interface
 

@@ -20,18 +20,6 @@ proposing the same change again.
 
 ## Known defects
 
-**F1. An agent that runs SQL can lift the append-only guard.** The guard
-of `sqliteBackend` refuses the statements that it names: `CREATE
-TRIGGER`, a DROP or ALTER of a guarded table, `ATTACH`, and the PRAGMAs
-`recursive_triggers`, `writable_schema`, and `query_only`. A statement
-that it does not name can still lift it. On 2026-09-29 a review lifted it
-on Node 22 and Node 26 with `PRAGMA temp_store`, which drops the TEMP
-triggers of the guard at compile time. An allow-list closes the class: an
-agent call runs only a fixed set of statement kinds, and only the PRAGMAs
-that read. Node 22 has no `setAuthorizer`, so the allow-list reads the
-text there. **Condition:** a room that gives the `sql` tool to an agent
-that the owner does not trust, or a second bypass in use.
-
 **F2. A Pi wrapper stream receives a stub model.** `createExecutionServices`
 in `packages/pi/src/services.ts` resolves every model to `stubModel` when
 `stream` is set. A stream that wraps a real provider then gets a 1,000,000
@@ -200,7 +188,6 @@ own.** A later review does not propose them again.
   resume keeps the recorded one.
 - **`visit.send` and `room.post`.** A send has an author, and a system
   message has none.
-- **`sqlite.ts` and `sqlite-guard.ts`.** They are one concept in two files.
 - **The port suite and the executor suite.** Cloudflare runs the port
   suite.
 - **The record line.** The core has one `renderLine`, and

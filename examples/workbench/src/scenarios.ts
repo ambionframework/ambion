@@ -104,10 +104,10 @@ export async function seedWorkspace(path: string): Promise<void> {
 }
 
 /**
- * The lab records: projects, test plans, runs, and results. Every table that
- * agents write has the provenance columns, and the database fills them. The
- * UNIQUE constraint on a run makes a retried activation fail instead of
- * recording the run twice.
+ * The lab records: projects, test plans, runs, and results. The UNIQUE
+ * constraint on a run makes a retried INSERT of the same label fail instead
+ * of recording the run twice. The instrument writes the provenance columns of
+ * `operations` itself.
  */
 export const labSchema = `
 CREATE TABLE IF NOT EXISTS projects (
@@ -118,24 +118,21 @@ CREATE TABLE IF NOT EXISTS test_plans (
 	id INTEGER PRIMARY KEY,
 	project TEXT NOT NULL REFERENCES projects (name),
 	title TEXT NOT NULL,
-	steps TEXT NOT NULL,
-	agent TEXT, room TEXT, activation TEXT, exchange_person TEXT, exchange_from TEXT, at TEXT
+	steps TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS runs (
 	id INTEGER PRIMARY KEY,
 	project TEXT NOT NULL REFERENCES projects (name),
 	plan_id INTEGER REFERENCES test_plans (id),
 	label TEXT NOT NULL,
-	agent TEXT, room TEXT, activation TEXT, exchange_person TEXT, exchange_from TEXT, at TEXT,
-	UNIQUE (activation, label)
+	UNIQUE (project, label)
 );
 CREATE TABLE IF NOT EXISTS results (
 	id INTEGER PRIMARY KEY,
 	run_id INTEGER NOT NULL REFERENCES runs (id),
 	metric TEXT NOT NULL,
 	value REAL NOT NULL,
-	unit TEXT NOT NULL,
-	agent TEXT, room TEXT, activation TEXT, exchange_person TEXT, exchange_from TEXT, at TEXT
+	unit TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS operations (
 	id INTEGER PRIMARY KEY,
@@ -153,9 +150,6 @@ ${scenarios
 	)
 	.join('\n')}
 `;
-
-/** The lab tables that accept INSERT alone. No agent changes a row once it lands. */
-export const labAppendOnly = ['projects', 'test_plans', 'runs', 'results', 'operations'] as const;
 
 /** The simulated instruments. An operation above the limit needs the approval of a person. */
 export const instruments = [

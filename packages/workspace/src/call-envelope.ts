@@ -1,5 +1,5 @@
 /**
- * Where one tool call ran, as the audit log and the `sql` tool stamp it.
+ * Where one tool call ran, as the audit log records it.
  * The module imports types alone.
  */
 import type { ToolContext } from '@ambionframework/ambion';
@@ -12,7 +12,7 @@ export interface CallEnvelope {
 	readonly exchange?: { readonly person?: string; readonly from: number };
 }
 
-/** The provenance of the call that `ctx` describes. */
+/** Where the call that `ctx` describes ran. */
 export function callEnvelope(ctx: ToolContext): CallEnvelope {
 	return {
 		agent: ctx.agent.name,

@@ -17,7 +17,7 @@ import { describe, expect, it, onTestFinished } from 'vitest';
 import { people, team } from '../src/definitions.ts';
 import { openInstrument } from '../src/instrument.ts';
 import { labRepositories } from '../src/repositories.ts';
-import { instruments, labAppendOnly, labSchema } from '../src/scenarios.ts';
+import { instruments, labSchema } from '../src/scenarios.ts';
 import { bundleCanvas } from './hosting.ts';
 
 /** The Workbench team over an in-memory workspace and lab database. The test disposes them. */
@@ -26,11 +26,7 @@ function build() {
 		name: 'workbench',
 		backend: {
 			bash: memoryBackend({ git: labRepositories(':memory:') }),
-			sql: sqliteBackend(':memory:', {
-				schema: labSchema,
-				appendOnly: labAppendOnly,
-				provenance: true,
-			}),
+			sql: sqliteBackend(':memory:', { schema: labSchema }),
 		},
 	});
 	onTestFinished(() => workspace.dispose());

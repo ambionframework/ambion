@@ -1,5 +1,5 @@
 import { defineTool, type ToolBundle, type ToolContext } from '@ambionframework/ambion';
-import type { SqlEnv, SqlProvenance, SqlRow } from '@ambionframework/workspace';
+import type { SqlEnv, SqlRow } from '@ambionframework/workspace';
 import type { WorkspaceResource } from '@ambionframework/workspace/resource';
 import { Type } from 'typebox';
 
@@ -29,9 +29,10 @@ const GUIDANCE =
 	'When nobody is present and the room has an opener, `report` the question with the operation id to the opener, then end your activation. ' +
 	'When the answer reaches you in a later message, call `approve_operation` with the operation id and the decision. ' +
 	'The instrument checks the numeric limit. It does not verify who approved, so relay only the answer of the person that you asked. ' +
-	'Every operation lands in the operations table with its provenance.';
+	'Every operation lands in the operations table with the agent, the room, the activation, the exchange, and the time.';
 
-function provenanceOf(ctx: ToolContext): SqlProvenance {
+/** The columns of an `operations` row that say who made the call, and when. */
+function provenanceOf(ctx: ToolContext): Record<string, string> {
 	return {
 		agent: ctx.agent.name,
 		...(ctx.room === undefined ? {} : { room: ctx.room }),
@@ -54,28 +55,25 @@ function literal(value: string | number): string {
 	return typeof value === 'number' ? String(value) : `'${value.replace(/'/g, "''")}'`;
 }
 
-/** Run one statement on the lab database with the provenance of `ctx`, and give its rows. */
-async function labRun(env: SqlEnv, sql: string, ctx: ToolContext): Promise<readonly SqlRow[]> {
-	const outcome = await env.run(sql, {
-		maxRows: Number.MAX_SAFE_INTEGER,
-		provenance: provenanceOf(ctx),
-	});
+/** Run one statement on the lab database, and give its rows. */
+async function labRun(env: SqlEnv, sql: string): Promise<readonly SqlRow[]> {
+	const outcome = await env.run(sql, { maxRows: Number.MAX_SAFE_INTEGER });
 	if (!outcome.ok) throw new Error(outcome.message);
 	return outcome.rows;
 }
 
-/** Append one row to `operations`, and give its id. The database fills the provenance. */
+/** Append one row to `operations` with the provenance of `ctx`, and give its id. */
 async function recordOperation(
 	env: SqlEnv,
 	values: Readonly<Record<string, string | number>>,
 	ctx: ToolContext,
 ): Promise<number> {
-	const names = Object.keys(values).join(', ');
-	const literals = Object.values(values).map(literal).join(', ');
+	const columns = { ...values, ...provenanceOf(ctx) };
+	const names = Object.keys(columns).join(', ');
+	const literals = Object.values(columns).map(literal).join(', ');
 	const [row] = await labRun(
 		env,
 		`INSERT INTO operations (${names}) VALUES (${literals}) RETURNING id`,
-		ctx,
 	);
 	return Number(row?.id);
 }
@@ -190,7 +188,6 @@ async function runApprove(
 	const [request] = await labRun(
 		env,
 		`SELECT instrument, setpoint FROM operations WHERE id = ${id} AND outcome = 'requested'`,
-		ctx,
 	);
 	if (!request) throw new Error(`No requested operation ${id}.`);
 	const name = String(request.instrument);
