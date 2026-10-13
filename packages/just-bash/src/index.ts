@@ -20,6 +20,3 @@ export type {
 	SeedWriter,
 } from './just-bash.ts';
 export { directoryBackend, memoryBackend } from './just-bash.ts';
-
-/** Kept in step with package.json by a test. */
-export const PACKAGE_NAME = '@ambionframework/just-bash';

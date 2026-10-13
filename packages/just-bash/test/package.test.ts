@@ -26,7 +26,7 @@ it('holds two entries, and builds each under the name the manifest gives it', as
 });
 
 it.each([
-	['.', main, ['PACKAGE_NAME', 'directoryBackend', 'memoryBackend']],
+	['.', main, ['directoryBackend', 'memoryBackend']],
 	['./git', git, ['justGitBackend', 'sqliteGitStorage']],
 ])('exports exactly its bindings from %s', (_path, entry, names) => {
 	expect(Object.keys(entry).sort()).toEqual(names);

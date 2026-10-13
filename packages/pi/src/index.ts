@@ -37,6 +37,3 @@ export {
 	type PiSessions,
 	type SessionScope,
 } from './sessions.ts';
-
-/** Kept in step with package.json by a test. */
-export const PACKAGE_NAME = '@ambionframework/pi';

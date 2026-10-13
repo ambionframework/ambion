@@ -108,6 +108,3 @@ export { sqlResult } from './sql-result.ts';
 export { ToolFailure } from './tools.ts';
 export type { Workspace, WorkspaceProcesses, WorkspaceToolsOptions } from './workspace.ts';
 export { openWorkspace } from './workspace.ts';
-
-/** Kept in step with package.json by a test. */
-export const PACKAGE_NAME = '@ambionframework/workspace';
