@@ -4,8 +4,15 @@
 queue, entry shape, fencing, idempotency, and conditional appends. A caller
 owns entry kinds and body validation.
 
-The package has no Pi dependency. It stores JSON data through a narrow
-storage contract:
+## Install
+
+```sh
+npm install @ambionframework/journal
+```
+
+## Storage contract
+
+The package stores JSON data through a narrow storage contract:
 
 ```ts
 interface JournalStorage {
@@ -77,7 +84,15 @@ Decisions still run inside the queue. Their proposed body is captured before
 awaiting storage; later caller mutations do not change that append.
 
 `sqliteJournals(sql)` provides SQLite storage with native compare-and-append.
-`memoryJournals()` provides independent in-memory journals for one process.
+`sql` is a `Sql` value with two calls: `run(query, ...params)` and
+`all(query, ...params)`, which returns the rows. A parameter and a column
+hold a `SqlValue`: a string, a number, or `null`. `memoryJournals()` provides
+independent in-memory journals for one process.
+
+`namespaced(opener, namespace)` returns a `JournalOpener` that keeps the
+journals of one namespace apart inside a shared storage backend.
+`assertJson(value)` throws, with the path of the first fault, when a value is
+not JSON. The journal calls it on every body at append.
 
 **A storage author proves the contract with a published suite.**
 `@ambionframework/journal/conformance` exports `storageConformance(fixture)`.
@@ -97,6 +112,8 @@ describe.each(fixtures)('$name', (fixture) => {
   for (const c of storageConformance(fixture)) it(c.name, c.run);
 });
 ```
+
+## More
 
 See the [durability contract](https://github.com/ambionframework/ambion/blob/main/docs/durability.md)
 for failure guarantees. The journal stores ordered facts; applications own

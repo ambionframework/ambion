@@ -1,8 +1,9 @@
 # Limits and fold cost
 
 **This page owns two subjects: the configurable limits of a room and the
-measured cost of its fold.** Other pages link here and do not repeat the
-figures. The fold cost is the time to derive room state from the journal.
+cost of its fold.** The fold cost is the time to derive room state from the
+journal. The page holds the shape of that cost and the script that measures
+it.
 [Durability](durability.md) owns the journal entry contract.
 [Formal](formal.md) owns the proof scope.
 
@@ -30,6 +31,13 @@ the table. `Limits` in
 | `limits.trace.toolOutputBytes`    | Bytes of tool output that a logged step keeps               | 65,536                 |
 | `limits.trace.inputBytes`         | Bytes of text that a logged `input` step keeps              | 1,048,576              |
 | `limits.trace.stepsPerPass`       | Steps that one pass logs                                    | 1,000                  |
+| `activationTokenLimit`            | Tokens of the record that one activation reads              | The whole record       |
+| `estimateTokens`                  | A function that counts those tokens                         | 4 characters per token |
+
+**`activationTokenLimit` and `estimateTokens` are options of an agent.** A
+host sets them in the executor options of one definition.
+[Definitions and tools](agent.md#definitions) states the windowing and the
+estimator.
 
 **Two limits change what the room does with a message.**
 `limits.context.messages` windows the view and refuses nothing. The room
@@ -44,8 +52,10 @@ journal stays authoritative when a timed out call reached the room.
 [Durability](durability.md) owns the lease, retry, and delivery rules.
 
 **No limit caps an exchange.** Deadlines and retry caps bound one
-activation. A continuing contribution keeps an exchange open.
-[Deployment](deployment.md) covers the limits a host adds.
+activation. A continuing contribution keeps an exchange open. The say lock
+rejects stale writes and forces reconsideration, and it does not guarantee
+that a model stops. A host monitors work and applies its own operational
+limits. [Deployment](deployment.md) covers the limits a host adds.
 
 ## The limits of a compose call
 
@@ -63,42 +73,26 @@ it.
 
 ## The cost of the fold
 
-**The claim is a shape.** The oracle `foldRoom` in
-[`test/support/fold.ts`](../packages/ambion/test/support/fold.ts) replays
-the whole journal. Its cost grows with the length of the history. The
-incremental projection in
+**The incremental projection copies whole containers for each entry.** A
+new question costs more as the history grows, and replay grows faster than
+the history ([Accepted risks](../planning/backlog.md#accepted-risks)). The
+oracle `foldRoom` in
+[`test/support/fold.ts`](../packages/ambion/test/support/fold.ts) replays the
+whole journal. The projection in
 [`room/projection.ts`](../packages/ambion/src/room/projection.ts) updates
-the addressed fields that one entry changes. It still copies whole
-containers for each entry, so a new question costs more as the history
-grows. The table below shows it, and replay grows faster than the
-history ([Accepted risks](../planning/backlog.md#accepted-risks)).
+the addressed fields that one entry changes.
 
 **The projection is a cache.** It is the one derivation of the room state
 that the room runs, and `foldRoom` is the oracle that the tests compare it
 with. A resumed room and `readRoom` rebuild the projection with `replay`.
 The projection writes no durable checkpoint.
 
-**One measurement shows the shape.** The run below used Node 26.9 on an
-Apple silicon laptop on 2026-09-20. Each closed exchange holds a question,
-an answer, a close, and a summary. The figures vary with the machine and
-the load. They promise nothing.
-
-| Closed exchanges | Fold (ms) | Replay (ms) | Question, reference (ms) | Question, incremental (ms) |
-| ---------------- | --------- | ----------- | ------------------------ | -------------------------- |
-| 100              | 10        | 3           | 12.9                     | 0.2                        |
-| 1,000            | 685       | 58          | 1,090.8                  | 1.1                        |
-| 4,000            | 11,440    | 735         | 17,249.6                 | 4.8                        |
-
-**Reproduce it with one command.** The bench is manual because timing is
-too noisy for the gate.
+**Measure the cost with `scripts/projection-cost.mjs`.** The bench is manual
+because timing is too noisy for the gate.
 
 ```sh
 node scripts/projection-cost.mjs 100 1000 4000
 ```
 
-**The gate checks the result and not the time.** The property test in
-[`projection-equivalence.test.ts`](../packages/ambion/test/projection-equivalence.test.ts)
-compares the projection with `foldRoom` under cancellation, reseating,
-late summaries, takeover, and restart. It runs 50 seeds. Set `AMBION_SEEDS`
-to widen the run. The context window bounds model input and does not bound
-the replay of the journal on resume.
+The context window bounds model input and does not bound the replay of the
+journal on resume.

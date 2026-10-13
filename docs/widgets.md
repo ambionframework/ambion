@@ -1,10 +1,5 @@
 # Widgets
 
-> **Status: the package `@ambionframework/canvas` implements this page.** It
-> holds the store of revisions, `show`, `hide`, the reminder, the `widget`
-> and `answered` events, the acts of people, and the host reads. The
-> [canvas](canvas.md) holds the rooms, and widgets extend it.
-
 **A widget is a live view that an agent places in a room for people.** A
 view of a running process and a pinned test plan are widgets. The agent
 declares what the widget shows and where the data comes from. The host reads
@@ -54,90 +49,12 @@ author, and the reason for it is on the record.
 
 ### The model
 
-```ts
-interface CanvasWidget {
-  readonly room: string;
-  /** Unique in the room. The shared name syntax, 48 characters at most. */
-  readonly name: string;
-  /** A new id for each revision. */
-  readonly revision: string;
-  /** Counts the revisions of this name, from 1. */
-  readonly rev: number;
-  readonly state: 'shown' | 'hidden';
-  /** One kind of the host catalog. */
-  readonly kind: string;
-  readonly source?: WidgetSource;
-  /** One line, 80 characters at most. */
-  readonly title?: string;
-  /** The agent that wrote this revision. */
-  readonly author: string;
-  /** What a person can do. No actions: the widget is a view. */
-  readonly actions: readonly WidgetAction[];
-  /** The one person who may act. Absent: any person on a visit. */
-  readonly for?: string;
-}
-
-type WidgetSource =
-  | { readonly type: 'process'; readonly process: string; readonly path: string }
-  | { readonly type: 'file'; readonly path: string }
-  | { readonly type: 'snapshot'; readonly ref: string };
-
-interface WidgetAction {
-  /** The shared name syntax. */
-  readonly id: string;
-  /** One line, 40 characters at most. */
-  readonly label: string;
-  /** The first act on the revision answers it. A later act with other content is `answered`. */
-  readonly once?: boolean;
-  /** A form: 8 fields at most. */
-  readonly fields?: readonly WidgetField[];
-}
-
-/** `name` follows the name syntax. `label` is one line, 40 characters at most. */
-type WidgetField =
-  | { readonly name: string; readonly label: string; readonly type: 'text' } // one line, 200 characters at most
-  | {
-      readonly name: string;
-      readonly label: string;
-      readonly type: 'number';
-      readonly min?: number;
-      readonly max?: number;
-    }
-  | { readonly name: string; readonly label: string; readonly type: 'boolean' }
-  | {
-      readonly name: string;
-      readonly label: string;
-      readonly type: 'choice';
-      readonly options: readonly string[];
-    }; // 10 options of 40 characters at most
-
-interface WidgetKind {
-  readonly name: string;
-  /** One line for the guidance. */
-  readonly description: string;
-  /** The source types that the kind takes. A kind with none takes no source. */
-  readonly sources: readonly WidgetSource['type'][];
-  /** True when the host can draw actions on this kind. */
-  readonly actions: boolean;
-}
-
-interface WidgetOptions {
-  /** The kinds that the host draws. A `show` names one of them. */
-  readonly kinds: readonly WidgetKind[];
-}
-```
-
 **The host declares a closed catalog of kinds.** `openCanvas` takes
 `widgets: { kinds }`, and it refuses a catalog with a duplicate kind. The
 canvas refuses a kind outside the catalog and a source type that the kind
 does not take. A kind with no source types takes no source, and a kind with
 source types needs one. The guidance lists the catalog, so an agent places
 only what the host can draw.
-
-| Host        | Catalog                                                             | First widget  |
-| ----------- | ------------------------------------------------------------------- | ------------- |
-| Camera chat | `frame`: the newest frame that a process serves, with actions       | A viewfinder  |
-| Workbench   | `markdown`, `table`, `image`: a file of the workspace, with actions | A pinned file |
 
 **The canvas refuses actions on a kind that draws none.** A kind with
 `actions: false` takes no `actions` and no `for`. A `for` with no actions is
@@ -236,16 +153,6 @@ each revision id with `randomUUID`, so an id never repeats, even after a
 lost store. `resume` loads every revision, so the reads of the canvas
 stay synchronous.
 
-```ts
-interface CanvasStore {
-  // The room methods, and:
-  /** Every revision, in the order of insertion. */
-  revisions(): Promise<readonly CanvasWidget[]>;
-  /** Appends one revision. A revision id that exists stays as it is. */
-  appendRevision(widget: CanvasWidget): Promise<'inserted' | 'exists'>;
-}
-```
-
 **SQLite adds one table.** `canvas_widget_revisions` holds an
 autoincrement position that keeps the order, the unique id, the room, the
 name, `rev`, and the revision as JSON. The table is unique on
@@ -285,46 +192,6 @@ Widgets in this room:
 
 ### The host interface
 
-```ts
-interface Canvas {
-  /** The widget bundle: show, hide, and the reminder. A refusal with no widgets.kinds. Call it before defineAgent. */
-  widgetTools(): ToolBundle;
-  /** The current revision of each widget of a room, hidden ones included. Empty before resume. */
-  widgets(room: string): readonly CanvasWidget[];
-  /** One revision by id, or undefined. Read at resume. */
-  revision(id: string): CanvasWidget | undefined;
-  /** The act that answers each answered revision of a room: its seq and the person. Empty before resume. */
-  answers(room: string): ReadonlyMap<string, { readonly seq: number; readonly by: string }>;
-  /** Checks an act, then sends it through the visit of the person in that room. */
-  act(person: PersonDefinition, act: WidgetAct): Promise<WidgetActResult>;
-}
-
-/** `CanvasEvent` has these variants. */
-type WidgetEvent = { readonly type: 'widget'; readonly widget: CanvasWidget };
-type AnsweredEvent = {
-  readonly type: 'answered';
-  readonly room: string;
-  readonly revision: string;
-  readonly seq: number;
-};
-
-interface WidgetAct {
-  readonly room: string;
-  readonly widget: string;
-  /** The revision that the person saw. */
-  readonly revision: string;
-  readonly action: string;
-  readonly values?: Readonly<Record<string, string | number | boolean>>;
-  /** A token for one press. The host saves it before the call and reuses it on a retry. */
-  readonly press: string;
-}
-
-type WidgetActResult =
-  | { readonly kind: 'sent'; readonly seq: number }
-  | { readonly kind: 'stale'; readonly widget: CanvasWidget }
-  | { readonly kind: 'answered'; readonly seq: number };
-```
-
 **A bad call of `show`, `hide`, or `act` is a refusal.** It throws an
 `AmbionError` with the code `refused`. `stale` and `answered` are results,
 since the host draws them. The `answered` event fires once for each revision,
@@ -342,10 +209,6 @@ is no refusal.
 | ------ | -------------- | ---------------------------------- |
 | `show` | `(room, name)` | Equal content changes nothing      |
 | `hide` | `(room, name)` | Finds `hidden` and changes nothing |
-
-**Revision ids never repeat.** The canvas makes each one with
-`randomUUID`, so an id stays unique when a canvas store is lost and a new
-one starts.
 
 ### Trust
 
@@ -458,8 +321,7 @@ widget and says to the person what it needs. The act arrives as a later
 message and activates it again.
 
 **A question to the opener of the exchange closes `complete`.** The
-exchange does not await that person. AP1 of
-[The settled room](../planning/0.10.0.md) changes this rule. The act
+exchange does not await that person. The act
 still arrives and opens the next exchange. Only the attention line of the
 host misses the open question.
 
@@ -486,9 +348,3 @@ text values are one capped line, so they cannot forge a reminder line. The
 reminder holds names, kinds, sources, and seqs, and no label. The act
 message quotes the labels, so a label can imitate a `label: value` line
 inside that one message.
-
-## Out of scope
-
-- **Agent-written HTML or JS.** The catalog is closed.
-- **Layout hints.** The host places widgets.
-- **Widgets for one person.** Every visitor sees a widget.

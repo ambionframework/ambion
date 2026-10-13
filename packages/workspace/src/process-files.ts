@@ -228,12 +228,16 @@ function parseSpec(text: string): ProcessSpec | undefined {
 	try {
 		const spec: unknown = JSON.parse(text);
 		if (typeof spec !== 'object' || spec === null) return undefined;
-		const { handle, agent, command, timeout, startedAt, grace } = spec as Record<string, unknown>;
+		const { handle, agent, command, port, timeout, startedAt, grace } = spec as Record<
+			string,
+			unknown
+		>;
 		const valid =
 			typeof handle === 'string' &&
 			isHandle(handle) &&
 			typeof agent === 'string' &&
 			typeof command === 'string' &&
+			typeof port === 'number' &&
 			typeof timeout === 'number' &&
 			typeof startedAt === 'string' &&
 			typeof grace === 'number';
@@ -397,8 +401,7 @@ export function statusOf(files: ProcessFiles, owned: boolean): Process {
 		...(spec.name === undefined ? {} : { name: spec.name }),
 		agent: spec.agent,
 		command: spec.command,
-		// A spec written before ports has none: port 0 means the process does not listen.
-		port: spec.port ?? 0,
+		port: spec.port,
 		output: `${files.dir}/out`,
 		timeout: spec.timeout,
 		grace: spec.grace,

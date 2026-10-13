@@ -4,7 +4,7 @@
  * on its `$PORT`. `./process-fetch.ts` finds the process and sends the
  * request.
  *
- * `docs/processes.md` is the design contract.
+ * `docs/workspace.md` states the contract.
  */
 
 import { posix } from 'node:path';

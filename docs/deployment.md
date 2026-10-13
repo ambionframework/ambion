@@ -2,17 +2,16 @@
 
 **The host supplies execution; Ambion supplies collaboration semantics.**
 Placement, journal persistence, and tool resources are separate decisions.
-[The road to 1.0.0](../planning/1.0.0.md#the-road) defines the next releases. The
-table below states the status of each deployment model.
+The table below states the status of each deployment model.
 
 ## Deployment models
 
-| Model                         | Placement                        | Persistence                  | Current status                                                                  |
-| ----------------------------- | -------------------------------- | ---------------------------- | ------------------------------------------------------------------------------- |
-| Embedded Node application     | Room and runners in one process  | In-memory journals           | Implemented; storage lasts for the instance's lifetime                          |
-| Persistent Node service       | Application-managed service      | SQLite journals              | SQLite recovery tests include a fresh process after SIGKILL; see evidence below |
-| Separate room and agent hosts | Calls cross the JSON protocol    | Each host chooses storage    | Extension contract with a published conformance suite                           |
-| Cloudflare Durable Objects    | One object per room and per seat | Each object's SQLite storage | Publishable adapter tested in workerd; deployment commands pending              |
+| Model                         | Placement                        | Persistence                  | Current status                                                      |
+| ----------------------------- | -------------------------------- | ---------------------------- | ------------------------------------------------------------------- |
+| Embedded Node application     | Room and runners in one process  | In-memory journals           | Implemented; storage lasts for the instance's lifetime              |
+| Persistent Node service       | Application-managed service      | SQLite journals              | SQLite recovery tests include a fresh process after SIGKILL         |
+| Separate room and agent hosts | Calls cross the JSON protocol    | Each host chooses storage    | Extension contract with a published conformance suite               |
+| Cloudflare Durable Objects    | One object per room and per seat | Each object's SQLite storage | Adapter tested in workerd; the package ships no deployment commands |
 
 ## Embedded Node
 
@@ -32,29 +31,25 @@ as `storage`, and `resumeRoom` reconstructs a named room from its confirmed entr
 See the [runtime contract](agent.md) and [durability contract](durability.md)
 for the current signatures and failure rules.
 
-The [Workbench example](../examples/workbench) hosts three sample rooms and
-several people in one process, behind an OpenTUI terminal. The terminal
-calls the host through a typed in-process API and sends keyed messages. The
-rooms run while the terminal runs. One SQLite database stores the room
-journals, and the next start resumes them with the same agent definitions.
-
-Selecting a room enters it; selecting another leaves the current room. All
-rooms share one local directory workspace. The assistant coordinates
-datasheet, design, and experiment agents. Stop and Resume preserve workspace
-files and room journals.
+The [Workbench example](../examples/workbench/README.md) hosts its rooms and
+several people in one process. One SQLite database stores the room journals,
+and the next start resumes them with the same agent definitions.
 
 A host must:
 
 1. Reopen the same durable storage and supply executable agent definitions.
-2. Maintain one authoritative writer per room and handle supersession.
+2. Maintain one authoritative writer per room and handle supersession. Evict
+   a dead in-memory room before another host takes its name. Treat
+   `superseded` like eviction: discard its answers and resume the name. A
+   failed resume may be retried; its fence is the first write of the new run.
 3. Resume the room and let journal rules recover pending work.
 4. Reconcile recorded human presence with actual client connections.
 5. Recreate subscriptions, read durable messages, and reacquire exchange handles.
 6. Restore domain resources under their own persistence contracts.
 
-**The trace goes to the host's logs.** Room history lives in the journal.
-Pass a `logger` to `createRuntime`, or to `configure` on Cloudflare, to
-receive the steps of each activation. A restart keeps no trace.
+**Pass a `logger` to receive the trace.** Give it to `createRuntime`, or to
+`configure` on Cloudflare, to receive the steps of each activation. A restart
+keeps no trace.
 
 **A vendor session is not part of the recovery.** A restart on a new
 disk, or on a host with no disk, loses the session, and the next activation
@@ -97,20 +92,13 @@ a present person refer to the same live visit. One `leave()` ends it for
 all those clients. The host tracks tabs or sockets and calls `leave` only
 when its person-level presence policy requires it.
 
-`room.stop()` deliberately revokes work and records departures. It is a
-graceful end of that run. [`durability.md`](durability.md#stop) owns the
-stop guarantee.
+`room.stop()` is the graceful end of a run, and a failed stop may be
+retried. [`durability.md`](durability.md#stop) owns the stop guarantee.
 
 `hostingOf(runtime).evict(name)` drops local handles and observers without
 writing departures or releasing leases. `hostingOf` comes from
 `@ambionframework/ambion/hosting`, a host's own entry. Neither operation
 closes one client's connection while keeping the room active.
-
-Concurrent `stop()` calls wait for the same shutdown operation. If a durable
-revocation or departure fails, callers observe that failure and may retry the
-stop. Admission remains closed and the runtime releases the room name even on
-failure. If another run resumes the room, its journal fence prevents the old
-run's retry from changing the new run's presence or work.
 
 ### Restore client reads and exchange handles
 
@@ -147,8 +135,8 @@ const response = await exchange.waitForSummary(); // A summary, or undefined.
 
 An exchange key is its opening question's `seq`. Another message sent while
 that exchange is open returns the same `from`. To recover an uncertain send,
-retry `visit.send` with the original key and payload. Its returned handle
-identifies the original exchange even if the room has since moved on.
+retry `visit.send` with the original key and payload
+([Durability](durability.md#2-what-a-delivery-promises)).
 
 Pending waits belong to one running room. Eviction or detected supersession
 rejects them; recreate waits on a handle from the resumed room. A stopped
@@ -157,7 +145,8 @@ summary results remain available through `readRoom()` or Cloudflare `read()`,
 including stopped rooms. Reading recorded state does not resume execution.
 
 **Subscribe before reading history, and merge by sequence.** Subscriptions
-are local and do not replay past notifications. A message may appear in both
+are local and do not replay past notifications. Read with an exclusive
+`after` position. A message may appear in both
 the replay and the live stream. This example collects both without duplication:
 
 ```ts
@@ -204,49 +193,6 @@ expiry; hosts must keep their server or event loop alive and let alarms run.
 Manual-clock tests advance time explicitly. A room lease does not cancel an
 external effect or make a repeated tool call idempotent.
 
-### Recovery evidence
-
-**Deterministic tests exercise the documented procedures.**
-[`reconnect.test.ts`](../packages/ambion/test/reconnect.test.ts) covers human
-presence and exchange handles on memory and SQLite.
-[`inherited-leases.test.ts`](../packages/ambion/test/inherited-leases.test.ts)
-covers surviving remote authority and expiry before local retry.
-[`reconnect-process.test.ts`](../packages/ambion/test/reconnect-process.test.ts)
-kills a Node process at an active lease, then starts a fresh process over the
-same SQLite file and saved client identifiers. The recovered client retries
-its delivery, reads missed messages, and waits for the original exchange.
-
-Run the process scenario without provider credentials:
-
-```sh
-pnpm --filter @ambionframework/ambion exec vitest run test/reconnect-process.test.ts
-```
-
-The process test uses a scripted model and an explicit clock. It verifies
-process and storage recovery; it does not verify a provider's interrupted
-network request. The site demo resumes an evicted runtime inside one process;
-its product state and workspace stay in memory.
-
-**The live tier also crosses a real process boundary.**
-[`restart.test.ts`](../packages/ambion/test/live/restart.test.ts) records a
-real provider contribution and waits for that activation to release. It then
-kills Node while another activation holds a confirmed lease. A fresh process
-opens the same SQLite database, resumes the room, and retries the original
-delivery. System-clock alarms expire the lost lease and recover pending work.
-The test checks the original contribution, exchange ID, single question,
-single human arrival, and recovered agent response.
-
-Run it with the configured provider credential:
-
-```sh
-pnpm --filter @ambionframework/ambion test:live test/live/restart.test.ts
-```
-
-The fixture holds a lease claim response to make the interruption point
-observable. It sets `limits.lease.ttl` to five seconds and
-`limits.activation.backoff` to zero. It does not preserve a provider
-connection across the kill or claim exactly-once model execution.
-
 ## Separate execution and the Cloudflare reference
 
 **Execution hosts need their own agent code and resources.** The JSON
@@ -265,33 +211,25 @@ workspace is not automatically available in a Durable Object.
 
 ## Operational boundaries
 
-**A lease fences room contributions.** Tools can repeat after failure or
-continue briefly after cancellation. Applications own effect idempotency and
-external transaction rules. An exchange close certifies a discussion boundary;
-it does not certify the correctness of each contribution.
+**Applications own effect idempotency.**
+[Durability](durability.md#5-what-the-room-does-not-promise) states what a
+lease fences and what an exchange close certifies.
 
 **Recovery depends on execution placement.** A dead local runner and a
 remote runner with a valid lease require different handling. Lease expiry and
 host topology affect recovery time.
 
 **Control and observation belong to the running room.** Await `cancel()` and
-`stop()` before reporting their durable work complete. See the
-[cancellation contract](durability.md#cancellation). Exchange handles do not
-provide independent cancellation.
-Subscriptions belong to one host. Ambion includes no durable subscription
-service across processes.
+`stop()` before reporting their durable work complete
+([cancellation](durability.md#cancellation)). Exchange handles do not provide
+independent cancellation. Subscriptions belong to one host. Ambion includes
+no durable subscription service across processes.
 
-**Call deadlines and execution limits have different scopes.**
-`limits.call.timeout` bounds each executor call to the room.
-`limits.call.attempts` bounds claim and release retries. A lost answer can
-follow a successful remote write; the journal still decides which
-contributions were accepted.
-
-Monitor `port_error` for failed or uncertain delivery. Unclaimed work stays
-pending and retries while eligible, including after a long shutdown. Execution
-retry limits apply after a claim. Use `cancel()` or unseat the affected agent when
-the application must end pending work. See the
-[call contract](durability.md#executor-calls-and-unclaimed-work).
+**Monitor `port_error` for failed or uncertain delivery.** Unclaimed work
+stays pending and retries while eligible, including after a long shutdown.
+Use `cancel()` or unseat the affected agent when the application must end
+pending work. [Durability](durability.md#executor-calls-and-unclaimed-work)
+states the call contract and [Limits](limits.md) the values.
 
 **History and work can grow.** Full history remains in storage and replay.
 Activation deadlines and retry limits do not bound the total exchange duration.
@@ -299,5 +237,6 @@ Continuing contributions can keep a discussion open.
 
 Ambient rooms remain available between interactions. The room returns a
 scheduled say on the host's clock, and the Cloudflare room object on its
-alarm. A host that wants a wake calls `room.post`. Browser-only execution, a managed service, arbitrary edge-platform
-support, and turnkey deployment commands are outside the current scope.
+alarm. A host that wants a wake calls `room.post`. Browser-only execution,
+a managed service, arbitrary edge-platform support, and turnkey deployment
+commands are outside the current scope.

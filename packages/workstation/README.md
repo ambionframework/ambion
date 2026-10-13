@@ -56,30 +56,6 @@ const lab = openWorkspace({
 | `idleTimeout`   | Seconds a connection may stay with no environment or endpoint open. Processes and open endpoints hold it. 300 by default |
 | `credentialFor` | The username and private key of an agent, or of the host account `<name>-host`                                           |
 
-**A workstation exposes private endpoints.** The `machine` field
-names `server`. The port passed to `endpoints.forward` is the remote HTTP service
-port. `options.port` is the SSH login port. The transport URL uses a
-temporary host loopback port. The private URL is an HTTP root. The workspace
-exports the `WorkspaceEndpoint` and `WorkspaceEndpoints` types from its root entry.
-The owner runs a server as an ordinary process from its Git
-repository, and any agent reads it with `fetch`.
-
-```ts
-const backend = workstationBackend(options);
-if (!backend.endpoints) throw new Error('This backend has no endpoints.');
-
-const transport = await backend.endpoints.forward({ name: 'instruments' }, 43127);
-try {
-  const response = await fetch(transport.url);
-  await response.text();
-} finally {
-  await transport.close();
-}
-```
-
-The caller closes each successful transport. An abort signal cancels
-establishment. It does not close a transport after `open` succeeds.
-
 ## The git backend
 
 `workstationGitBackend(options)` returns a `WorkstationGitBackend`. Pass it
@@ -90,8 +66,7 @@ opens no port.
 
 ```ts
 import { readFile } from 'node:fs/promises';
-import { openWorkspace } from '@ambionframework/workspace';
-import { fromDirectory } from '@ambionframework/workspace';
+import { fromDirectory, openWorkspace } from '@ambionframework/workspace';
 import { workstationBackend, workstationGitBackend } from '@ambionframework/workstation';
 
 // `layout` and `credentialFor` are the options of the example above.
@@ -117,16 +92,17 @@ const lab = openWorkspace({
 });
 ```
 
-| Option           | What it is                                                                             |
-| ---------------- | -------------------------------------------------------------------------------------- |
-| `server`, `port` | The address of the server, the same as for the bash backend. The port is 22 by default |
-| `hostKey`        | The SHA-256 fingerprint of the server's host key. The backend refuses any other        |
-| `account`        | The username and private key of the git account                                        |
-| `root`           | The folder of the repositories, in the account's home. `repos` by default              |
-| `alias`          | The host name in every clone URL. `ambion-git` by default                              |
-| `templates`      | The templates, by name                                                                 |
-| `credentialTtl`  | Whole seconds an agent key lives. 3600 by default                                      |
-| `idleTimeout`    | Seconds the git account's client may stay unused. 300 by default                       |
+| Option           | What it is                                                                                      |
+| ---------------- | ----------------------------------------------------------------------------------------------- |
+| `server`, `port` | The address of the server that holds the git account. The port is 22 by default                 |
+| `hostKey`        | The SHA-256 fingerprint of the server's host key. The backend refuses any other                 |
+| `account`        | The username and private key of the git account                                                 |
+| `root`           | The folder of the repositories, in the account's home. `repos` by default                       |
+| `alias`          | The host name in every clone URL. `ambion-git` by default                                       |
+| `templates`      | The registrations of the read-only templates, by name. The shape is the one of `justGitBackend` |
+| `shared`         | The registrations of the shared repositories, by name                                           |
+| `credentialTtl`  | Whole seconds an agent key lives, 1 or more. 3600 by default                                    |
+| `idleTimeout`    | Seconds the git account's client may stay unused. 300 by default                                |
 
 **The git backend issues and rotates the git key of each agent.** At each
 `connect`, the bash backend writes the key, a `known_hosts` file, and an
@@ -138,17 +114,6 @@ only from the loopback address, until it expires.
 **The host provisions every account and the key of each account.** The
 bash backend stores, issues, and rotates no account key.
 
-**OpenSSH permits local forwards to workstation loopback services.** The
-SSH account configuration must allow local forwarding and restrict its
-destination to `127.0.0.1:*`. For example, an applicable `Match` block uses:
-
-```text
-AllowTcpForwarding local
-PermitOpen 127.0.0.1:*
-```
-
-The backend reports an explicit error when OpenSSH refuses a forward.
-
 - **One account for each agent and for `<name>-host`,** each with a
   login shell that runs a command, and a home of mode `0700`.
 - **`bash` and a `setsid` that has `--wait`,** from util-linux.
@@ -156,25 +121,14 @@ The backend reports an explicit error when OpenSSH refuses a forward.
   to it, with mode `2770` and `setfacl -d -m g::rw`.
 - **`layout.rooms` and `layout.snapshots` belong to the host account,**
   with mode `2750` and the same group.
+- **Local forwards to the loopback,** for the endpoints of processes: set
+  `AllowTcpForwarding local` and `PermitOpen 127.0.0.1:*` for each account.
+  [Workstation](https://github.com/ambionframework/ambion/blob/main/docs/workstation.md) states the error that a refused
+  forward gives.
 
 **The git backend needs one more account and one `Match` block.**
-
-- **One git account, such as `lab-git`,** with a login shell of `bash`, a
-  home of mode `0700`, and no place in the agents' group. The host's
-  key for it goes in `~/.ssh/authorized_keys`.
-- **A `Match` block, last in `sshd_config`,** that adds the file the
-  backend writes:
-
-  ```text
-  Match User lab-git
-    AuthorizedKeysFile .ssh/authorized_keys .ssh/authorized_keys.ambion
-  ```
-
-- **`AllowUsers`, when it is set,** names the git account.
-- **`git` and `openssh-client`** on the server. An agent runs `ssh` to
-  reach the git account.
-- **OpenSSH 7.7 or newer,** for the `expiry-time` option of a key line.
-- **GNU coreutils and util-linux** for `mv -T`, `date -d`, and `flock`.
+[Workstation git](https://github.com/ambionframework/ambion/blob/main/docs/workstation-git.md#prepare-the-server) lists
+the steps.
 
 [`test/sshd/setup.sh`](https://github.com/ambionframework/ambion/blob/main/packages/workstation/test/sshd/setup.sh) does each step on a disposable
 machine.

@@ -3,11 +3,181 @@
 An executor runs one agent's model loop for one activation. The room and the
 driver own the record, the lease, the rules, and the state of each activation.
 An executor owns one harness: the model call, where the tools run, and the
-steps it reports. [The README](../README.md) holds the positioning. This
-page holds the contract between the driver and an executor: the pass, the
-room tools, exchange continuity, failure classification, the step
-vocabulary, and the way to write an adapter. [The Pi guide](pi.md), [the Claude guide](claude.md), and
-[the Codex guide](codex.md) hold what is specific to one adapter.
+steps it reports. [The README](../README.md) holds the positioning.
+
+This page has two parts. **Use an executor** serves a host that picks an
+executor and wires it into a room. **The contract** serves a reader who writes
+an adapter or needs the rules between the driver and an executor: the pass,
+the room tools, exchange continuity, failure classification, the step
+vocabulary, and the way to write an adapter. [The Pi guide](pi.md), [the
+Claude guide](claude.md), and [the Codex guide](codex.md) hold only what
+differs per adapter.
+
+**Use an executor**
+
+- [Pick an executor](#pick-an-executor)
+- [Install](#install)
+- [Options every executor takes](#options-every-executor-takes)
+- [Wire an execution](#wire-an-execution)
+- [Sign in](#sign-in)
+- [Troubleshooting](#troubleshooting)
+- [Test with the scripted executor](#test-with-the-scripted-executor)
+
+**The contract**
+
+- [The executor contract](#the-executor-contract)
+- [The pass contract](#the-pass-contract)
+- [The hosting entry exports](#the-hosting-entry-exports)
+- [The prompt the driver renders](#the-prompt-the-driver-renders)
+- [How an activation runs](#how-an-activation-runs)
+- [The room tools](#the-room-tools)
+- [The step vocabulary](#the-step-vocabulary)
+- [The trace log](#the-trace-log)
+- [Exchange continuity](#exchange-continuity)
+- [Failure classification](#failure-classification)
+- [The harness matrix](#the-harness-matrix)
+- [How to write an adapter](#how-to-write-an-adapter)
+- [The conformance suite](#the-conformance-suite)
+
+## Use an executor
+
+### Pick an executor
+
+**Three executor kinds ship.** A room can run seats of several kinds.
+
+| Kind   | Package                   | The loop runs in                        | Pick it for                                                                                    |
+| ------ | ------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Pi     | `@ambionframework/pi`     | The host process, on the Pi harness     | Any provider of the Pi registry, tools in process, seats apart from the room, scripted streams |
+| Claude | `@ambionframework/claude` | A Claude Code child process of the host | The Claude Code loop on a Claude model                                                         |
+| Codex  | `@ambionframework/codex`  | A `codex app-server` child process      | The Codex loop on an OpenAI key or a ChatGPT subscription                                      |
+
+**A seat of any kind has no tool beyond the room tools and your tools.** Files
+and a shell come from the workspace tools in `bundles`.
+[Trust](trust.md#what-each-harness-exposes) states what each harness exposes.
+Claude and Codex spawn a process, so the host must be able to run one. The
+Cloudflare adapter builds its seats on Pi.
+
+### Install
+
+```sh
+npm install @ambionframework/ambion @ambionframework/journal @ambionframework/pi
+```
+
+**Replace `pi` with `claude` or `codex` for another kind.** Every package
+needs Node 22.19 or newer. The packages install from npmjs with no token. A
+dev build of `main` installs from GitHub Packages; see
+[Toolchain](toolchain.md#9-release-and-publishing). The kernel imports no
+model library, so each package brings its own harness at an exact version.
+
+### Options every executor takes
+
+**`pi()`, `claude()`, and `codex()` return a frozen executor of their kind.**
+The kernel validates the shared fields, which are `ExecutorBaseOptions`. Each
+adapter also requires `model` and adds options of its own. The adapter page
+lists them.
+
+| Option                 | Required | Default                      | Meaning                                                                                                |
+| ---------------------- | -------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `instructions`         | Yes      | None                         | The private guidance of the agent.                                                                     |
+| `tools`                | No       | None                         | The tools of the agent, from `defineTool`. They run in the host process.                               |
+| `bundles`              | No       | None                         | Tool bundles. Their guidance joins the prompt after the respond policy.                                |
+| `compose`              | No       | `quickjsRuntime()`           | The `compose` and `describe` tools of the seat: a runtime and optional limits ([Compose](compose.md)). |
+| `respondPolicy`        | No       | `DEFAULT_RESPOND_POLICY`     | The respond policy. It replaces the default.                                                           |
+| `summaryPolicy`        | No       | `DEFAULT_SUMMARY_POLICY`     | The summary policy. It replaces the default.                                                           |
+| `activationTokenLimit` | No       | The whole record             | The token limit of the record one activation reads. A positive integer.                                |
+| `estimateTokens`       | No       | `Math.ceil(text.length / 4)` | A function that counts the tokens of a text. It needs the limit.                                       |
+
+**`estimateTokens` is a function that the room runs.** The room windows the
+record with it. The definition throws when `estimateTokens` has no
+`activationTokenLimit`, when the limit is not a positive integer, and when
+`estimateTokens` is not a function. [History and limits](room.md#history-and-limits)
+states the rule.
+
+### Wire an execution
+
+**`x()` defines the executor of one agent. `xExecution()` gives a room or a
+runtime the services that run it.** Here `x` is `pi`, `claude`, or `codex`.
+Pass the execution as `execution` to `startRoom`, `resumeRoom`, or
+`createRuntime`. A room with several kinds takes a list, such as
+`[piExecution(), claudeExecution()]`. A host with no special need calls
+`xExecution()` with no argument.
+
+**`xExecution(options)` configures the services of one kind.** Each adapter
+page lists its options: the binary, the environment, the place of the
+sessions, and the sign-in. The runtime supplies the clock, the call limits,
+the trace limits, and the logger. [The executor contract](#the-executor-contract)
+states how a room resolves an execution.
+
+### Sign in
+
+**A seat reads its credential from the host.** The adapter page names the
+variable or the stored sign-in. These rules hold for every kind:
+
+- **A refused sign-in is a permanent failure.** The room does not retry it.
+- **A subscription has its own usage limit.** A limit that the provider
+  reports is a permanent failure.
+- **The cost on a `usage` step is notional for a subscription.** A
+  subscription bills nothing per token. Codex reports no cost.
+- **A provider may restrict a consumer subscription outside its own
+  clients.** Read the terms first. They are the choice of the account owner.
+
+| Kind   | Key                  | Subscription                                           |
+| ------ | -------------------- | ------------------------------------------------------ |
+| Pi     | `<PROVIDER>_API_KEY` | `loginPi` once, then `piExecution({ credentials })`    |
+| Claude | `ANTHROPIC_API_KEY`  | `claude setup-token`, then `CLAUDE_CODE_OAUTH_TOKEN`   |
+| Codex  | `CODEX_API_KEY`      | `codex login`, linked into the Codex home of the seats |
+
+### Troubleshooting
+
+**These symptoms hold for every kind.** The adapter page lists the rest.
+
+| Symptom                                                    | Cause                                                                                                                                                                   |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each seat fails at once with `no_execution`                | No supplied execution serves the kind of the seat. Pass the `xExecution()` of the kind to the room or runtime.                                                          |
+| `Cannot run an executor of kind 'a': this seat needs 'b'.` | A seat of kind `a` reached the executor of kind `b` through an execution with no kind. Pass the execution of each kind.                                                 |
+| The seat is abandoned after one attempt                    | A permanent failure. Read the `error` event. Check the credential, the credit, and the usage limit.                                                                     |
+| `An agent estimateTokens needs an activationTokenLimit.`   | `estimateTokens` is set with no limit.                                                                                                                                  |
+| The agent never speaks                                     | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.                                                                    |
+| A say returns `Not delivered: the room moved`              | The freshness rule refused a say against newer record. The model reads the new messages, then says its message again unless they already say it or make it unnecessary. |
+| A steer shows `consumed: false`                            | The pass ended before the harness took the line. The next delta carries it.                                                                                             |
+| The activation ends with `stop: 'length'`                  | The last model message hit a length limit. This is no failure. Shorten the record with `activationTokenLimit`.                                                          |
+| A resumed seat starts a fresh session                      | The store lost the session: a new disk, a changed directory, or an evicted seat. The room record holds the exchange, and the release records the new id.                |
+
+### Test with the scripted executor
+
+**`scripted(script)` runs a room with no model, no key, and no process.**
+`@ambionframework/ambion/testing` exports it. The execution has no kind, so
+it serves every seat. A script is a function of the step, the seat, and the
+request count. It returns a reply built with `say`, `callTool`, `schedule`,
+`seat`, `spend`, or `quiet`, and `byAgent` routes a script by seat. `settled(room)`
+waits for the room, and `fakeClock` moves time by hand.
+
+**The scripted executor also reads the room answer of a commit.** A script
+branches on a short answer, such as `delivered`, `missed`, or `stale: <why>`.
+The result holds only the text that a model reads, and the scripted executor
+makes no call to the room. The driver keeps the answer beside each result for
+the scripted executor alone. The hosting entry does not export it.
+
+**An own tool of the seat can throw.** The scripted executor records the
+`tool_result` step with the error, and the script reads the message in
+`step.results` as the text of the result. The activation goes on, as it does
+with Pi, Claude, and Codex. A script that throws a `ScriptedFailure` ends the
+pass with the cause it names.
+
+**The scripted executor proves the room. A scripted harness proves the
+adapter.** Each adapter runs its real harness against a stand-in for the
+provider: Pi through a scripted stream ([Pi](pi.md#testing)), Claude through a
+fake executable ([Claude](claude.md#testing)), and Codex through a scripted
+model ([Codex](codex.md#testing)). `piExecutorFixture` from
+`@ambionframework/pi/testing` and `claudeExecutorFixture` from
+`@ambionframework/claude/testing` each give `executorConformance` a fixture
+([The conformance suite](#the-conformance-suite)). Codex keeps its fixture in
+its tests.
+
+**A scripted run shows nothing about the provider.** It cannot show real
+payloads, price tables, token counts, the length of a real context, or what a
+real model says. The live tier of each package covers those claims and costs
+money.
 
 ## The executor contract
 
@@ -85,53 +255,8 @@ steps, resumes a vendor session, hosts the tools, and reports the signal
 that the model consumed input.
 
 **An `ActivationOpener` is a function of the activation.** It takes an
-`ExecutorActivation` and returns a `RunningActivation`. The activation
-holds what serves the whole activation, in these properties:
-
-| Property          | What it is                                                                              |
-| ----------------- | --------------------------------------------------------------------------------------- |
-| `id`              | The activation id.                                                                      |
-| `trace`           | A `StepSink`: its `record(step)` takes the steps that the executor owns.                |
-| `signal`          | The `AbortSignal` of the activation: the room, the driver, or a room tool cuts it.      |
-| `readThrough`     | The position the driver holds as read. A harness that keeps a session writes it there.  |
-| `read(range)`     | The model consumed `range`, `{ after, through }`: a prompt, a delta, or a steered line. |
-| `delivered(call)` | The result of the tool call `call` reached the model.                                   |
-| `callId(tool)`    | The id of the next call of `tool`, for a harness that cannot see the id of a call.      |
-
-**`pass` receives what the driver decides for one pass.** `Pass` holds
-`kind`, `view`, and `after` for a delta, as `PassInput` does, and these
-properties:
-
-| Property        | What it is                                                                                     |
-| --------------- | ---------------------------------------------------------------------------------------------- |
-| `mechanism`     | How a room works. It depends on the kernel version alone.                                      |
-| `agent`         | The seat's part: the name, the respond policy, the identity, and the instructions.             |
-| `record(after)` | The record the pass reads, rendered, with the range it holds. `undefined` when nothing is new. |
-| `resumeId`      | The id of the vendor session to resume, when `spec.resume` names the executor kind.            |
-| `tools`         | The room tools that the purpose grants, then the tools of the definition.                      |
-
-**The running activation reports back.** `RunningActivation` has these properties:
-
-| Property                   | What it does                                                                        |
-| -------------------------- | ----------------------------------------------------------------------------------- |
-| `pass(pass)`               | Runs one pass, and returns a `PassResult`.                                          |
-| `session`                  | The id of the vendor session, for the release. Absent when the executor keeps none. |
-| `steer?(after, seq, line)` | Delivers a line to a live pass. Absent when the executor cannot.                    |
-| `close?()`                 | Frees a held process. The driver calls it once, after the release.                  |
-
-**The driver records the session under the executor kind.** The release
-records `{ kind, id }`, where `kind` is `definition.executor.kind`,
-such as `pi`. A running activation with no `session` id records none.
-
-**`pass` returns a `PassResult`.** It has these fields:
-
-| Field     | What it is                                                                                          |
-| --------- | --------------------------------------------------------------------------------------------------- |
-| `failed`  | Whether the pass failed.                                                                            |
-| `cause`   | On failure: `permanent` or `transient`. It tells the room whether a retry can pass.                 |
-| `message` | On failure: what went wrong, for the `error` event and the `end` step.                              |
-| `error`   | On failure: the error that the `error` event carries. Absent, the driver builds one from `message`. |
-| `stop`    | `'length'` when the model reached a length limit. The pass did not fail.                            |
+`ExecutorActivation` and returns a `RunningActivation`. `contract.ts` holds
+the fields of `ExecutorActivation`, `Pass`, and `RunningActivation`.
 
 **A running activation follows these rules.** The driver reads it at fixed
 points.
@@ -144,8 +269,10 @@ points.
   ends. The tool effects of the old pass still land, such as bash, git, a
   process, or a network call. An executor must honor `signal`.
 - **The driver reads `session` after the last pass.** Keep the id of the
-  vendor session there until the driver calls `close`. The room hands it
-  to the next activation as `spec.resume`, and never reads it.
+  vendor session there until the driver calls `close`. The release records
+  `{ kind, id }`, where `kind` is `definition.executor.kind`. A running
+  activation with no `session` id records none. The room hands the id to the
+  next activation as `spec.resume`, and never reads it.
 - **Every pass holds the same tool values.** The driver binds the tools on the
   first pass, so an adapter can host them once for the activation.
 
@@ -166,25 +293,19 @@ states the commit-freshness promise.
 
 **`@ambionframework/ambion/hosting` exports the execution protocol.** The
 main entry names none of it. Journal events and projected lease state stay
-internal. Participant views omit `sessionId`.
+internal. Participant views omit `sessionId`. The `hosting.ts` file lists the
+protocol types with their TSDoc.
 
-| Export                   | What it is                                                                                                                                                                                                                                                                       |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Execution`              | What a runtime or a room takes: the `kind` that it serves, and its connector                                                                                                                                                                                                     |
-| `ExecutionHost`          | What the runtime gives a connector: the clock, the storage, the limits, and the logger                                                                                                                                                                                           |
-| `ConnectorRequest`       | What the room gives for one seat: the room and seat names, the definition, and `emit`                                                                                                                                                                                            |
-| `AgentPort`              | The side that the room calls: `wake`, `steer`, and `cut`                                                                                                                                                                                                                         |
-| `RoomProtocol`           | The side that a seat calls: `view`, `commit`, and `lease`                                                                                                                                                                                                                        |
-| `AgentRunner`            | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends. `recover(activation)` releases as failed a run that the host lost                                                                                                                   |
-| `localExecution`         | Builds one execution of one kind, whose port is an `AgentRunner` in this process                                                                                                                                                                                                 |
-| `hostingOf`              | The state of a runtime: an `ExecutionHost` with the journal namespace, the executions, and `evict`                                                                                                                                                                               |
-| `visitOf`                | The visit of a person whom the record of a running room holds present. It writes nothing                                                                                                                                                                                         |
-| `describeExecutor`       | The neutral half of an executor definition, which an executor kind extends with its fields. It appends the `compose` and `describe` tools when `compose` is an object. An absent field adds none. `pi()`, `claude()`, and `codex()` fill an absent field with `quickjsRuntime()` |
-| `invokeTool`             | Runs one direct call of a tool: prepares and checks the arguments, then invokes. It hands the step sink and the room tools to the `compose` tool alone                                                                                                                           |
-| `invokeChecked`          | The same call for a harness that prepared and checked the arguments already, as Pi does                                                                                                                                                                                          |
-| `present`, `pickPresent` | The option fields that hold a value, which an executor kind spreads into its executor                                                                                                                                                                                            |
-| `Executor`               | The value in an agent definition: `kind`, `instructions`, `tools`, and the fields that the room reads                                                                                                                                                                            |
-| `ActivationOpener`       | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `RunningActivation`                                                                                                                                                |
+- **`describeExecutor`** builds the neutral half of an executor definition,
+  which an executor kind extends with its fields. It appends the `compose`
+  and `describe` tools when `compose` is an object. An absent field adds none.
+  `pi()`, `claude()`, and `codex()` fill an absent field with
+  `quickjsRuntime()`.
+- **`invokeTool`** runs one direct call of a tool: it prepares and checks the
+  arguments, then invokes. It hands the step sink and the room tools to the
+  `compose` tool alone.
+- **`invokeChecked`** makes the same call for a harness that prepared and
+  checked the arguments already, as Pi does.
 
 **`RoomProtocol.view(activation, message?)` takes no range.** The room
 serves the record windowed to its cap and to the token limit of the seat,
@@ -318,22 +439,9 @@ harness.** Each executor kind adapts them to its own tool shape.
 **The result of a room tool holds the content that the model reads.**
 `isError` marks an error result. `terminate` marks an activation that has
 nothing more to do: an `unknown` or `stale` answer, or the last answer of a
-summary activation.
-
-**The scripted executor also reads the room answer of a commit.** A script
-of `@ambionframework/ambion/testing` branches on a short answer, such as
-`delivered`, `missed`, or `stale: <why>`. The result holds only the text
-that a model reads, and the scripted executor makes no call to the room.
-The driver keeps the answer beside each result, for the scripted executor
-alone. The hosting entry does not export it, and no other executor reads
-it.
-
-**The scripted executor returns a tool error to the script.** An own tool
-of the seat can throw. The scripted executor records the `tool_result` step
-with the error, and the script reads the message in `step.results` as the
-text of the result. The activation goes on, as it does with Pi, Claude, and
-Codex. A script that throws a `ScriptedFailure` ends the pass with the
-cause it names.
+summary activation. `carriesRecord` marks content that holds lines of the
+record the model has not read, so a `compose` call shows it in its own
+result.
 
 **`say` commits a `said` intent.** It carries `readThrough` and takes the
 tool call id as its commit key. It accepts `text`, `to`, and `refs`. The
@@ -391,8 +499,8 @@ every tool of the definition does.
 executor records the steps, and raises no tool event.
 
 **The executor hosts the tools.** Pi runs them in its harness, Claude in an
-MCP server in the process, and Codex as dynamic tools of its thread. A harness that cannot see the id of a call
-takes it with `callId(tool)`: the oldest `tool_call` step of that tool that
+MCP server in the process, and Codex as dynamic tools of its thread. A harness
+that cannot see the id of a call takes it with `callId(tool)`: the oldest `tool_call` step of that tool that
 no call took yet, or a fresh id when none waits. A step with a `parent` is
 never that step. A nested `bash` call of `compose` cannot give its id to a
 direct `bash` call of the same batch. A `tool_result` step ends
@@ -409,15 +517,15 @@ definition:
 - The harness runs a batch in turn when a tool sets `executionMode` to
   `sequential`.
 - The harness gives the tool `onUpdate`, and the abort signal of the pass.
-- The harness keeps `details` and `terminate` of the result. A `BoundTool`
-  gives the content alone.
+- The harness keeps `details` of the result. A `BoundTool` result has no
+  `details`.
 
 Pi builds each tool from its `AmbionTool`, and `toolContext` gives each call
 the context that the driver gives it.
 
 ## The step vocabulary
 
-**A step is one thing an activation did.** The vocabulary has twelve kinds,
+**A step is one thing an activation did.** The vocabulary has thirteen kinds,
 and every executor kind shares it. A step is plain JSON. The trace stamps
 each step with `activation`, `pass`, `at`, and `index`. `index` counts from
 zero in each pass. The `TraceStep` type is the stamped form. `Step` in
@@ -426,6 +534,7 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | Step          | Recorded by | Meaning                                                                                                     |
 | ------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
 | `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                               |
+| `input`       | driver      | The text the driver renders: `part` is `system` or `record`. The `omit` policy drops it.                    |
 | `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                             |
 | `text`        | executor    | A block of model text. `final` closes the block.                                                            |
 | `tool_call`   | executor    | A tool starts, with its input. `parent` names the `compose` call that made a nested call.                   |
@@ -556,6 +665,18 @@ starts fresh from the room record. The activation does not fail, and the
 release records the new id. The record is the only state the room
 promises to keep.
 
+**Each adapter keeps its own id, store, and fallback.**
+
+| Kind   | The recorded id                       | Where the session lives                       | First input of a resumed activation          | Fresh start when                                                              |
+| ------ | ------------------------------------- | --------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------- |
+| Pi     | The activation that began the session | A JSONL storage under `sessionDir`, or memory | The delta                                    | The store cannot open or read the session, or the harness cannot restore it   |
+| Claude | The id of the SDK session             | The config home of the seat                   | The whole view, after the restated seat part | The SDK cannot resume the id                                                  |
+| Codex  | The id of the thread                  | The `sessions` directory of the Codex home    | The view alone, on `thread/resume`           | `thread/resume` fails, or the bound tools differ from the tools of the thread |
+
+The adapter pages hold the detail: [Pi](pi.md#exchange-continuity),
+[Claude](claude.md#exchange-continuity), and
+[Codex](codex.md#exchange-continuity).
+
 **Freshness governs speech in a kept session.** A kept session does not
 let a seat commit over a record it has not read.
 [Durability](durability.md#journal-format) owns the journal field and the
@@ -579,12 +700,12 @@ room does with the cause.
 
 **One classifier serves every executor kind.** `classifyCause({ text, status })`
 from `@ambionframework/ambion/hosting` holds the text set of every provider
-that a shipped executor kind reaches. The patterns are `credit balance`,
-`billing_error`, `usage limit`, `insufficient_quota`, `exceeded your
-current quota`, `authentication_error`, `permission_error`,
-`invalid_request_error`, an invalid API key, `x-api-key`, `unauthorized`,
-`permission denied`, `not logged in`, `missing bearer`, `invalid_grant`, and
-`provider is not configured`. OpenAI sends a spent quota with a 429, and only the text tells it from a rate limit.
+that a shipped executor kind reaches: credit, billing, quota, usage limit,
+authentication, permission, an invalid request, an invalid API key, an
+`x-api-key` header, an unauthorized reply, a missing login, and an expired
+sign-in. OpenAI sends a spent quota with a 429, and only the text tells it
+from a rate limit. The `PERMANENT_TEXT` constant in
+`packages/ambion/src/execution/failure.ts` holds the exact patterns.
 
 **A status decides the cause when no text matches.** An uncertain failure
 is transient, so the room retries it.
@@ -612,24 +733,25 @@ that the driver cannot recover from, raises one `error` event with its
 cause. The event carries the `error` of the pass result, or an error built
 from its `message`. No executor raises one.
 
-**Each executor kind brings its own source of a status.**
-[Pi](pi.md#failure-classification), [Claude](claude.md#failure-classification),
-and [Codex](codex.md#failures) name the status source of each executor kind.
+**Each executor kind brings its own source of a status.** The cause of a
+failure that the adapter raises itself differs too.
+
+| Kind   | Reads a status from                                       | Other permanent causes                                                          |
+| ------ | --------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Pi     | The last provider diagnostic that holds a status          | An unknown model, and the harness reason `no_model`                             |
+| Claude | `api_error_status` of a failed result                     | `error_max_budget_usd`, and an executable older than the version floor          |
+| Codex  | `httpStatusCode` in the `codexErrorInfo` of a failed turn | A missing binary, a model with no catalog entry, and a login that Codex refuses |
+
+Free text never gives a status, because a rate limit names a token count that
+reads like one. The adapter pages hold the detail:
+[Pi](pi.md#failure-classification),
+[Claude](claude.md#failure-classification), and [Codex](codex.md#failures).
 
 ## The harness matrix
 
-**Three executor kinds ship today.** Pi, the Claude Agent SDK, and the
-Codex `app-server` implement the contract. The Anthropic SDK tool runner is an
-anticipated executor kind. No package for it exists yet.
-
-| Kind                      | Package                   | Loop owner | Steer during a pass           | Status      |
-| ------------------------- | ------------------------- | ---------- | ----------------------------- | ----------- |
-| Pi harness                | `@ambionframework/pi`     | Harness    | Yes, as a queued write        | Shipped     |
-| Claude Agent SDK          | `@ambionframework/claude` | Harness    | Yes, on the SDK `user` echo   | Shipped     |
-| Codex `app-server`        | `@ambionframework/codex`  | Harness    | Yes, on the `turn/steer` echo | Shipped     |
-| Anthropic SDK tool runner | None                      | Caller     | Between passes                | Anticipated |
-
-The [Pi](pi.md), [Claude](claude.md), and [Codex](codex.md) guides describe the packages.
+**All three shipped kinds take a steer into a live pass.** Pi takes it as a
+queued write, Claude on the SDK `user` echo, and Codex on the `turn/steer`
+echo.
 
 **An executor that cannot steer still passes.** Its `readThrough` advances at
 the pass boundary, and the driver holds a steer for the next pass. The
@@ -664,12 +786,7 @@ executor kind. `@ambionframework/claude` is the worked example, and
    consumes a range, and `delivered(call)` when a tool result reaches it,
    and on nothing earlier. [How an activation runs](#how-an-activation-runs)
    states the events. Declare `steer` only when the harness takes a line
-   into a live pass. The driver calls `steer` at any moment after it calls
-   `pass` and before that pass settles, also before the body of `pass`
-   reaches its first `await`. Hold a line that the harness cannot take yet,
-   deliver it when the harness can, and drop what you hold when `pass`
-   settles. Call `read({ after, through: seq })` when the model consumes a
-   line, and record no `steer` step.
+   into a live pass.
    [The driver rule](#how-an-activation-runs) sets `consumed`.
 6. **Classify every failure.** Sort it into `permanent` and `transient`
    with `classifyCause`. Throw `PermanentError` for a fault that a retry
@@ -684,30 +801,8 @@ executor kind. `@ambionframework/claude` is the worked example, and
    the executor of an agent and a function that gives the host its
    execution. Claude offers `claude()` and `claudeExecution()`. Build the
    value with `localExecution` in the second function. The host supplies it
-   through the `execution` option of the room or runtime.
-
-```ts
-import { createRuntime, defineAgent, startRoom } from '@ambionframework/ambion';
-import { claude, claudeExecution } from '@ambionframework/claude';
-import { memoryJournals } from '@ambionframework/journal';
-
-const reviewer = defineAgent({
-  name: 'reviewer',
-  identity: 'Reads the plan and names what is missing.',
-  executor: claude({
-    instructions: 'Speak when the plan lacks evidence.',
-    model: 'claude-sonnet-5',
-  }),
-});
-
-const runtime = createRuntime({ storage: memoryJournals() });
-const room = await startRoom({
-  runtime,
-  name: 'delivery',
-  agents: [reviewer],
-  execution: claudeExecution(),
-});
-```
+   through the `execution` option of the room or runtime. [The Claude
+   guide](claude.md#a-complete-example) shows the wiring.
 
 ## The conformance suite
 
@@ -721,28 +816,10 @@ neutral plans.
 An adapter supplies an `ExecutorFixture`. `open(plan, definition)` builds
 the executor for one `ExecutorPlan`, using a fake model or a fake
 executable. `can` is an `ExecutorCapabilities` value with `steer`, `usage`,
-and `permanentFailure`. The suite drops each case that a false capability
+`permanentFailure`, and `memory`. The suite drops each case that a false capability
 gates. `close(report)` runs after each case. The report holds the name of
 the case, every room call with its answer, and every step the logger
 received.
-
-Three runs exist as evidence. The scripted executor runs the suite in
-`packages/ambion/test/executor-conformance.test.ts`. The Pi executor runs
-it on a scripted stream in `packages/pi/test/executor-conformance.test.ts`,
-through `piExecutorFixture` from `@ambionframework/pi/testing`. The Claude
-executor runs it against a fake Claude Code executable in
-`packages/claude/test/executor-conformance.test.ts`, through
-`claudeExecutorFixture` from `@ambionframework/claude/testing`. No run
-needs a key or a network.
-
-The Codex executor runs the suite in its live tier, on a real `codex` and a
-real model, in `packages/codex/test/live/conformance.test.ts`, through
-`codexExecutorFixture` in its live support. The model follows each plan
-from its instructions. It declares steer and no usage, because Codex
-takes a steer and a real model spends no planned usage. The run needs
-`CODEX_API_KEY` or a ChatGPT login, and skips without either. The package
-also runs the real `codex app-server` on a scripted model, and tests its
-mapping on notifications that a real `codex` recorded. See [Codex](codex.md).
 
 **The suite checks the pass contract.** A failed activation raises exactly
 one `error` event, and a `say` raises no tool event.

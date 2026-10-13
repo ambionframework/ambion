@@ -1,10 +1,10 @@
 # @ambionframework/just-bash
 
-The just-bash backends for an
-[Ambion](https://ambionframework.com) workspace. Each backend is a
-`BashBackend` over [just-bash](https://github.com/vercel-labs/just-bash): a
-virtual Unix filesystem and shell in the process, in memory or over a real
-directory. The `./git` entry holds a git backend over a
+The just-bash backends for an [Ambion](https://ambionframework.com)
+workspace. Each backend is a `BashBackend` over
+[just-bash](https://github.com/vercel-labs/just-bash): a virtual Unix
+filesystem and shell in the process, in memory or over a real directory. The
+`./git` entry holds a git backend over a
 [just-git](https://github.com/blindmansion/just-git) server in the process.
 
 ## Install
@@ -16,7 +16,9 @@ pnpm add @ambionframework/workspace @ambionframework/just-bash
 ## Use
 
 Pass a backend as `backend.bash`, and the file tools and the process tools of
-the workspace run on it. Each agent's home is `/home/<agent name>`.
+the workspace run on it. Each agent's home is `/home/<agent name>`. The
+simulated shell has the common coreutils, `jq` for JSON, `yq` for YAML and
+TOML, `xan` for CSV, and `sqlite3`.
 
 ```ts
 import { memoryBackend } from '@ambionframework/just-bash';
@@ -25,57 +27,37 @@ import { openWorkspace } from '@ambionframework/workspace';
 const drive = openWorkspace({ name: 'team-site', backend: { bash: memoryBackend() } });
 ```
 
-## The two backends
-
 **`memoryBackend(options)` keeps the files in memory**, for as long as the
 handle lives. `options.seed` writes files before any agent connects, and
-`readFiles()` reads every file back out without an agent. A host reaches the
-workspace's files with no tool call, which is what a real directory gives for
-free. `options.git` is the git backend, and it is optional.
+`readFiles()` reads every file back out without an agent.
 
 **`directoryBackend(root, options)` writes through to a real directory.** It
-creates the root when an operation needs it. `options.git` is the git
-backend, and it is optional. `drive.dispose()` releases the handle
-and keeps the root and its files. A host deletes the data it owns.
+creates the root when an operation needs it. `drive.dispose()` releases the
+handle and keeps the root and its files.
 
-Neither backend exposes workstation endpoints. A workspace using these backends
-has no `fetch` tool.
+Both backends accept `options.git`, the optional git backend. They expose no
+workstation endpoints, so a workspace on them has no `fetch` tool. Every
+instance runs `javascript` and `python`, so `bash` runs a script with
+`js-exec` or `python3`. No instance takes a `network` option, so `curl` and
+every other network command stay absent. These backends give no
+operating-system isolation between agents: they share every file.
 
-Agents connected to one workspace share every file. just-bash is single-user,
-so one agent can read another agent's home. The default workspace provides no
-operating-system isolation between agents or distributed ownership of a shared
-directory. Hosts own credentials and authorization for external services.
-
-Every instance runs with `javascript: true` and `python: true`, so `bash`
-runs a script with `js-exec` or `python3` beside just-bash's coreutils, `jq`,
-`yq`, `xan` and `sqlite3`. No instance takes a `network` option, so `curl`
-and every other network command stay absent.
-
-**Every instance has `git`**, from [just-git](https://github.com/blindmansion/just-git).
-It supports the common subcommands, each with a subset of the flags of real
-git. The author of a commit is the agent's name, and `git config` does not
-change it. With no git backend, `git` has no network access, so a remote is a
-path on the workspace's filesystem, such as another agent's home. With a git
-backend ([`justGitBackend`](#the-git-backend)), `git` reaches the backend's
-URL prefix alone, and the token of each request stays inside the `git`
-command. The guidance tells each agent the same.
+**Every instance has `git`**, from just-git, with a subset of the flags of
+real git. The author of a commit is the agent's name. With no git backend,
+`git` has no network access, so a remote is a path on the workspace's
+filesystem.
 
 ## The git backend
 
-**`justGitBackend(options)` runs a `just-git` server in the host's
-process.** Pass it as the `git` option of `memoryBackend` or
-`directoryBackend`. The workspace then gives each agent the `repos` and
-`fork` tools, and the `git` of each agent's shell reaches the backend's
-repositories. An agent can run `git clone` in `bash` to check out any repository
-without creating a fork. To make changes it can push, it forks a template,
-clones the fork, edits, commits, and pushes. A push persists the edits
-across a restart of the host.
+**`justGitBackend(options)` runs a just-git server in the host's process.**
+Pass it as the `git` option of a backend. The workspace then gives each agent
+the `repos` and `fork` tools, and the `git` of each agent's shell reaches the
+repositories of the backend.
 
 ```ts
 import { directoryBackend } from '@ambionframework/just-bash';
 import { justGitBackend, sqliteGitStorage } from '@ambionframework/just-bash/git';
-import { openWorkspace } from '@ambionframework/workspace';
-import { fromDirectory } from '@ambionframework/workspace';
+import { fromDirectory, openWorkspace } from '@ambionframework/workspace';
 
 const git = justGitBackend({
   storage: sqliteGitStorage('./data/lab-git.db'),
@@ -103,28 +85,13 @@ package loads no `node:sqlite`.
 | `storage`       | `sqliteGitStorage(path)`, or `sqliteGitStorage(':memory:')` for tests  |
 | `secret`        | The key of every token. A new secret revokes every token               |
 | `templates`     | The registrations, by template name                                    |
+| `shared`        | The registrations of the shared repositories, by name                  |
 | `credentialTtl` | Seconds a token lives. The default is 3600                             |
 | `onError`       | Called with a fault of the server. Absent, the backend reports nothing |
 
-**A registration updates its template.** The backend registers each
-template before its first operation. A changed source fast-forwards the
-template to a new commit, and a changed description replaces the old one.
-A fork keeps the commit it came from.
+## Documentation
 
-**No request leaves the process.** Every clone URL starts with
-`http://git.ambion.invalid`, a name that never resolves. The `git` command
-passes each request to the server in the process, with a token that no
-file holds. The two just-bash backends take a `justGitBackend` and no
-other git backend. A git backend of another package is a compile error.
-
-## Tests
-
-**`pnpm test`** runs `workspaceConformance` on both backends, and the
-tests of the adapter, the memory backend, and the `/dev` layer. It runs
-`gitConformance` on both backends under `justGitBackend`, and the tests of
-the tokens, the registration after a crash, and a restart over one file.
-Every test runs in process, with no key and no network.
-
-[Workspace](https://github.com/ambionframework/ambion/blob/main/docs/workspace.md)
-and [Git](https://github.com/ambionframework/ambion/blob/main/docs/git.md)
-hold the design contracts.
+[The workspace](https://github.com/ambionframework/ambion/blob/main/docs/workspace.md)
+states the backends and their limits.
+[Git](https://github.com/ambionframework/ambion/blob/main/docs/git.md) states
+the options of `justGitBackend`, the templates, and the tokens.

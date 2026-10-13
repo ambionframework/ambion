@@ -8,10 +8,8 @@ Workbench is a narrow build of a larger idea. The
 [Workbench repository](https://github.com/fastforwardengine/workbench) runs
 that idea as a real application on Ambion.
 
-This page describes what the example does today, on the current kernel API.
-The section [Beyond the current scope](#beyond-the-current-scope) lists the
-lab capabilities that wait for a later release in
-[the backlog](../planning/backlog.md).
+The [Workbench README](../examples/workbench/README.md) holds the run
+commands, the keys, and the terminal.
 
 ## Workbench: a lab bench for a toy Arduino kit
 
@@ -35,18 +33,20 @@ person joins a room, asks a question, and reads the summary.
 
 **One assistant coordinates three specialists.** The assistant seats
 a specialist, routes a request to a named specialist, and writes the closing
-summary. It
-uses `defineAssistant` from `@ambionframework/assistant`, seated at
-`broadcast`.
+summary. It uses `defineAssistant` from `@ambionframework/assistant`, seated
+at `broadcast`.
 
-| Agent           | Scope                                                      | Kind   |
-| --------------- | ---------------------------------------------------------- | ------ |
-| **Datasheets**  | Reads `/library` and states exact limits with their source | Pi     |
-| **Design**      | Chooses parts and values, and shows the circuit math       | Claude |
-| **Experiments** | Turns a question into a short, repeatable test plan        | Codex  |
+| Specialist      | Scope                                                      |
+| --------------- | ---------------------------------------------------------- |
+| **Datasheets**  | Reads `/library` and states exact limits with their source |
+| **Design**      | Chooses parts and values, and shows the circuit math       |
+| **Experiments** | Turns a question into a short, repeatable test plan        |
 
 Each room seats the specialists it needs. The reserve holds the rest. The
 specialists collaborate through directed messages and report once to the room.
+The seats run on three executor kinds. The
+[Workbench README](../examples/workbench/README.md#the-team) names the kind,
+the model, and the key of each seat.
 
 **Specialists do delegated work in breakout rooms.** The assistant and
 every specialist hold the one canvas bundle: `breakout`, `tell`, `archive`,
@@ -61,47 +61,20 @@ The assistant delegates a long task, and the specialists keep their narrow
 scope in the room of the person. The report of a specialist reaches the
 assistant in the parent room.
 
-**The team runs on three executor kinds.** The `seatKinds` table names the
-kind of each seat, the assistant included. The assistant and the
-datasheets specialist run on Pi. The design specialist runs on
-`@ambionframework/claude`. The experiments specialist runs on
-`@ambionframework/codex`. The workbench passes its own execution for each
-executor kind, because it checks keys and lets a test script an executor.
-
-| Kind   | Model                              | Key                 | Seats                 |
-| ------ | ---------------------------------- | ------------------- | --------------------- |
-| Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` | Assistant, datasheets |
-| Claude | `claude-sonnet-5`                  | `ANTHROPIC_API_KEY` | Design                |
-| Codex  | `gpt-5.6-luna`, reasoning `medium` | `CODEX_API_KEY`     | Experiments           |
-
-`AMBION_EXECUTOR=codex` moves the assistant to Codex.
-Any other value leaves it on Pi. The live delegation test uses this.
-
-A seat with no key reports the missing variable and does not run. The other
-seats run. The scripted tests give the Claude and Codex seats a scripted
-execution, so they need no key. The live tests skip a scenario when an
-executor kind that it uses has no key. See the
-[Workbench README](../examples/workbench/README.md) for the commands.
-
 ### One tool set, one filesystem, no native tool
 
 **Every agent holds the same tools and reaches the same filesystem, and no
 native tool of any harness is on.** One list of bundles serves every seat:
-the workspace, the lab, and the instrument tools, in that order. Each seat
+the workspace, the instrument, the widget, and the canvas tools, in that order. Each seat
 also has the `compose` tool, which is the default of the executor packages. All three
 executor kinds share one workspace instance, so a file that one agent writes is
-the file that another agent reads.
+the file that another agent reads. The workbench passes its own execution for
+each executor kind, because it checks keys and lets a test script an
+executor.
 
-| Kind   | How it enforces the guarantee                                       |
-| ------ | ------------------------------------------------------------------- |
-| Pi     | Has no native tool. The seat holds only the tools that it receives. |
-| Claude | Passes no built-in tool. No Claude definition option names one.     |
-| Codex  | Has no native tool. The seat holds only the tools that it receives. |
-
-`test/tool-set.test.ts` fails when a definition drifts from this. The live
-test `test/live/tool-set.test.ts` asks each seat for its tool list, writes a
-file with one seat and reads it with another, and asks each seat for
-`/etc/hosts`.
+`test/tool-set.test.ts` fails when a definition drifts from this.
+[Trust](trust.md#what-each-harness-exposes) states how each executor kind
+enforces it and what the live test proves.
 
 ### The shared workspace
 
@@ -122,13 +95,13 @@ this file beside the workspace directory, and the shell does not reach it.
 
 **The workspace has a git backend, `justGitBackend` of
 `@ambionframework/just-bash/git`, with its storage in `git.db`.** It holds
-one read-only template, `templates/firmware-sketch`: a pin map, an
-Arduino sketch, and a sweep of the LED resistor, from
-`examples/workbench/templates`. An agent forks it with `fork`, clones the
-fork into its home, and pushes a branch with `git` in `bash`. A peer finds the fork with `repos` and uses `git clone` in `bash` to review. A push
+three read-only templates from `examples/workbench/templates`.
+The template `firmware-sketch` holds a pin map, an Arduino sketch, and a
+sweep of the LED resistor. An agent forks a template with `fork`, clones
+the fork into its home, and pushes a branch with `git` in `bash`. A peer finds the fork with `repos` and uses `git clone` in `bash` to review. A push
 survives a restart of the host. [Git](git.md) holds the contract.
 
-**The template's sweep runs as a background process.** `sweep/sweep.sh`
+**The sweep of `firmware-sketch` runs as a background process.** `sweep/sweep.sh`
 steps the series resistor of the LED through ten values, one every 3
 seconds, and writes `sweep/results.csv`. An agent starts it with `bash`
 and a `name`, and the sweep runs past the exchange. A later exchange in the
@@ -188,71 +161,6 @@ pattern. Each room offers a suggested prompt.
 | power    | Datasheet check → budget        | Add up the kit current and confirm USB power              |
 | firmware | Template → fork → pushed branch | Fork the firmware sketch, set the pins, and push a branch |
 
-### One process, one terminal
-
-**One Node process runs the rooms and the terminal together.** The terminal
-calls the host through a typed in-process API. The example defines no HTTP
-interface.
-
-- **Lifecycle.** The rooms run while the terminal runs. When the person
-  quits, the host ends each visit, then closes the rooms. The journals and the
-  canvas rows stay on disk. The next start resumes the rooms that ran.
-- **Canvas.** The host keeps its root rooms on one canvas over `rooms.db`.
-  The canvas owns the name, the goal, the seats, and whether each room runs.
-  It resumes each running room at the start, attaches the room mirror, and
-  stops the rooms at the close. The host keeps the feed, the composer, and
-  the scenarios. The answer of a person to an approval stays a room
-  message. A breakout room is a room of the canvas with a parent, and the
-  room list shows it beside the root rooms. A person visits it like any other
-  room. A restart resumes the breakout rooms that ran, and replays the
-  notices that no journal holds.
-- **Terminal.** `src/tui.ts` is an OpenTUI application on a dark theme. It has
-  a multi-line composer with a room chip, and slash commands to switch person
-  or room, create a room, search workspace files in a side panel, watch and cancel the agents'
-  background processes with `/ps`, and stop, resume, or cancel. It shows
-  the refs of each message. It previews a snapshot, a commit, a file, or a
-  lab table, and opens a room or a message from one (see the
-  [Workbench README](../examples/workbench/README.md)). `/attach` copies a
-  local picture into the workspace, snapshots it, and cites the snapshot
-  ref on the next message; the files panel renders a picture file with
-  OpenTUI's `ImageRenderable`, and every other file stays text. Pasting a bare
-  picture path into an empty composer fills `/attach` for the person,
-  through the terminal's bracketed paste.
-  The person picks an identity on the first screen.
-- **Pins.** An agent pins a file for the people in a room with
-  `show({ name, kind, source: { type: 'file', path }, title? })`. The kinds
-  are `markdown`, `table` (a SQLite database file), and `image`. The terminal
-  draws the shown files of the open room in a side area, one after the other,
-  each with its title or name and its kind. The host reads each file as its
-  author, with the size limits of the files panel, and it checks the size
-  again on the bytes that it reads. It reads again after each widget event,
-  each room start, and the end of each activation, and it polls nothing. The
-  area draws four pins at most and says `and N more`. It marks a stopped
-  room, whose files stay as last read. `hide` removes a pin. A widget of an
-  archived breakout room draws nothing. The side area
-  draws text as text and drops terminal escapes, and it gives way to the
-  files panel and the processes panel.
-- **Actions on a pin.** `show` also takes `actions` and `for` on these
-  kinds. The side area draws each action as a button under its pin, and it
-  shows `for` as `for mira`. A widget that holds an answer reads `answered by
-<person> in #<seq>`, and its once actions read as done. Tab, then `a`, takes
-  the keys: Up and Down choose an action, Enter presses it, and Esc leaves. An
-  action with fields opens a form of text, number, boolean, and choice fields.
-  The form checks the values and shows the first problem before it sends. A
-  press calls `canvas.act` as the person through `Workbench.act`. The host
-  saves the act of each call, with its press token, until the call gives a
-  result. After a failure, the next press of the same action sends that act
-  again as the same person, so a press lands once. A refusal drops the act
-  and shows its reason alone. A `stale` result redraws the new revision, and
-  an `answered` result shows a line. A button is inactive, with the reason,
-  when `for` names another person or the room is stopped. The host reads the
-  pins again on the `widget` event, and it adds the answer to the pins on the
-  `answered` event with no new file read.
-  [Camera Chat](../examples/camera-chat/README.md) reuses `ActionPad` and
-  `ActionsView` for the `look` action of its viewfinders.
-- **Brand.** The terminal reads its colors from the repository brand kit in
-  `brand/tokens/ambion.tokens.json`.
-
 ## How the example maps onto the kernel
 
 **Every application concept in Workbench is one kernel mechanism.** The
@@ -304,76 +212,3 @@ automated test yet.
 | A sweep runs in the background past its exchange                            | A later exchange reads the sweep's state   | Scripted: Design starts `sweep/sweep.sh`, and the next exchange finds it with `ps` and waits on its handle. Live: the second summary names the handle, and the sweep exits 0                                                          |
 
 The kernel chaos tier covers a kill during work. This example does not.
-
-## Layout
-
-**One package, one process, one database, one directory.** The layout keeps
-every concern in a file a reader can open in order.
-
-```text
-examples/workbench/
-  README.md            how to run it, and what each part shows
-  package.json
-  src/
-    brand.ts           the product name and the terminal palette
-    definitions.ts     the assistant, three specialists, and the people
-    scenarios.ts       the rooms, the workspace seed, the lab schema, and the instruments
-    repositories.ts    the git backend and its firmware-sketch template
-    instrument.ts      the simulated instruments and their approval step
-    rooms.ts           the canvas of the root rooms and the host room view
-    workbench.ts       the host: open, read, watch, send, control, create, files, processes
-    names.ts           the room name and goal rules
-    sql.ts             the Sql of the journal and canvas stores over one SQLite database
-    files.ts           the workspace list, one file preview, one lab table preview, /attach, and the pins
-    pins.ts            the widget kinds, the pin of one shown file, and the removal of terminal escapes
-    attachments.ts     what /attach does, and what a pasted path names
-    refs.ts            the refs of a message: parse, resolve, and one chip line
-    session.ts         the terminal's state and commands, without OpenTUI
-    feed.ts            the room feed: one read at a time
-    commands.ts        the slash commands and their suggestions
-    timeline.ts        the record grouped into questions, threads, and summaries
-    steps.ts           the steps of an activation, and the cost of a run
-    approvals.ts       the instrument operations that wait for an answer
-    text.ts            one line of text fitted to a width, with an ellipsis
-    header-fit.ts      what the header rows show at one width
-    transcript.ts      the conversation
-    header.ts          the panel above the conversation: room, goal, people, pattern
-    composer.ts        the composer, room chip, palette rows, and paste detection
-    palette.ts         the palette state: rows, the picked row, and dismissal
-    browser.ts         the files panel state: search and the chosen file
-    files-panel.ts     the files panel beside the conversation
-    file-view.ts       the views of one file: text, markdown, table, and picture
-    pins-panel.ts      the side area of the pinned files
-    action-state.ts    the actions of a pin: focus, form, validation, press token, and result
-    widget-actions.ts  the buttons and the form of the actions, drawn in OpenTUI
-    processes.ts       the order of the processes, and the end of an output
-    process-browser.ts the processes panel state: list, choice, and cancel
-    process-panel.ts   the processes panel beside the conversation
-    database.ts        the SQLite preview: tables and their first rows
-    draw.ts            the painter: header, conversation, and composer chrome
-    keys.ts            the input: mode, browse selection, and key routing
-    tui.ts             the terminal: builds the parts and runs the loop
-    kinds.ts           the executor kind, model, and key of each seat
-    unavailable.ts     the execution of a kind that has no key
-    main.ts            the entry point
-  library/             the datasheets as text
-  templates/           the source of each git template
-  test/                scripted tests: host, session, feed, commands, timeline, text, header,
-                       recovery
-  test/live/           two scenarios on a real provider
-```
-
-The example reads the repository brand kit from the root `brand/`
-directory. It adds no brand files of its own.
-
-## Beyond the current scope
-
-**The fuller lab vision waits for later work.** The original design named
-five specialists over data resources and instruments, and a drill-down
-interface. The Instruments agent and the Data Analysis agent need
-application resources that no release schedules yet. Workbench grows into
-them later.
-
-| Deferred capability                            | Item in the backlog |
-| ---------------------------------------------- | ------------------- |
-| An Instruments agent and a Data Analysis agent | None                |

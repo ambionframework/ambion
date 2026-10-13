@@ -3,8 +3,7 @@
 **The assistant package supplies a default implementation for ordinary rooms.**
 `@ambionframework/assistant` provides `defineAssistant()`. The
 `startRoom({ assistant })` option supplies its room configuration. The
-workbench example uses both. This document defines the behavior and the
-evidence needed to evaluate it.
+workbench example uses both. This document defines the behavior.
 
 ## Responsibility
 
@@ -22,13 +21,15 @@ activation authority, freshness checks, exchange closure, and summary
 provenance. Other agents retain their existing seats and speech tools.
 The package introduces no privileged role or separate execution lifecycle.
 
-| Responsibility | Default behavior                                                                                                                                                        |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Seating        | Seat specialists whose expertise can materially affect the result. Unseat on request or on a clear change of scope.                                                     |
-| Routing        | Send one directed request to a seated specialist at `named` attention, with every constraint that is still in force.                                                    |
-| Answers        | Answer a participant that asks the assistant a question. A report is not a question. A question to the room is for the specialists. The summary reports what they said. |
-| Summaries      | Report what the specialists established, with corrections, conflicts, constraints, open questions, and unresolved work.                                                 |
-| Silence        | Send no message about a result, a report, or an acknowledgment. Steer only to stop a forbidden action.                                                                  |
+| Responsibility | Default behavior                                                                                                                                                                                                                                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Seating        | Seat specialists whose expertise can materially affect the result. Unseat on request or on a clear change of scope.                                                                                                                                                                                                  |
+| Routing        | Send one directed request to a seated specialist at `named` attention, with every constraint that is still in force.                                                                                                                                                                                                 |
+| Answers        | Answer a participant that asks the assistant a question. A report is not a question. A question to the room is for the specialists. The summary reports what they said.                                                                                                                                              |
+| Summaries      | Report what the specialists established, with corrections, conflicts, constraints, open questions, and unresolved work.                                                                                                                                                                                              |
+| Silence        | Send no message about a result, a report, or an acknowledgment. Steer only to stop a forbidden action.                                                                                                                                                                                                               |
+| Constraints    | Carry every explicit constraint of the person into each routing request and each summary. Examples are a scope, an output limit, or "do not edit files". A constraint outranks a role instruction and stays in force until the person withdraws it in words.                                                         |
+| Revisions      | Send at most one routing request to a specialist for each human request. A later request to involve, recheck, or revise a specialist is new direction and activates it once, even when an earlier result stays in the record. A revision request goes to the responsible specialist as one concise directed request. |
 
 Specialists own domain judgments. The assistant must not invent extra work
 after the request is satisfied or require every specialist contribution to
@@ -124,21 +125,20 @@ The normalization rules are:
 - Register the supplied definition under its own name.
 - Seat that agent at `broadcast` attention and select it as the summary writer.
 - Preserve explicit seating choices for all other agents.
-- Preserve existing defaults when `seats` is omitted: all defined agents start
-  at `broadcast` attention.
+- When `seats` is omitted, seat every defined agent at `broadcast`
+  ([Roster](roster.md#configuration)).
 - Treat `seats: {}` with an assistant as seating only the assistant.
 - Reject duplicate assistant names and conflicting summary or assistant
   attention settings. Do not silently replace a definition or configuration.
 - Permit matching explicit settings, although the shorthand makes them
   unnecessary.
 
-Applications that need different attention or a separate summary writer can
-use the existing explicit configuration. Omitting `assistant` preserves the
-current API behavior.
+Applications that need different attention or a separate summary writer use
+the explicit configuration without `assistant`.
 
-**Omitting `seats` starts all specialists immediately with no roster mark.**
-This preserves the existing default and permits direct specialist participation.
-Use an empty map when the assistant should select specialists from the reserve:
+**The `seats` map decides who participates at the start.** Omitting `seats`
+seats every specialist at `broadcast`, so each one participates directly. Use
+an empty map when the assistant should select specialists from the reserve:
 
 ```ts
 const runtime = createRuntime({ storage: memoryJournals() });
@@ -152,9 +152,7 @@ const room = await startRoom({
 });
 ```
 
-Only the assistant starts seated in this configuration. The two configurations
-make different choices about initial participation; the shorthand preserves
-that choice for the application.
+Only the assistant starts seated in this configuration.
 
 **The journal records the expanded ordinary composition.** The shorthand adds
 no durable assistant role or new history format. Resume still requires all
@@ -162,25 +160,6 @@ recorded agent definitions, including the assistant. A host retains the
 complete definitions for resume and preserves the recorded roster.
 
 ## Speak only when the message adds value
-
-**Repeating the user's prompt adds no value when the specialist already
-receives it.** The shared record contains the request. Seating a specialist
-gives it access to that record under the existing activation rules. The
-assistant must not automatically follow every seating operation with a
-restatement of the request.
-
-A seated specialist with `named` attention needs a directed message to activate.
-In that case, send the shortest useful request to that specialist. Reference
-the existing question and add only the scope or constraint needed for its work.
-Do not reproduce the full prompt merely to route it.
-
-**Explicit user constraints survive specialist handoffs.** Scope limits,
-selected items, output length or format, deadlines, and permissions such as
-“do not edit files” apply to every specialist. Role instructions supply
-defaults and yield to those constraints. If named activation is required,
-include the relevant constraint in the one concise directed request. When a
-human asks for a revision, combine the feedback and constraints in one request
-and do not send an acknowledgement or a second equivalent request.
 
 Set the tool's `to` field to activate a named specialist:
 
@@ -203,17 +182,6 @@ before choosing the operation.
 | A specialist asks for information that only the person can give | Stay silent. The summary asks the person for it.                        |
 | A specialist writes that it will now take a forbidden action    | Send it one short directed say that names the constraint.               |
 
-Avoid announcements, acknowledgements, repeated assignments, and
-coordination messages that create further work without advancing the
-request.
-
-**A specialist's answer needs no forwarding.** Even a result addressed to
-the assistant is visible in the shared record. A result, a report, a failure,
-or an acknowledgment is not a question. The assistant sends no message about
-it, to anyone, and the closing summary reports it. The assistant answers a
-participant only when that participant asks it a question. The room runs the
-summary work in a separate summary activation.
-
 **The guidance names the marker that a mid-activation result carries.** The
 core adds the `[new]` prefix to each message that lands while the assistant
 works, and every executor sends the line unchanged. The assistant
@@ -222,41 +190,7 @@ reads `[new] #12 [specialist → assistant] text`. The ordinary guidance names t
 and says that the same rules apply to it. Change the marker and the guidance
 together.
 
-**A trial measured the effect.** The specialist answered after the assistant
-had decided to end. With the original guidance, the assistant relayed the
-result in 5 of 30 runs. With the marker `[steer]`, it relayed in 18 of 30.
-With the new guidance and `[new]`, it relayed in 0 of 30.
-
-Assignment deduplication is scoped to the current exchange. A later human
-request that explicitly asks for a specialist to be involved, to recheck, or to
-revise is new direction even when an earlier exchange left a similar answer or
-artifact. Activate the specialist once for that request; silence remains the
-default when the user has not renewed the work.
-
-## Silence during the exchange
-
-**A correction from the assistant repeats the record.** A specialist at
-`broadcast` or `presence` attention receives every message, the person's
-corrections and constraints included. The person reads every message too. A
-correction from the assistant repeats what both already have, and it starts
-more work.
-
-The assistant does not correct, verify, or question a specialist during the
-exchange, and it does not ask the person a question. A specialist reports to
-the room with a say that has no `to`. It answers a question that another
-specialist addressed to it with a directed say. When a result relies on a
-superseded fact, breaks a constraint, or needs information from the person,
-the closing summary reports it. The person then decides what happens next.
-
-**The assistant steers only to protect a constraint.** Steering is rare. One
-exception holds: a specialist writes that it will now take an action that the
-person forbade in words, for example "I will edit the files" after "do not
-edit files". The assistant sends that specialist one short directed say that
-names the constraint. A result that already happened, a plan, a proposal, or
-an estimate is no such action: it is evidence for the closing summary.
-
-When a specialist report conflicts with evidence already in the record, the
-summary states both. It does not state the unsupported claim as fact.
+## Observation and completion
 
 **The assistant observes through ordinary attention and activation rules.**
 It has no continuous view of specialist execution or private tool use.
@@ -265,48 +199,12 @@ It does not guarantee that every omission or failure will be detected before
 closure. A summary activation can report an incomplete result but cannot
 repair it through further investigation.
 
-## Seating and completion
-
-**Changes to the roster serve the work.** Select specialists from the identities in
-their definitions and the current request. Avoid recruiting every remotely related
-specialist by default. Retain specialists across exchanges by default.
-Unseat when the user requests removal or a clear scope change makes continued
-participation unnecessary. Being idle alone is not a reason to remove an agent.
-
-**The presence of the person who asked does not change the work.** A
-person can ask and leave before the first activation of the assistant. The
-assistant seats and routes as it does for a person who stays. The room
-assigns the closing summary to the `person` of the exchange, the assistant
-writes it, and the person reads it on return. The seating guidance of the package states this
-rule.
-
-Unseating can interrupt active work and settle due activations. Do not
-use it as routine cleanup after each contribution. Avoid repeated seating
-and unseating. The assistant's seat is fixed as the summary writer: no
-agent, including the assistant itself, can unseat it through the room's
-`unseat` tool. Only the host can remove it through `room.unseat`.
-
 **The room determines closure from remaining work.** The assistant has no
 special completion command. It stops contributing when further intervention
 has no value. Prompt guidance encourages restraint; hard exchange budgets
 and roster restrictions require enforcement outside the prompt.
 
 ## Goals and preferences
-
-**The room goal and the user's current request guide respond activations.** Later
-user corrections can change the requested outcome. An explicit change from
-the user is new direction.
-
-**A constraint stays in force until the person withdraws it in words.** A new
-request does not withdraw an earlier constraint. A request for a plan, a
-proposal, or an estimate does not permit the action that it describes. The assistant carries each constraint that is still in force into a
-directed request, and the summary keeps it.
-
-**The summary carries a question for the person.** The assistant asks no
-question during the exchange. When the work waits on information that only
-the person can give, the summary asks for it. Distinguish waiting for the
-user from completing the request. Closure does not prove that the goal was
-achieved.
 
 Human preferences currently reach only the summary activation. They describe
 how that person wants to read the response. Respond activations receive the
@@ -318,99 +216,6 @@ shared working constraints through the room goal, conversation, or application
 instructions. Do not claim that the package automatically reads private
 preferences during a respond activation. Broader preference routing needs a separate
 contract, including how preferences from multiple people interact.
-
-## Summaries
-
-**Closing summaries also become context for later agents.** Preserve material
-corrections, decisions, quantities, dates, owners, constraints that are still
-in force, uncertainty, and unfinished commitments. When a specialist relied on
-a superseded fact or broke a constraint, state the conflict and the value
-that applies. Distinguish verified outcomes from proposals.
-When the messages report that the discussion did not answer the question,
-state that. When no message after the request reports anything, write no
-summary.
-
-When available context shows specialist failure or an incomplete result,
-describe the gap and its effect on the answer. Do not infer success from
-silence or closure. Do not create an automatic retry cycle or repeat the same
-assignment without new evidence that another attempt can help. Report a
-remaining gap in the summary, including any decision needed from the user.
-
-Source or artifact presence proves that the material was found or inspected;
-it does not prove that behavior shipped, released, deployed, or became a new
-scope decision. Preserve the verification limit and distinguish a static
-prototype from delivered capability.
-
-Adapt presentation to the assigned recipient's preferences without removing
-facts needed for later work. Avoid a transcript recap or a second performance
-of the discussion.
-
-**A summary rests on the messages of the exchange.** The assistant
-summarizes only what those messages support. Every fact, value, and
-recommendation must come from them. A reported failure, an unknown, or a
-question to the person is a fact of the exchange, and the summary reports it.
-The assistant adds nothing from its own knowledge, even when the answer is
-common. It copies each value as a message states it and does not calculate,
-convert, or derive a value. When no message after the request reports
-anything, the assistant writes no summary and ends the activation without `say`. The same holds when
-the only agent messages of the exchange are its own answer to a question that
-the person addressed to it, or its own routing requests that no specialist
-answered. It also holds when one specialist message already answers the request
-in full, with its sources, whoever that message addresses. The source messages then stay in later prompts.
-
-A summary activation receives only `say`, with a fixed source range and
-recipient. It cannot seat agents, use domain tools, or reopen investigation.
-See [Summaries](summary.md) for the existing authority and completion rules.
-
-## Integration and evaluation
-
-**The workbench example is the first consumer and the acceptance target.** Its
-rooms use the package factory with the lab's domain context and workspace
-tools. The example exposes the assistant, the specialist definitions, and the
-complete definitions. Startup uses the shorthand; resume supplies the complete
-definitions. [The example page](example.md) describes each room. Exercise every
-room when evaluating changes to the shared behavior.
-
-**Deterministic checks and behavioral evaluations establish different facts.**
-
-Use deterministic tests for shorthand equivalence, configuration conflicts,
-seating, summary activation, and resume. Use behavioral evaluations for
-specialist selection, silence, summary fidelity, and restraint.
-Evaluate redundant routing explicitly: a specialist that already receives
-the user's request must not require an assistant restatement.
-
-Include named activation, changed user instructions, unresolved
-disagreement, conservative unseating, and successful silence.
-Include specialist failure and incomplete results. Check that the assistant
-reports gaps accurately without inventing success or repeatedly assigning work.
-
-Include explicit constraints that must survive seating and handoff, including
-an item scoped draft with a no-file-edits instruction. Include a human revision
-and check that it causes one concise directed activation.
-
-Include a specialist result that relies on a superseded constraint, and one
-that asks for information from the person. Require silence during the
-exchange, and a summary that states the conflict or asks the question.
-
-Include these cases of the purpose:
-
-- A question that a person addresses to the assistant.
-- A question that a specialist addresses to the assistant.
-- A question that a person addresses to a named specialist.
-- An unseat on request.
-- A request that needs no specialist.
-- A person who asks and leaves before the first activation.
-
-Evaluate explicit application overrides of assistant defaults, including
-the silence at `broadcast`. Check that kernel authority remains unchanged.
-
-Verify that summaries preserve constraints needed in later exchanges.
-Measure coordination messages and unnecessary activations alongside task
-completion. A shorter conversation alone does not prove better behavior.
-
-The initial project adds no scheduler, workflow engine, privileged capability
-system, separate goal database, or automatic preference persistence. Further
-configuration should follow evidence from consumers.
 
 ## Validation commands
 
@@ -428,10 +233,6 @@ pnpm --filter @ambionframework/assistant test:live
 pnpm --filter @ambionframework-examples/workbench test:live
 ```
 
-The assistant suite runs on [the simulator](simulator.md). It uses a real
-assistant with controlled specialist evidence. It checks routing, silence at
-`broadcast`, summaries of obsolete constraints and missing facts, incomplete
-results, direct questions, unseating, a person who asks and leaves, and
-application overrides. The Workbench suite runs two example rooms
+The assistant suite runs on [the simulator](simulator.md). The Workbench suite runs two example rooms
 with real agents. These evaluations sample
 model behavior; they do not guarantee that every model follows the defaults.

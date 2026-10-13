@@ -966,7 +966,13 @@ describe('the files as the source of truth', () => {
 		const spec = { handle: lost, agent: 'alpha', command: 'sleep 99' };
 		await writeFile(
 			join(home, 'spec'),
-			JSON.stringify({ ...spec, timeout: 600, grace: 10, startedAt: '2026-01-01T00:00:00.000Z' }),
+			JSON.stringify({
+				...spec,
+				port: 0,
+				timeout: 600,
+				grace: 10,
+				startedAt: '2026-01-01T00:00:00.000Z',
+			}),
 		);
 		await writeFile(join(home, 'pid'), '1\n');
 		// A spec with a grace that is not a number, and one with none, are no specs: the table skips them.

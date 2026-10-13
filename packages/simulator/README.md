@@ -2,11 +2,14 @@
 
 `@ambionframework/simulator` runs evals on an Ambion room. An actor plays a
 person, one exchange at a time, and `simulate` returns a simulation that
-checks in code read. [Simulator](../../docs/simulator.md) holds the design.
+checks in code read. [Simulator](../../docs/simulator.md) states the loop, the
+actors, and the judge.
 
 ```sh
 npm install @ambionframework/ambion @ambionframework/journal @ambionframework/pi @ambionframework/simulator
 ```
+
+The example runs a Pi seat, so it needs `ANTHROPIC_API_KEY`.
 
 ```ts
 import { createRuntime, defineAgent, definePerson, startRoom } from '@ambionframework/ambion';

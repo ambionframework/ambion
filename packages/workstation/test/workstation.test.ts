@@ -530,6 +530,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 				handle,
 				agent: 'ada',
 				command: 'exec sleep 30',
+				port: 0,
 				timeout,
 				grace: 10,
 				startedAt,
@@ -565,6 +566,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			join(lost, 'spec'),
 			JSON.stringify({
 				...spec,
+				port: 0,
 				timeout: 600,
 				grace: 10,
 				startedAt: new Date().toISOString(),

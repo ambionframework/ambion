@@ -34,63 +34,27 @@ const analyst = defineAgent({
 });
 ```
 
-## The runtime
-
-| ComposeRuntime     | Runs the code                                           | Memory and CPU                                      | Isolation                                                                                    |
-| ------------------ | ------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `quickjsRuntime()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit and a CPU limit, both in the options | A runtime and a WebAssembly memory for each compose call. It shares the process of the host. |
-
-**The runtime is not a defense against hostile code.** A separate context
-limits the names that code reaches. The code of a model is not hostile, and
-the runtime bounds its mistakes. [Trust](https://github.com/ambionframework/ambion/blob/main/docs/trust.md)
-states what the kernel does not defend.
-
-**The code has no ambient authority.** The runtime runs one setup script
-in a fresh context. It makes these names throw or absent.
-
-| Name                                          | In the code                                        |
-| --------------------------------------------- | -------------------------------------------------- |
-| `Date.now()`, `Date()`, `new Date()`          | Throws. A tool gives the time.                     |
-| `new Date(value)`, `Date.UTC`, `Date.parse`   | Works.                                             |
-| `Math.random`                                 | Throws.                                            |
-| `WeakRef`, `FinalizationRegistry`             | Absent.                                            |
-| `Intl`, `performance`, `crypto`               | Absent.                                            |
-| `setTimeout`, `setInterval`, `queueMicrotask` | Absent. `await` orders the work.                   |
-| `require`, `import`, `process`, `fetch`       | Absent. The code reads no module, file, or socket. |
-
-**A macro reads its arguments as the global `args`.** When the input of an
-evaluation has `args`, the code reads them. Free code has no `args`, and
-`typeof args` is `'undefined'`.
-
-**Every value that crosses is JSON.** Arguments, binding values, errors, and
-the return value cross as JSON. A function, a cycle, a bigint, or a number
-that is not finite fails the call with an error that names the place. An
-error of a binding reaches the code as an `Error` with the same message and
-`details`.
-
 ## `quickjsRuntime(options)`
+
+`quickjsRuntime()` runs the code in QuickJS compiled to WebAssembly, in the
+host process. Each compose call gets a fresh runtime and its own WebAssembly
+memory.
 
 | Option        | Meaning                                                           | Default |
 | ------------- | ----------------------------------------------------------------- | ------- |
 | `memoryLimit` | The bytes of the QuickJS heap and of its WebAssembly memory       | 64 MiB  |
 | `cpuLimit`    | The milliseconds that the code runs, summed between settled calls | 10,000  |
 
-**The synchronous build runs several calls at once.** Each tool is a host
-function that returns a promise. The host settles the promise when the call
-settles, so `Promise.all` runs its calls together.
+**The runtime is not a defense against hostile code.** A separate context
+limits the names that code reaches. The code of a model is not hostile, and
+the runtime bounds its mistakes. Code that catches an out-of-memory error can
+make Emscripten print an `Aborted(...)` line to stderr. The evaluation keeps
+the value of the code.
 
-**The CPU limit ends a loop.** The host thread cannot see a signal while
-the code runs. The interrupt handler reads the signal and the CPU limit, so a
-loop ends at the limit. A wait for a call does not count.
-
-**An evaluation disposes every handle.** QuickJS aborts the process when it
-frees a runtime that still holds one. The tests run the debug build and fail
-on a leak. When the engine stops a job at a limit or at a cut, it leaves
-objects that no handle names, and the evaluation then frees nothing. The
-module of the evaluation is its own, so the garbage collector reclaims it.
-Code that catches an out-of-memory error leaves the same objects. The free of
-the runtime then aborts, the evaluation keeps the value of the code, and
-Emscripten can print an `Aborted(...)` line to stderr.
+[Compose](https://github.com/ambionframework/ambion/blob/main/docs/compose.md#the-runtime)
+states the contract of a runtime, its globals, and its isolation.
+[Trust](https://github.com/ambionframework/ambion/blob/main/docs/trust.md)
+states what the kernel does not defend.
 
 ## Test a runtime
 

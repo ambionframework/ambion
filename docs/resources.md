@@ -70,12 +70,12 @@ resource. A tool that needs the current state of the room reads the room.
 names. Bundle guidance appears in each activation
 ([The prompt the driver renders](executors.md#the-prompt-the-driver-renders)).
 
-| Field      | Contract                                                                                   |
-| ---------- | ------------------------------------------------------------------------------------------ |
-| `tools`    | Required. The bundle's `readonly AmbionTool[]`                                             |
-| `guidance` | Optional. Instructions for the tools                                                       |
-| `macros`   | Optional. `readonly ComposeMacro[]`; a seat with `compose` runs them ([Macros](macros.md)) |
-| `remind`   | Optional. Text for one respond activation, or `undefined`                                  |
+| Field      | Contract                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------- |
+| `tools`    | Required. The bundle's `readonly AmbionTool[]`                                                    |
+| `guidance` | Optional. Instructions for the tools                                                              |
+| `macros`   | Optional. `readonly ComposeMacro[]`; a seat with `compose` runs them ([Skills](skills.md#macros)) |
+| `remind`   | Optional. Text for one respond activation, or `undefined`                                         |
 
 **A reminder receives the seat and an abort signal.** `ReminderSeat` holds
 `agent`, `room`, and `activation` as strings. `Reminder` returns text or
@@ -110,7 +110,7 @@ outside a room. A binding stamps them where its data allows.
 
 The workspace records calls in its opt-in
 [audit log](workspace.md#record-every-tool-call). The SQL backend stamps
-[append-only records](workspace.md#records-append-only-tables-with-provenance).
+[append-only records](sql.md#records-append-only-tables-with-provenance).
 A backend defines where it stores provenance. Host code supplies its own
 provenance for direct operations.
 

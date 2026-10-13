@@ -2,7 +2,6 @@
 
 **`@ambionframework/simulator` runs evals.** The package holds
 `simulate`, `scriptedActor`, `agentActor`, and `agentJudge`.
-[The assistant's live suite](#the-assistants-live-suite) runs on it.
 
 **The simulator runs an eval: an agent plays a person in a room, and the test
 grades what the room did.** An eval has three parts. The actor sends each
@@ -89,7 +88,7 @@ sequenceDiagram
     J-->>T: verdict
 ```
 
-## Design rules
+## Rules of the loop
 
 - **The simulator drives a room that the test started.** `simulate` takes
   a running `Room`. The test chooses the runtime, the storage, the
@@ -98,30 +97,17 @@ sequenceDiagram
 - **One iteration of the loop is one exchange.** The actor sends one
   message. The loop waits on the handle of that exchange. The loop never
   sends into an open exchange.
-- **The simulation groups the record by exchange.** An assistant check reads one
-  exchange: what the assistant said in it, and the summary that closed it.
-  Each entry of `simulation.exchanges` holds the message sent, the discussion, the
-  summary, and the closed view.
 - **Every wait is a handle wait.** The loop uses `waitForClose()` and
   `waitForSummary()`. It never polls for a quiet room, and it never calls
   `reconcile()`.
 - **The actor sees what a person sees.** It reads each discussion, each
   summary, and what its tools return. It reads no activation, no event, no
   trace, and no criterion.
-- **Checks are plain `expect` calls on the simulation.** The package ships no
-  check type and no assertion library.
-- **The judge is a separate call after the simulation.** `simulate` takes no
-  criteria, so the actor cannot read them.
-- **A criterion that code can decide is a check.** The judge grades only
-  what a check cannot decide: tone, fidelity, and whether the answer meets
-  the question.
-- **The package ships no rubric, no score scale, and no threshold.** A
-  criterion is a string in the test. A verdict is pass or fail for each
-  criterion.
+- **Actor and judge are functions.** The `Actor` and `Judge` types hold the
+  contract. A scripted actor and a scripted judge are ordinary values, so the
+  scripted tier runs every path with no key.
 - **One simulation is one sample.** The package repeats nothing. A test that
   wants several samples writes the loop.
-- **Actor and judge are functions.** A scripted actor and a scripted judge
-  are ordinary values, so the scripted tier runs every path with no key.
 - **A fixed question needs no agent.** Most assistant cases send one
   question and grade the answer. `scriptedActor([question])` drives a live
   room. An agent actor is for a case where the next message depends on the
@@ -129,33 +115,6 @@ sequenceDiagram
 - **A controlled seat comes from the testing entry.** A seat whose
   evidence the test fixes runs on `scripted()` from
   `@ambionframework/ambion/testing`. The package adds nothing for it.
-- **`agentActor` and `agentJudge` are configured like any agent.** Each
-  takes `model`, `tools`, and `bundles`, the options of an agent
-  definition. A test that passes `workspace.tools()` gives the person the
-  workspace, with its guidance.
-- **The `Actor` and `Judge` types hold the contract.** An agent behind them
-  can grow: more tools, a session across moves, one request for each
-  criterion. `simulate` does not change.
-
-## Practice it follows
-
-**The design takes each rule below from a published source.**
-
-| Rule in this design                                         | Source                                                                                                                                    |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Grade the outcome with checks, and a meaning with a judge   | [Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)                                |
-| A case passes when all k samples pass: pass^k               | [τ-bench](https://arxiv.org/abs/2406.12045), [Demystifying evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) |
-| Check the final state of the environment                    | [τ-bench](https://arxiv.org/abs/2406.12045), [Demystifying evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) |
-| A simulated person with a persona, a stop, and a bound      | [promptfoo simulated user](https://www.promptfoo.dev/docs/providers/simulated-user/)                                                      |
-| The judge reasons first, and may run on another model       | [Inspect model grading](https://inspect.aisi.org.uk/model-graded.html)                                                                    |
-| The judge has an answer for missing evidence: `no evidence` | [Demystifying evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)                                              |
-| Each sample starts from a clean environment                 | [Demystifying evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)                                              |
-| A person reads the transcripts of failed cases              | [Demystifying evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)                                              |
-
-**Two rules of those sources wait for a later version.** One judge request
-for each criterion multiplies the cost by the number of criteria.
-Calibration against labels from people needs the labels. Both stay inside
-`agentJudge` when they come.
 
 ## The surface
 
@@ -167,42 +126,6 @@ Calibration against labels from people needs the labels. Both stay inside
 | `scriptedActor` | An actor that plays a fixed list of moves                                   |
 | `agentActor`    | An agent with tools that plays a person from a brief                        |
 | `agentJudge`    | An agent with tools that grades a simulation                                |
-
-```ts
-/** What the person does next: send a message, or stop and give the reason. */
-export type Move = ({ readonly text: string; readonly to?: string } | { readonly stop: string }) & {
-  /** The tools the actor called before the move, in order. */
-  readonly calls?: readonly { readonly tool: string; readonly args: unknown }[];
-  readonly usage?: Usage;
-};
-
-/** One exchange as the person saw it. */
-export interface SeenExchange {
-  /** The text the person sent. */
-  readonly sent: string;
-  /** What `waitForClose()` returned: the discussion, without summaries. */
-  readonly discussion: readonly Message[];
-  /** What `waitForSummary()` returned. */
-  readonly summary?: SummaryMessage;
-}
-
-/** What the person has seen: one entry for each exchange the loop ran. */
-export interface Seen {
-  readonly person: PersonDefinition;
-  readonly exchanges: readonly SeenExchange[];
-}
-
-export interface SimulateOptions {
-  readonly person: PersonDefinition;
-  readonly actor: Actor;
-  /** The most messages the actor sends. Required, so that every eval states its bound. */
-  readonly messages: number;
-  /** Real milliseconds for one exchange: its close and its summary. The default is 150 000. */
-  readonly exchangeMs?: number;
-}
-
-export function simulate(room: Room, options: SimulateOptions): Promise<Simulation>;
-```
 
 ## The loop
 
@@ -266,7 +189,7 @@ const actor = scriptedActor(['Can we pour on Thursday?', { text: 'And Friday?', 
 ```
 
 **`agentActor` plays a brief as an agent.** It takes the options of an
-agent definition and one more:
+agent definition and these:
 
 | Option     | What it is                                                               |
 | ---------- | ------------------------------------------------------------------------ |
@@ -292,6 +215,13 @@ agent definition and one more:
 - **A move that ends with no `send` and no `stop` rejects.** So does a
   move that passes `moveMs`. The loop then ends with `ended: 'failed'`.
 
+**`agentActor` has three limits.**
+
+- The prompt holds no names of the participants. The actor learns a name
+  when its owner speaks.
+- `send` accepts a `to` that names nobody.
+- One person takes part in a simulation.
+
 **The workspace knows the person by name.** A workspace tool reads the
 caller from `ctx.agent`. The actor's calls carry the person's name and
 identity, so the person has a home like any seat. `openWorkspace` takes no
@@ -315,57 +245,8 @@ the discussion, and its next move answers it or stops.
 ## The model call
 
 **Both agents run on the Pi harness through `@ambionframework/pi`.**
-The Pi package exports `runAgent`:
-
-```ts
-export function runAgent(
-  services: ExecutionServices,
-  request: {
-    /** A `provider/model-id`. */
-    readonly model: string;
-    /** The routing name: `actor` or `judge`. A scripted stream routes on it. */
-    readonly name: string;
-    /** Who the tools see in `ctx.agent`: the person, or the judge. */
-    readonly agent: { readonly name: string; readonly identity: string };
-    readonly system: string;
-    readonly prompt: string;
-    readonly tools?: readonly AmbionTool[];
-    readonly bundles?: readonly ToolBundle[];
-    /** The names of the tools that end the run. */
-    readonly ends: readonly string[];
-    /** A Pi `ThinkingLevel`. Absent, `off`. */
-    readonly thinking?: ThinkingLevel;
-    readonly signal?: AbortSignal;
-  },
-): Promise<{ end: RunAgentCall; calls: readonly RunAgentCall[]; usage: Usage }>;
-```
-
-- **The model.** `services.model(model, name)` resolves it. Over a scripted
-  stream, the stub model carries `name`, and the script routes on it.
-- **The tools.** `describeExecutor` from `@ambionframework/ambion/hosting`
-  flattens the bundles and joins their guidance. It refuses a duplicate
-  name, so a bundle tool named `send`, `stop`, or `grade` fails at once.
-- **The loop.** `runAgent` opens one harness session, prompts it once, and
-  closes it after the run. It has no steer, no resume, and no
-  `readThrough`. A tool in `ends` returns `terminate: true`, and the
-  harness stops after it. The first call in `ends` to succeed ends the
-  run. A call after it gets a result that ends the run too, and the run
-  keeps no record of it. When a sequential batch holds another call
-  before the end, the harness sends one more request.
-- **The output limit.** A run that stops at the output limit with no call
-  in `ends` rejects, and the error names the limit.
-- **The tool context.** Each call gets `{ agent, callId, signal, onUpdate
-}`, with no `room`, `activation`, or `exchange`. `ToolContext` allows
-  their absence, and the workspace audit log accepts it. `runAgent`
-  resolves no reminders, because a reminder needs a room.
-- **The bound.** `signal` aborts the run the way a cut aborts an
-  activation, and it ends every provider request of the run. An abort
-  of the signal aborts the submission of the run, and it cuts the request
-  itself. A run whose signal aborted rejects with the
-  signal's reason, even when an end landed first. `agentActor` and
-  `agentJudge` abort at `moveMs` and `gradeMs`.
-- **The usage.** `runAgent` sums the usage of each request, and it maps a
-  request the way `spent` in `pi-trace.ts` does.
+`runAgent` runs them. [Run an agent outside a room](pi.md#run-an-agent-outside-a-room)
+states it.
 
 **`agentActor` and `agentJudge` take optional `services`.** The default is
 `createExecutionServices({ sessions: 'memory' })`, which reads
@@ -381,26 +262,6 @@ person as `agent`. The judge passes the name `judge` and itself as
 object, so a test that writes a simulation to a JSON file loses the error
 details.
 
-```ts
-export interface Simulation {
-  readonly person: PersonDefinition;
-  /** Every move the actor made, in order, the last `stop` included. */
-  readonly moves: readonly Move[];
-  /** One entry for each message the actor sent, in order. */
-  readonly exchanges: readonly (SeenExchange & {
-    readonly view: Extract<Exchange, { readonly status: 'closed' }>;
-  })[];
-  /** One `room.read()` after the last close, with every message. */
-  readonly room: RoomRead;
-  /** Every notification after the subscription. */
-  readonly events: readonly RoomNotification[];
-  readonly ended: 'stopped' | 'limit' | 'timeout' | 'failed';
-  readonly error?: string;
-  /** `room` sums `exchanges[].view.usage`, and `actor` sums `moves[].usage`. An absent usage counts as zero. */
-  readonly usage: { readonly room: Usage; readonly actor: Usage };
-}
-```
-
 **A move that rejects keeps no usage.** `runAgent` rejects with no spend,
 so `simulation.usage.actor` misses the requests of the last move of a `failed`
 simulation.
@@ -411,9 +272,10 @@ usage at its release, which can follow the summary message.
 
 ## Checks
 
-**A check reads the simulation with `expect`.** Each fact that
-[Assistant evaluation](assistant.md#integration-and-evaluation) names has a
-source in the simulation.
+**A check is a plain `expect` call on the simulation.** The package ships
+no check type and no assertion library. Each entry of
+`simulation.exchanges` holds the message sent, the discussion, the summary,
+and the closed view.
 
 | Fact                              | Where it is in the simulation                                      |
 | --------------------------------- | ------------------------------------------------------------------ |
@@ -439,18 +301,12 @@ test support.
 **A judge grades a simulation against a list of criteria.** It returns one finding
 for each criterion. The verdict passes when every finding passes.
 
-```ts
-export interface Verdict {
-  readonly pass: boolean;
-  readonly findings: readonly {
-    readonly criterion: string;
-    readonly pass: boolean;
-    /** One sentence that cites the message seq it rests on. */
-    readonly reason: string;
-  }[];
-  readonly usage?: Usage;
-}
-```
+**The judge is a separate call after the simulation.** `simulate` takes no
+criteria, so the actor cannot read them. A criterion that code can decide is
+a check. The judge grades only what a check cannot decide: tone, fidelity,
+and whether the answer meets the question. The package ships no rubric, no
+score scale, and no threshold. A criterion is a string in the test, and a
+verdict is pass or fail for each criterion.
 
 **The judge reads the record.** `agentJudge` renders the simulation as text:
 
@@ -532,203 +388,7 @@ holds the rules.
   Pi sessions stay in memory. No state passes from one case or sample to
   the next.
 
-## The assistant's live suite
+## Dependencies
 
-**`packages/assistant/test/live/behavior.test.ts` is the acceptance test
-of the design.** The suite runs a live assistant beside a
-specialist whose evidence the test fixes. Its claims are about judgment:
-routing, silence, and what the summary keeps, a superseded constraint
-included.
-
-**The suite rests on three mechanisms.**
-
-- **The specialist runs on the testing entry.** Its definition carries
-  `executor: { kind: 'scripted', instructions, tools: [] }`.
-  The room passes `[piExecution(), scripted()]`: the assistant runs on
-  `piExecution()`, and the specialist runs on `scripted()`, which has no
-  kind and serves every kind. The `executor` function of `defineAssistant`
-  calls `pi()`, so the assistant has the kind `pi`.
-- **`simulate` runs each case.** A case passes
-  `scriptedActor([question])` and `messages: 1`. `exchangeMs: 90_000`
-  bounds each exchange.
-- **Each case starts its own runtime.** `scripted()` keeps one step counter
-  for each seat name over the life of its runtime. A shared runtime shares
-  the counter between cases.
-
-**The specialist script reads the view and its results, and ignores the
-counter.** The `request` argument counts every step of the seat in the
-runtime, so a script that speaks at `request === 1` answers the first
-exchange only. The view of a later step in one activation may not hold the say the
-seat just made, so the script also stops once the activation has a result.
-A script for a case with several exchanges speaks once in each exchange:
-
-```ts
-const answers =
-  (fact: string): Script =>
-  ({ view, results }) => {
-    if (results.length > 0 || view.context.exchange === undefined) return quiet();
-    const { from } = view.context.exchange;
-    const spoke = view.context.messages.some(
-      (m) => m.kind === 'said' && m.from === 'inventory' && m.seq >= from,
-    );
-    return spoke ? quiet() : say(fact);
-  };
-```
-
-`packages/assistant/test/live/support.ts` holds this script, the room, the
-evidence of a failed case, and the cost line.
-`packages/assistant/test/eval-support.test.ts` runs the support with a
-scripted Pi assistant, so its plumbing needs no key.
-
-**An exact fact stays a check. A regex that lists wordings becomes a
-criterion.** A check such as `/8|eight/` decides a fact. A regex that lists
-eight ways to say "not verified" grades a meaning.
-
-| Case                                                             | Checks                                                                                                                                                                        | Criteria for the judge                                                                                                                                         |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Routes participation, five samples                               | The specialist spoke. At `named`, the assistant says once, to `inventory`, and says nothing otherwise. The summary names 8.                                                   | None                                                                                                                                                           |
-| The reserve sample of the five                                   | The record holds a `seated` entry for `inventory` from `assistant`.                                                                                                           | None                                                                                                                                                           |
-| Leaves a superseded constraint to the summary, three samples     | The assistant says nothing. The summary names 8.                                                                                                                              | The summary reports that inventory planned on the withdrawn limit, states the limit of 8, and does not accept the plan.                                        |
-| Does not steer valid work                                        | The assistant says nothing.                                                                                                                                                   | The summary says that the dispatch capacity is unknown, and it reports no success.                                                                             |
-| Honors an application override                                   | The assistant says the exact override text once. The summary names 8.                                                                                                         | None                                                                                                                                                           |
-| Keeps the verification limits                                    | The assistant says nothing.                                                                                                                                                   | The summary says that the check was a source inspection of a static prototype, that runtime behavior is unverified, and that nothing was released or deployed. |
-| Works a request after the person who asked leaves, three samples | The first two entries are the question and the departure. At `named`, the assistant says once, to `inventory`. The specialist spoke. The summary goes to `priya` and names 8. | The summary does not say that the request went unanswered because the person left.                                                                             |
-
-**Three cases need more than one exchange.**
-[Assistant evaluation](assistant.md#integration-and-evaluation) lists
-them.
-
-| Case                                        | Actor                                                   | Checks                                                                                                                  | Criteria for the judge                                                                                     |
-| ------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| A person revises the request                | Scripted: the question, then the revision               | At `named`, the assistant says once to `inventory` in the second exchange, and names SKU B. The second summary names 5. | The second summary answers for SKU B.                                                                      |
-| A constraint survives into a later exchange | Scripted: a no-dispatch constraint, then a plan request | At `named`, the assistant says once to `inventory` in the second exchange.                                              | That request carries the no-dispatch constraint. The second summary keeps it.                              |
-| The assistant needs a material fact         | `agentActor`, with the fact in the brief                | Two or more exchanges run. The assistant says nothing. A message the person sent after the first carries the fact.      | The first summary asks for the fact, or reports that the work waits on it. The last summary uses the fact. |
-
-**The specialist asks for the material fact.** In the third case, its
-script asks the person for the fact in the first exchange. The kernel's
-speaking policy directs a question that only one participant can answer, so
-the specialist addresses the person. The assistant says nothing, so the
-check reads the second message and the judge reads the first summary.
-
-**Five cases hold the rest of the assistant's purpose.** The assistant is
-passive at `broadcast`, it answers a participant who addresses it, and it
-changes the roster on request and on need only. The scripted specialist
-reports to the room, and it addresses a participant only with a question for
-that participant. It picks its reply from the words of the person, so the
-words of an agent never change the evidence.
-
-| Purpose case                                | Actor                                             | Checks                                                                                                       | Criteria for the judge                                                              |
-| ------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| A person asks the assistant at `broadcast`  | Scripted: a question with `to: 'assistant'`       | The assistant says once, to the person. The specialist says nothing. No `seated` or `unseated` entry.        | The answer names `inventory` as the agent that checks stock, and says it is seated. |
-| A person asks a `named` specialist directly | Scripted: a question with `to: 'inventory'`       | The assistant says nothing. The specialist spoke. The summary names 8.                                       | None                                                                                |
-| An unseat on request, and not before        | Scripted: a question, then a request to remove it | No `unseated` entry in the first exchange, one from the assistant in the second. The assistant says nothing. | The second summary says that `inventory` left the room.                             |
-| No seat without need                        | Scripted: a note that needs no specialist         | No `seated` entry. The specialist and the assistant say nothing.                                             | None                                                                                |
-| A specialist asks the assistant             | Scripted: a question about the north warehouse    | The specialist asks the assistant which warehouse. The assistant says once, to `inventory`, and names north. | None                                                                                |
-
-**Samples stay in the test.** `it.each` sets the number of samples.
-The simulator repeats nothing. `it.each` over k samples measures pass^k:
-the case passes when every sample passes.
-
-## Where the code lives
-
-**The package depends on `ambion` and `pi`.** The package graph in
-[Toolchain](toolchain.md#1-repository-layout) holds the line
-`simulator ──▶ ambion, pi`. `packages/pi/src/run-agent.ts` holds
-`runAgent`.
-
-| File                      | What it holds                                          |
-| ------------------------- | ------------------------------------------------------ |
-| `src/simulate.ts`         | `simulate` and the deadline of an exchange             |
-| `src/types.ts`            | `Simulation`, `Seen`, `Move`, `Actor`, and the options |
-| `src/actor.ts`            | `scriptedActor`                                        |
-| `src/agent-actor.ts`      | `agentActor`, `send`, and `stop`                       |
-| `src/agent-judge.ts`      | `agentJudge`, `Judge`, `Verdict`, and `grade`          |
-| `src/render.ts`           | The prompts of the actor and the judge's record        |
-| `src/signal.ts`           | The timeout of a move and of a grade                   |
-| `src/index.ts`            | The one entry                                          |
-| `test/simulate.test.ts`   | The loop on a scripted room                            |
-| `test/agent.test.ts`      | The agent actor and judge on a scripted stream         |
-| `test/live/agent.test.ts` | One live case of the actor and the judge               |
-
-**The assistant package takes the simulator as a dev dependency.** Its
-live suite is the first consumer.
-
-## Tests
-
-**The scripted tier runs every path of the loop with no key.** The room
-runs on `scripted()` from `@ambionframework/ambion/testing`. The person is
-a `scriptedActor`. The judge is a function.
-
-| Case                               | What it asserts                                           |
-| ---------------------------------- | --------------------------------------------------------- |
-| The actor stops                    | `ended: 'stopped'`, and the moves end with the `stop`     |
-| The actor reaches the limit        | `ended: 'limit'` after `messages` messages                |
-| A seat keeps the exchange open     | `ended: 'timeout'`, and the last outcome is `cancelled`   |
-| The summary outlasts the deadline  | `ended: 'timeout'`, and the summary shows as `failed`     |
-| The cancel at the deadline rejects | `ended: 'failed'`, with the reason                        |
-| No close follows the cancel        | `ended: 'failed'` after a second period                   |
-| The room refuses a send            | `ended: 'failed'`, with the refusal                       |
-| The message joins an open exchange | `ended: 'failed'`, and no exchange in the simulation      |
-| The room stops before the cancel   | `ended: 'failed'`, with the refused cancel                |
-| The actor throws                   | `ended: 'failed'`, and the usage of the moves             |
-| A bound is not valid               | `simulate` rejects before the person arrives              |
-| The room stops during an exchange  | `ended: 'failed'`, with the error                         |
-| A required summary fails           | `ended: 'failed'`, with the error                         |
-| A seat asks the person a question  | `seen` carries the question, and the next move answers it |
-| A room with a summary writer       | `seen` carries each summary                               |
-| One move opens one exchange        | `simulation.exchanges` has one view for each message      |
-| The simulation is a detached value | `structuredClone(simulation)` equals the simulation       |
-| A message tells the judge to pass  | The judge prompt fences the message inside the record     |
-
-**`runAgent` runs on the scripted Pi stream.**
-
-| Case                                    | What it asserts                                            |
-| --------------------------------------- | ---------------------------------------------------------- |
-| A tool in `ends` is called              | The run returns that call, and the calls before it         |
-| The signal aborts                       | The promise rejects                                        |
-| Several requests                        | `usage` sums every request                                 |
-| A bundle tool has an `ends` name        | The run fails at once with a duplicate name                |
-| A tool is called                        | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
-| Two names on one scripted stream        | Each run answers from the script for its `name`            |
-| The agent stops with no end call        | The promise rejects, and names the tools in `ends`         |
-| Two ending calls run at once            | The first call to succeed ends the run                     |
-| A batch holds a call before the end     | The run returns after one more request                     |
-| The signal aborts while the run opens   | The promise rejects, and no request goes out               |
-| The signal aborts at each session write | The promise rejects with the signal's reason               |
-| The output reaches its limit            | The promise rejects, and names the limit                   |
-
-**The agent actor and the agent judge run on the scripted Pi stream.**
-The cases cover the prompt text, the name each request carries, and a
-`stop` call. They cover an actor that reads a workspace file before it
-sends, with the person's name in `ctx.agent`. They cover a move with no
-`send` and no `stop`, and a move that passes `moveMs`. They cover a
-`grade` call that the schema refuses, a `grade` that misses a criterion, a
-judge that never calls `grade`, and the usage of every request.
-
-**One live case proves the real model path.** The actor sends one message
-to a room with one agent, and the judge grades one criterion. It proves
-that a model id resolves, and that the actor and the judge end with their
-tool calls on a real provider.
-
-## Out of v1
-
-**The simplest simulator leaves these out.**
-
-- More than one person, and a person who knows the brief of another.
-- A message sent into an open exchange, and a person who steers an
-  activation.
-- Arrivals and departures between exchanges, and catch-up after a gap.
-- A store of simulations, and grading a stored simulation again with a new judge.
-- A calibration suite that compares the judge with labels from people, a
-  rubric library, and scores.
-- A panel of judges with a majority vote.
-- Statistics across samples beyond pass^k, such as pass@k and confidence
-  intervals.
-- The names of the participants in the actor's prompt, and a `send` that
-  refuses a `to` that names nobody. The actor learns a name when its owner
-  speaks.
-- A clock option for `simulate`, so a test can fire the deadline in the
-  same tick as a summary.
-- The usage of a move that rejects.
-- A budget in money that stops a simulation.
-- A report format, a command-line tool, and a CI workflow for evals.
+**The package depends on `ambion` and `pi`.** The assistant package takes
+the simulator as a dev dependency, and its live suite is the first consumer.

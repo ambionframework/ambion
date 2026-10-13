@@ -71,10 +71,6 @@ file modes. Give `grace` the seconds that `safe()` needs:
 bash({ command: 'bash ~/bath-control/start', grace: 5, name: 'bath-hold', timeout: 3900, wait: 0 });
 ```
 
-**A cancel gives the controller its grace.** The workspace sends
-`SIGTERM`, waits `grace` seconds, then sends `SIGKILL`. The controller
-makes the device safe and exits 0 inside the grace.
-
 **Keep `node` as the only process.** `start` replaces itself with
 `node`, so a stop signal reaches the controller directly and its exit
 code reaches the workspace. A parent such as `npm start` or a forking
@@ -102,8 +98,7 @@ bash({ command: 'cd ~/bath-control && node finally.mjs', wait: 30 });
 | An error, and `safe()` fails      | 1         | Unknown; run `finally.mjs`         |
 | `SIGKILL`                         | None      | Unknown; run `finally.mjs`         |
 
-**Exit 0 means safe.** It does not mean that the target was reached. The
-event log states the claim, and you confirm it with a sensor.
+**Exit 0 means safe.** A sensor confirms that the target was reached.
 
 ## The event log
 
@@ -122,5 +117,5 @@ when the value stays inside the tolerance for `settleSeconds`, and
 `holding` follows it. `stopping` and `safe` come at a stop. `gave_up`
 comes when the lock is busy.
 
-**The log is a claim.** Confirm `reached` and `holding` through a sensor
-of the workspace, and cite its snapshot.
+**The log is a claim.** Confirm `reached` and `holding` through a sensor of
+the workspace, and cite its snapshot.

@@ -1,12 +1,12 @@
 # @ambionframework/workspace
 
 Optional filesystem resources and tools for the
-[Ambion collaboration kernel](https://ambionframework.com). Applications own
-these resources and choose which agents share them. Workspace files remain
-separate from the collaboration journal.
+[Ambion collaboration kernel](https://ambionframework.com). A workspace holds
+files and a shell for the agents that an application chooses to let share it.
+Workspace files remain separate from the collaboration journal.
 
-This package owns workspace resources, their tools, and the helpers a bash
-backend builds on.
+This package owns the workspace resource, its tools, and the helpers that a
+bash backend builds on.
 
 ## Install
 
@@ -19,22 +19,16 @@ from GitHub Packages; see [the toolchain guide](https://github.com/ambionframewo
 
 ## Use
 
-`drive.tools()` returns four file tools — `read`, `write`, `edit`, and `apply_patch` —
-and four process tools — `bash`, `ps`, `wait`, and `cancel` — plus `sql`
-when the workspace has a SQL backend, plus any tool the bash backend adds of
-its own, and their guidance. Pass it in `bundles`; each tool reaches the
-environment the backend built for that agent, rooted at
-`/home/<agent name>`. `bash` starts each command as a background process and
-returns its handle, and `drive.processes` lists them for the host; see [Processes](https://github.com/ambionframework/ambion/blob/main/docs/processes.md).
+`openWorkspace` takes its backends by kind: `backend: { bash, sql, objects }`.
+`bash` is required, and its `git` option holds the optional git backend.
+`sql` and `objects` are optional.
 
-Every process gets a port in `$PORT`. A bash backend with `endpoints` also
-adds `fetch`. Start a server on `$PORT`, then call
-`fetch({ process: 'bench', path: '/temperature' })`. The result includes the
-status, the body, an export path, and a snapshot ref. An image returns as an
-image, and the text of the result names its export path. A `read` of an image
-does the same with `Image path: <path>`. `drive.fetch` reads a process for the
-host. See [Processes](https://github.com/ambionframework/ambion/blob/main/docs/processes.md)
-for processes that serve HTTP.
+`drive.tools()` returns an ordinary tool bundle. It holds the file tools
+(`read`, `write`, `edit`, and `apply_patch`), the process tools (`bash`, `ps`,
+`wait`, and `cancel`), and `snapshot` and `restore`. A SQL backend adds `sql`,
+a git backend adds `repos` and `fork`, and a backend with endpoints adds
+`fetch`. Each tool reaches the environment that the backend built for the
+calling agent, rooted at `/home/<agent name>`. Pass the bundle in `bundles`.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';
@@ -59,81 +53,38 @@ const surveyor = defineAgent({
 });
 ```
 
-## Use the resource directly
+## Entry points
 
-The root entry loads no backend. `./resource` holds only the neutral
-contract: `openResource` and its types. It loads neither the Ambion runtime
-nor a model library. `./sqlite` holds `sqliteBackend`, the SQL backend
-over one SQLite database. Its options `schema`, `appendOnly`, and
-`provenance` give a database of records: tables that accept INSERT alone,
-with the agent, the room, the activation, and the exchange of each new
-row. `./s3` holds `s3ObjectBackend`, the object backend over an S3 API,
-and it loads `aws4fetch`. `./conformance` holds `workspaceConformance`,
-the scenario matrix a new backend runs to prove it meets the resource
-contract, and `gitConformance` and `objectConformance`, the cases a
-`GitBackend` and an `ObjectBackend` run.
-
-`./git` holds what every git backend shares, and it loads no git library.
-The name rules of a repository ID are `validName`, `namespaceOf`,
-`assertAgent`, `readOnly`, `writableBy`, `TEMPLATES`, and `SHARED`. `revisionOf` and
-`validRefName` read a branch, a tag, or a hash as a name alone.
-`DEFAULT_BRANCH` and `BACKEND_AUTHOR` name the default branch and the author
-of every commit that a backend writes.
-`registerRepositories` holds every decision of registration, and a backend
-supplies its `RegistrationSteps`. The registration helpers
-are `filesOf`, `hashesOf`, `sameFiles`, and `changeTo`, with the
-`RepositoryRegistration` type. `@ambionframework/just-bash/git` holds a git
-backend that uses them. The root entry holds `fromDirectory` and the
-`FileSource`, `SourceFiles`, and `SourceInput` types, which templates and
-skills share. Both git backends accept `templates` and `shared` maps of
-registrations. Templates follow their source; shared repositories read
-it only to create the first commit, then preserve agents' content.
-Every agent can push to `shared/<name>`, whose default branch refuses
-deletion and non-fast-forward updates.
-
-`openWorkspace` takes its backends by kind: `backend: { bash, sql, objects
-}`. `bash` is required, and its `git` option holds the optional git
-backend. `sql` is an optional `SqlBackend`, and the
-`sql` tool then runs on that database. `objects` is an optional
-`ObjectBackend` for the bytes of each snapshot; absent, a folder of the bash
-backend holds them. With no SQL backend, the workspace has no `sql`
-tool. The root entry exports the `SqlBackend` interface.
-
-```ts
-import { memoryBackend } from '@ambionframework/just-bash';
-import { openResource } from '@ambionframework/workspace/resource';
-
-const backend = memoryBackend({
-  seed: async (write) => write.writeFile('notes.txt', 'Checked the plan.'),
-});
-const drive = openResource({ name: 'team-site', backend });
-// `drive.use(agent, operation)` runs one operation with an agent's environment.
-console.log(await backend.readFiles());
-await drive.dispose();
-```
-
-This handle has `use` and `dispose`. The root `openWorkspace` function adds
-the Ambion tool bundle over the same resource implementation. Both paths use
-the lifecycle contract below.
+| Entry                                    | Holds                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------ |
+| `@ambionframework/workspace`             | `openWorkspace`, `loadSkills`, `fromDirectory`, and the port of a bash backend |
+| `@ambionframework/workspace/resource`    | `openResource` and its types. It loads no runtime and no model library         |
+| `@ambionframework/workspace/sqlite`      | `sqliteBackend`, the SQL backend over one SQLite database                      |
+| `@ambionframework/workspace/s3`          | `s3ObjectBackend`, the object backend over an S3 API. It loads `aws4fetch`     |
+| `@ambionframework/workspace/git`         | What every git backend shares. It loads no git library                         |
+| `@ambionframework/workspace/conformance` | `workspaceConformance`, `gitConformance`, and `objectConformance`              |
 
 ## The bash backends
 
-A bash backend is a separate package, and this package depends on none of
-them:
+A bash backend is a separate package, and this package depends on none of them.
 
 | Package                        | Backend                                                           |
 | ------------------------------ | ----------------------------------------------------------------- |
 | `@ambionframework/just-bash`   | `memoryBackend` and `directoryBackend`, over just-bash in process |
 | `@ambionframework/workstation` | `workstationBackend`, over SSH to one remote server               |
 
-A new backend builds its `ExecutionEnv` on the helpers of the root entry
-and runs `workspaceConformance`.
+A new backend builds its `WorkspaceEnv` on the helpers of the root entry and
+runs `workspaceConformance`.
 
-## The contract
+## Documentation
 
-[`docs/workspace.md`](https://github.com/ambionframework/ambion/blob/main/docs/workspace.md)
-is the design contract. It specifies the resource, its lifecycle, backend
-tools and the just-bash backends.
+[The workspace](https://github.com/ambionframework/ambion/blob/main/docs/workspace.md)
+states the resource, the tools, and the backends.
+[Processes](https://github.com/ambionframework/ambion/blob/main/docs/processes.md),
+[Snapshots](https://github.com/ambionframework/ambion/blob/main/docs/snapshots.md),
+[SQL](https://github.com/ambionframework/ambion/blob/main/docs/sql.md), and
+[Skills](https://github.com/ambionframework/ambion/blob/main/docs/skills.md)
+state the parts.
 
 ## License
 

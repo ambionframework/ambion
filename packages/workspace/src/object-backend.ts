@@ -8,7 +8,7 @@
  * same bytes have one object. The workspace checks the digest on every
  * read, so a backend promises storage alone.
  *
- * This module holds types only. `docs/workspace.md` states the contract.
+ * This module holds types only. `docs/snapshots.md` states the contract.
  */
 
 import type { ResourceBackend, ResourceEnv } from './resource.ts';

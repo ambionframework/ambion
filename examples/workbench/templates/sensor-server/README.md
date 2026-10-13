@@ -52,10 +52,6 @@ Run the template tests after making a change:
 npm test
 ```
 
-The tests run the real HTTP server. They check the schemas, the retained
-file digests, the conformance cases of protocol version 2, bad requests,
-launch metadata, and the external data directory.
-
 After the tests pass, commit and push the branch before starting the saved
 version:
 
@@ -135,12 +131,8 @@ saved version as a new process. Keep the same
 rolling back so each version uses the same persistent data directory. Name the
 new process the same, so the macro reads it.
 
-Rollback means stopping the process, checking out an earlier commit, and
-starting that code with the same data directory. The template's current
-`acquisition.json`, append-only JSONL observations, and digest-named blobs
-remain in place; Git rollback does not rewind them. The current server does
-not read prior observation records, and no library data migration or
-compatibility upgrade is provided. If a code change alters the format or
-meaning of data that a server version reads, use a separate data directory
-or make a backup before switching versions. A future format change must
-document its own compatibility behavior.
+Git rollback does not rewind `AMBION_SENSOR_DATA_DIR`. The directory keeps
+`acquisition.json`, the observation log, and the blobs. The current server
+does not read earlier observation records. If a code change alters the format
+or meaning of data that a server version reads, use a separate data directory
+or make a backup before you switch versions.

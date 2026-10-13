@@ -65,12 +65,9 @@ against; neither installs a tarball in an external project the way the smoke
 check does.
 
 **A packed consumer of the workspace installs no Pi package.**
-`scripts/packed-consumer.test.mjs` packs the workspace, the workstation, and
-just-bash as their tarballs. It reads the manifest of each tarball, and it
-lists the production dependencies of the package from the lockfile. The
-check needs no network. It fails on a package of the scope
-`@earendil-works` in either place. Biome refuses the same imports in `src`
-of the three packages.
+`scripts/packed-consumer.test.mjs` packs the workspace, workstation, and
+just-bash packages. It checks that the manifest of each tarball and its
+production dependency closure hold no `@earendil-works` package.
 
 The core has five published entries:
 
@@ -126,7 +123,7 @@ table. Add a new layer or file to the table first.
 | Language               | TypeScript 7, strict settings                              |
 | Contracts              | LemmaScript 0.6 with Dafny backend                         |
 | Bundling               | tsdown, ESM output and `.d.mts` declarations               |
-| Tests                  | Vitest 4                                                   |
+| Tests                  | Vitest                                                     |
 | Coverage               | `@vitest/coverage-v8`, on demand; the gate does not run it |
 | Lint                   | Biome 2; its formatter is disabled                         |
 | Formatting             | Prettier 3; 100-column, tabs in code, spaces in Markdown   |
@@ -134,7 +131,7 @@ table. Add a new layer or file to the table first.
 
 Every library package requires Node `>=22.19.0`. `examples/workbench` and
 `examples/camera-chat` require Node `>=26.4.0`, the OpenTUI floor;
-`examples/workbench` also runs on Bun `>=1.3`. CI tests both floors: Node
+CI tests both floors: Node
 `22.19.0` for the library packages, Node `26.4.0` for the library packages
 and the two examples together.
 
@@ -217,27 +214,11 @@ timings, passing tests, and stack frames inside `node_modules`. It puts a
 header over the lines of each turbo task and makes each path relative to
 the root. The last line names the failed steps, for `pnpm check <step...>`.
 
-LemmaScript source, its `.dfy`, and a hand-written `.proofs.dfy` are kept
-together. The `.dfy` equals the generation, which `lsc gen` writes to a
-`.dfy.gen` that git ignores. `pnpm rule:check <file>` after a contract edit
-copies the generation to the `.dfy`. A proof the generator cannot write
-goes in the `.proofs.dfy`, which includes the `.dfy`. `pnpm check` runs
-`lsc gen-check`, which regenerates and fails on a stale file without Dafny; `pnpm check:lemmascript` runs the
-proof and `check-extra.sh`, which verifies every proofs file, and needs
-Dafny on `PATH`. `pnpm rule:check <file>` does both for one file.
-`lsc gen-check` passes a `.dfy` that only adds lines to the generation, so
-[`scripts/rules-fresh.sh`](../scripts/rules-fresh.sh) compares each listed
-`.dfy` with the generation that `lsc gen-check` just wrote and names the
-stale file.
-
-`LemmaScript-files.txt` lists what CI verifies, one `path [timeout] [dafny
-flags]` per line. A timeout above 60 turns the batch check into a generation
-check with no proof, because CI passes no `--slow`; keep every timeout at 60
-or below. A rule that calls `filter` needs `--standard-libraries` in the
-flag column. The CI job clones the LemmaScript tools at `ls-ref`, which
-must name the `lemmascript` version in `package.json`.
-[`formal.md`](formal.md) holds the mechanism, the constructs that lower,
-and what a contributor does to change a rule.
+**Contract files are generated and proved.** `pnpm check` fails on a stale
+`.dfy` and needs no Dafny. `pnpm check:lemmascript` proves every listed file.
+`pnpm rule:check <file>` does both for one file. [Formal
+verification](formal.md#3-the-generated-files) states the generated files,
+the proofs files, `LemmaScript-files.txt`, and the CI job.
 
 `scripts/setup.sh` provisions the full local toolchain. It installs Node
 26.4.0 through nvm, the development version, because `examples/workbench`
@@ -320,38 +301,39 @@ runtime import of such a package gives that second finding.
 
 The live workflow runs the same scenarios on a real provider. It runs after a
 change lands on `main`, on a weekly schedule, and by dispatch. It does not run
-on a pull request, because a real-model run costs money. It runs one
-job per harness. The `pi` and `claude` jobs read `ANTHROPIC_API_KEY` and use
-`AMBION_MODEL` (the default is `anthropic/claude-sonnet-5`). The `codex` job
-reads `CODEX_API_KEY`. The `packages` job runs the live tier of every other
-package, with a limit of 90 minutes. It sets `AMBION_THINKING` and
-`JUDGE_THINKING` to `medium`. `AMBION_THINKING` sets the reasoning level of
-each executor kind in the Ambion, workspace, assistant, and simulator live
-suites. Codex uses `medium` when it is unset. Claude accepts an effort level
-and ignores any other value. `JUDGE_THINKING`
-sets reasoning for assistant and simulator judges. If either variable is
-unset, each consumer uses its own default. With an
-`OPENAI_API_KEY` secret, it sets `JUDGE_MODEL` to `openai/gpt-5.6-luna`, so
-a model from another provider grades the assistant. The workflow cancels a superseded
-run. Run it locally
-with:
+on a pull request, because a real-model run costs money. It cancels a
+superseded run. Run it locally with:
 
 ```sh
 pnpm test:live
 ```
 
-`AMBION_EXECUTOR` is `pi` (the default), `claude`, or `codex`. It selects the
-executor of the live seats. The live workflow runs a matrix on the three
-values, and each leg runs the live files of `@ambionframework/ambion` only.
-A harness whose secret is empty skips. One separate job runs the live tier of
-every other package once, with both keys. Run one harness by hand with
-`AMBION_EXECUTOR=codex pnpm test:live`. The `codex` harness reads
-`CODEX_API_KEY` and runs the model `gpt-5.6-luna`.
+**The live tier reads these variables.**
 
-A live file of `@ambionframework/ambion` or `@ambionframework/workspace` runs
-on the key, or else on the login of the host. The key wins when it is set.
-The login of a `codex` seat is `~/.codex/auth.json`. The login of a `pi` seat
-is a stored sign-in for the provider of `AMBION_MODEL` in
+| Variable            | Meaning                                                                                                                                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AMBION_EXECUTOR`   | `pi` (the default), `claude`, or `codex`. It selects the executor of the live seats                                                                                                                        |
+| `AMBION_MODEL`      | The model of the live seats. The default is `anthropic/claude-sonnet-5`                                                                                                                                    |
+| `AMBION_THINKING`   | The reasoning level of each executor kind in the Ambion, workspace, assistant, and simulator live suites. Codex uses `medium` when it is unset. Claude accepts an effort level and ignores any other value |
+| `JUDGE_THINKING`    | The reasoning level of the assistant and simulator judges                                                                                                                                                  |
+| `JUDGE_MODEL`       | The model of the judges. CI sets `openai/gpt-5.6-luna` when the `OPENAI_API_KEY` secret exists, so a model from another provider grades the assistant                                                      |
+| `ANTHROPIC_API_KEY` | The key of the `pi` and `claude` seats                                                                                                                                                                     |
+| `CODEX_API_KEY`     | The key of the `codex` seat, which runs the model `gpt-5.6-luna`                                                                                                                                           |
+
+If `AMBION_THINKING` or `JUDGE_THINKING` is unset, each consumer uses its own
+default. CI sets both to `medium`.
+
+**The live workflow runs one job for each harness.** The `pi` and `claude`
+jobs read `ANTHROPIC_API_KEY`. The `codex` job reads `CODEX_API_KEY`. Each of
+the three legs runs the live files of `@ambionframework/ambion` only, and a
+harness whose secret is empty skips. The `packages` job runs the live tier of
+every other package once, with both keys and a limit of 90 minutes. Run one
+harness by hand with `AMBION_EXECUTOR=codex pnpm test:live`.
+
+**A live file of `@ambionframework/ambion` or `@ambionframework/workspace`
+runs on the key, or else on the login of the host.** The key wins when it is
+set. The login of a `codex` seat is `~/.codex/auth.json`. The login of a `pi`
+seat is a stored sign-in for the provider of `AMBION_MODEL` in
 `~/.ambion/pi/credentials.json`, such as `openai-codex` with
 `AMBION_MODEL=openai-codex/<model>`. A `claude` seat has no login path and
 needs `ANTHROPIC_API_KEY`. The live files of `@ambionframework/assistant` and
@@ -454,10 +436,3 @@ NODE_AUTH_TOKEN=... node scripts/release.mjs promote --otp <code>
 ```
 
 The packages carry no provenance attestation.
-
-## 10. Departures from Flue
-
-Ambion keeps the pnpm, Turborepo, Biome, Prettier, Knip, tsdown, and Vitest
-shape but supplies its own CI/dev-release workflow and lockstep versioning
-script. The release scripts are small, side-effect-free when imported, and
-operate on one packed artifact set, so the published bytes are the packed bytes.

@@ -254,7 +254,7 @@ async function specOf(
 ): Promise<string> {
 	const dir = await env.absolutePath(`~/.processes/${handle}`);
 	if (!dir.ok) throw dir.error;
-	const spec = { handle, agent: OWNER, command, timeout, grace: 10, startedAt };
+	const spec = { handle, agent: OWNER, command, port: 0, timeout, grace: 10, startedAt };
 	expect(await env.createDir(dir.value, { recursive: true })).toMatchObject({ ok: true });
 	expect(await env.writeFile(`${dir.value}/spec`, JSON.stringify(spec))).toMatchObject({
 		ok: true,

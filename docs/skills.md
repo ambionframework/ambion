@@ -17,15 +17,8 @@ hold the files of the set. The seat reads a skill with `read` and runs a
 script with `bash`. Pi, Claude, and Codex seats hold the same workspace
 tools, so a skill works the same on each harness.
 
-**`@ambionframework/workspace` implements this page.**
-
-| File              | Holds                                                                  |
-| ----------------- | ---------------------------------------------------------------------- |
-| `skills.ts`       | `loadSkills`, the checks, the guidance, and the copy step              |
-| `skill-macros.ts` | The macro files: the header, the body, and the hash                    |
-| `skill-text.ts`   | The error of a skill set, the names, and the YAML header               |
-| `sources.ts`      | `fromDirectory`, the source types, and the blob hashes of a set        |
-| `workspace.ts`    | `tools({ skills })`: the guidance, the reminder, and the tool wrappers |
+**A skill can also store macros.** A macro is a compose program that the
+model runs by name ([Macros](#macros)).
 
 ## Words
 
@@ -176,7 +169,7 @@ breaks one.** The error starts with `Skill set:` and names the file.
 | `name` has 1 to 64 characters of `a-z`, `0-9`, and single hyphens, with no hyphen at an end | `Pour`, `a--b`, `-a`              |
 | `description` is text that is not blank, of at most 1024 characters                         | No `description`                  |
 | `compatibility`, when present, is text of at most 500 characters                            | 501 characters                    |
-| Each macro file passes the rules of [Macros](macros.md#the-file-format)                     | A `macros/x.js` with no header    |
+| Each macro file passes the rules of [the file format](#the-file-format)                     | A `macros/x.js` with no header    |
 | The set holds at least one skill                                                            | An empty folder                   |
 
 **Other frontmatter fields stay in the file, and the room reads none of
@@ -184,21 +177,12 @@ them.** `license`, `metadata`, and `allowed-tools` reach the model only when
 it reads `SKILL.md`. The workspace does not limit the tools of a seat by
 `allowed-tools`.
 
-## Macros
-
-**A skill can store macros in `macros/<name>.js`.** A macro is a compose
-program that the model runs by name. `loadSkills` checks each macro file and
-keeps its text and hash in `set.macros`, and `workspace.tools({ skills })`
-puts them on the bundle. The copy in `~/.skills` holds the files too.
-[Macros](macros.md) states the format, the checks, and what the copy
-protects.
-
 ## What the model reads
 
-**The guidance of the bundle lists each skill.** Pi's
-`formatSkillsForSystemPrompt` writes the list, and the bundle adds two
-lines about the copy. The guidance goes in the system prompt of every
-activation, after the guidance of the workspace tools.
+**The guidance of the bundle lists each skill.** `skillGuidance` writes the
+list as XML, and adds two lines about the folder of the skills. The guidance
+goes in the system prompt of every activation, after the guidance of the
+workspace tools.
 
 ```text
 The following skills provide specialized instructions for specific tasks.
@@ -217,49 +201,28 @@ resources. Read a file with read, and run a script with bash.
 ```
 
 **The location starts with `~`.** `read` and `bash` resolve `~` to the home
-of the calling agent. The guidance is fixed
-when the agent is defined, and a workstation account gets its home from
-the server, so the guidance does not name the absolute path.
+of the calling agent. The guidance is fixed when the agent is defined, and a
+workstation account gets its home from the server, so the guidance does not
+name the absolute path.
 
 ## The copy in the home
 
 **Each respond activation makes the copy hold the set.** The reminder of the
 bundle queues the copy step on the bash resource, and then gives the process
-reminder ([Reminders](processes.md#reminders)).
+reminder ([Reminders](processes.md#reminders)). A summarize activation makes
+no copy: the executor calls no reminder for it.
 
-```mermaid
-sequenceDiagram
-  participant E as Executor
-  participant B as Bundle reminder
-  participant O as Bash resource
-  E->>B: remind(seat)
-  B->>O: queue the copy step
-  B->>O: queue the process reminder
-  O->>O: read ~/.skills/.manifest
-  alt the manifest matches the set
-    O-->>O: done
-  else no manifest, or another set
-    O->>O: remove ~/.skills, write each file, chmod +x each script, write the manifest
-  end
-  O-->>B: the process text
-  B-->>E: the process text
-  E->>O: the first tool call of the activation
-```
-
-**The copy step has two costs.**
-
-- **A matching manifest costs one read.** This is the usual case.
-- **Another manifest, or none, costs one write for each file.** This
-  happens at the first activation of the agent, after the set changes, and
-  after the manifest goes. The step also runs one `chmod` command when
-  the set has a script.
+**A matching manifest costs one read.** This is the usual case. Another
+manifest, or none, costs one write for each file, and one `chmod` command when
+the set has a script. This happens at the first activation of the agent,
+after the set changes, and after the manifest goes.
 
 **The copy ends before the first tool call of the activation.** The bash
 resource runs its operations in order, and the reminder queues the copy
 before the model makes a request. The reminder does not wait for the
-copy, so the 5-second bound of a reminder does not cut it. A long copy
-delays the process reminder behind it. A copy that takes more than 5
-seconds loses the process list of that one activation.
+copy, so the 5-second bound of a reminder does not cut it. A copy that takes
+more than 5 seconds delays the process reminder behind it, and the process
+list of that one activation is lost.
 
 **The manifest is written last.** A copy that fails, or that a crash cuts,
 leaves no manifest. The next respond activation writes the whole copy
@@ -273,12 +236,8 @@ copy at the next activation.
 
 **A run with no reminder copies at its first tool call.** Pi's `runAgent`
 runs an agent outside a room and resolves no reminder. Each tool of the
-bundle queues the copy before its own operation when the bundle has not
-copied for that agent in this process. In a room, the reminder has already
-copied, so a tool call adds no operation.
-
-**A summarize activation makes no copy.** The executor calls no reminder
-for it, and a summary activation holds `say` alone.
+bundle then queues the copy before its own operation, when the bundle has not
+copied for that agent in this process.
 
 ## Scripts and resources
 
@@ -299,6 +258,230 @@ in `SKILL.md`.
 reference. An asset can be binary, and the copy keeps its bytes. A script
 or a command of the seat reads an asset by its path in the copy.
 
+## Macros
+
+**A macro is a compose program that a skill stores as data.** Macros are
+the main use of `compose`. The model runs a macro by name with arguments and
+writes no code. The macro declares the tools that it uses, and the room checks
+the arguments before anything runs. [Compose](compose.md) holds the tool that
+runs it.
+
+**A macro saves the model from writing the same code in each exchange.** Each
+line of code costs output tokens, and each copy can differ from the last one
+by a typo or a changed query. A script under `scripts/` repeats a procedure for
+the shell alone: it cannot reach `sql`, `snapshot`, or any other tool of the
+room. A macro reaches those tools, and the code never passes through the model.
+
+A skill holds a macro in a file. The file declares the tools and the
+arguments of the macro, and holds the code.
+
+```js
+/*---
+description: Snapshot the files of every run with a label. Returns the count and the refs.
+uses: [sql, snapshot]
+args:
+  type: object
+  properties: { label: { type: string } }
+  required: [label]
+---*/
+const runs = await tools.sql({
+  sql: 'SELECT path FROM runs WHERE label = ?',
+  params: [args.label],
+  rows: 500,
+});
+const { refs } = await tools.snapshot({ paths: runs.rows.map((row) => row.path) });
+return { runs: runs.count, refs };
+```
+
+This file is `lab-drift/macros/snapshot-drift.js`. `SKILL.md` names the macro
+and does not quote it. The name is `<skill>/<macro>`.
+
+```markdown
+1. Run the macro `lab-drift/snapshot-drift` with `{ "label": "drift" }`.
+2. Cite the refs in your say.
+```
+
+The guidance of `compose` lists the macro with its description
+([Compose](compose.md#guidance)). The model runs it with one call:
+
+```js
+compose({ macro: 'lab-drift/snapshot-drift', args: { label: 'drift' } });
+```
+
+The rows and the paths stay in the compose call. The model reads the
+returned value alone, and then cites the refs in a `say`:
+
+```json
+{ "runs": 2, "refs": ["ambion://workspace/lab/snapshot/<sha256>/shared/a.md", "..."] }
+```
+
+**The code runs under the tools of `uses` alone.** `uses` belongs to the
+file. `describeExecutor` checks it once, when the definition is made, and
+the model cannot widen it. A macro binds only tools that the seat holds, so
+its authority is the authority of a direct call.
+
+**The code is frozen at definition.** `compose` finds the macro in the
+skill set of the definition and never reads `~/.skills`. An edit of the copy
+does not change what runs.
+
+**A macro call is a compose call.** Each nested call is an ordinary tool
+call with its schema, its checks, its provenance, and its steps. The ledger,
+the limits, and the audit log apply.
+
+**One skill set fits every seat.** A definition that `describeExecutor`
+builds with no `compose` option ignores the macros and lists none. The
+executor packages always set the option.
+
+### The file format
+
+**A macro file sits in `<skill>/macros/<name>.js`.** The agentskills.io
+format allows any folder in a skill, so other harnesses ignore this one.
+A file in `macros/` that does not end in `.js` is a resource of the skill.
+
+**The file opens with a YAML block comment, and then the body.** The header
+lies between a `/*---` line and a `---*/` line. `loadSkills` strips the
+comment marks and reads the lines with the frontmatter parser of `SKILL.md`.
+The body is the body of the async function that `compose` runs, with one
+more global, `args` ([Compose](compose.md#the-runtime)).
+
+**The header has three fields, and `loadSkills` refuses any other.**
+
+| Field         | Rule                                                                      |
+| ------------- | ------------------------------------------------------------------------- |
+| `description` | Text that is not blank, of at most 1024 characters. The guidance shows it |
+| `uses`        | A non-empty list of tool names. The macro binds these tools alone         |
+| `args`        | Required. A JSON Schema object that the arguments must satisfy            |
+
+**`loadSkills` refuses a macro file that breaks a rule.** The error starts
+with `Skill set:` and names the file.
+
+| Rule                                                                            | Refused example                  |
+| ------------------------------------------------------------------------------- | -------------------------------- |
+| The file is UTF-8 text that starts with a header in a `/*---` and `---*/` block | A body with no header            |
+| The header is a YAML mapping with the fields above and no other field           | `when: always`                   |
+| The name of the file has the rules of a skill name, before `.js`                | `Snap_Shot.js`, `a--b.js`        |
+| The file sits directly in `macros/`                                             | `macros/more/one.js`             |
+| `description` and `uses` follow the table above                                 | `uses: []`                       |
+| `args` is JSON Schema of draft 2020-12 with the keywords that the check reads   | `type: banana`, `$ref`, `format` |
+
+**The check of `args` refuses a keyword that `Check` ignores.** TypeBox
+ignores a keyword that it does not know, so a schema with one would accept
+every value. The schema must satisfy the meta-schema of draft 2020-12, and
+every keyword must be in this list. The list omits `$ref`, `$defs`, `$id`,
+`$anchor`, and `format`.
+
+| Kind              | Keywords                                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| Types and values  | `type`, `enum`, `const`, `required`, `dependentRequired`                                              |
+| Numbers           | `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`                            |
+| Text              | `minLength`, `maxLength`, `pattern`                                                                   |
+| Lists and objects | `minItems`, `maxItems`, `uniqueItems`, `minProperties`, `maxProperties`, `minContains`, `maxContains` |
+| Schemas inside    | `properties`, `patternProperties`, `additionalProperties`, `items`, `prefixItems`, `contains`         |
+| Combinations      | `allOf`, `anyOf`, `oneOf`, `not`, `if`, `then`, `else`, `dependentSchemas`, `propertyNames`           |
+| Open objects      | `unevaluatedProperties`, `unevaluatedItems`                                                           |
+| Notes             | `title`, `description`, `default`, `examples`, `$comment`                                             |
+
+**`loadSkills` keeps the text and the hash of each macro.** The set holds
+`set.macros`. Each entry has the name, the description, `uses`, the `args`
+schema, the body as text, and the git blob hash of the whole file.
+`Object.freeze` does not freeze the bytes of a file, so the set keeps the
+text of the macro. The copy in `~/.skills` holds the file too.
+
+**`workspace.tools({ skills })` puts the macros on the bundle.** The field
+is `ToolBundle.macros`. It holds `ComposeMacro` values, and
+`composeMacro(fields)` checks the fields and gives a frozen copy. A bundle
+only carries the data.
+
+### How compose runs a macro
+
+**`describeExecutor` checks the macros of a seat that has the `compose` tool.** It
+collects the macros of every bundle. It refuses a macro that names a tool
+which the catalog lacks. The catalog holds the tools of the seat and the room
+tools. A tool with `compose: false` is not in the catalog. It refuses two
+macros with one name. The error is an `AmbionError` with the code
+`invalid_tool`.
+
+**`compose` takes a macro in place of `uses` and `code`.** The model gives
+`macro` and an optional `args`. These steps run in this order:
+
+1. Refuse a call that mixes `macro` with `uses` or `code`.
+2. Refuse a name that no macro holds. The error lists the names.
+3. Take absent `args` as `{}`. Refuse `args` that are not JSON.
+4. Check `args` against the schema of the macro. The refusal gives the
+   path and the rule of each fault.
+5. Ask `approve` with the name, the hash, and the `args`
+   ([Approval](compose.md#approval)).
+6. Evaluate the stored code under the stored `uses`.
+
+A refusal at steps 1 to 4 has no ledger, no approval, and no effect. A
+denial at step 5 has no ledger and no effect. From step 6 the call is an
+ordinary compose call: the nested calls, the ledger, the limits, and the
+result.
+
+### Review a macro
+
+**The seat that holds the skill reads it.** The copy in
+`~/.skills/<skill>/macros/<name>.js` holds the whole file. `read` gives the
+text, so the agent sees the header and the body before it runs the macro.
+The scripts and the resources of the skill sit beside it.
+
+**The hash of the approval equals the hash of the file.** The `hash` that
+`approve` receives is the blob hash that `loadSkills` computes from the
+bytes of the file: SHA-1 over `blob <size>`, a zero byte, and the bytes.
+`git hash-object <file>` gives the same value for the same bytes.
+`~/.skills/.manifest` lists the same value for the path
+`<skill>/macros/<name>.js`. A reviewer who reads the bytes can match them to
+the approval. Any change to the file gives another hash.
+
+**The copy is editable, and the run is not.** A review of the copy reads
+what the agent can change. An edit shows when the blob hash of the copied
+file differs from the hash in the manifest, or from the hash that `approve`
+receives. On `memoryBackend` and `directoryBackend`, the manifest is a file
+of the copy, so an agent can change it too. The hash from the host is the
+reference.
+
+**A host reviews the source.** The skill set is a folder in the repository
+of the host, so a pull request review covers each macro and each script. The
+host can hold the hash of a reviewed file and let `approve` allow that
+hash alone:
+
+```ts
+const reviewed = new Map([['lab-drift/snapshot-drift', blobHashOfReviewedFile]]);
+
+compose: {
+  runtime,
+  approve: (request) =>
+    'macro' in request && reviewed.get(request.macro) === request.hash ? 'allow' : 'deny',
+},
+```
+
+An edit of the file in the repository gives another hash, and `approve`
+denies it until the host records the new hash after a review.
+
+### Write a macro
+
+**A macro sends model data to tools, so treat it as a public API.** The model
+chooses `args`.
+
+- **Check `args` with the schema.** `compose` checks them before it runs any
+  code. Close the object with `additionalProperties: false`, and bound
+  numbers and text.
+- **Pass SQL values through `params`.** The `params` field binds each value
+  to a `?` placeholder, so a quote in an argument cannot change the
+  statement ([Query the shared database](sql.md#query-the-shared-database)).
+  Never join `args` into the text of a statement.
+- **Quote a value that goes into a shell command.** Pass it to `bash` as a
+  quoted word.
+- **Return only what the model needs.** The model reads the returned value
+  alone. The value must be JSON and fit `compose.limits.bytes`.
+- **Keep `uses` minimal.** List the tools that the code calls. Each name is
+  authority that the macro holds.
+- **Write the work in the body.** A body that runs a script of `~/.skills`
+  through `bash` runs the editable copy.
+- **Reach a process through the `fetch` tool.** The guest has no global
+  `fetch`. A macro that lists `fetch` in `uses` calls
+  `tools.fetch({ process, path })` and reads its declared output.
+
 ## Separation and trust
 
 **The copy of each agent is in its own home.** What protects it depends on
@@ -311,9 +494,16 @@ the backend.
 | The workstation over SSH | `surveyor` alone. Each home is mode `0700` for its own account                 |
 
 **The set in the definition does not change.** An edit of the copy lasts
-until the copy step writes it again. The macros of the set run from the
-set, so an edit of a macro file in the copy changes none of them ([Macros](macros.md#what-a-macro-keeps-and-what-it-does-not)). [Trust](trust.md#what-the-kernel-does-not-defend)
+until the copy step writes it again. [Trust](trust.md#what-the-kernel-does-not-defend)
 states what the kernel does not defend.
+
+### What a macro keeps, and what it does not
+
+| Part                                | Protected                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| The body, `uses`, and `args` schema | Yes. They come from the set, and `approve` sees the hash                  |
+| A script that the body runs by path | No. `bash ~/.skills/<skill>/scripts/x.sh` runs the editable copy          |
+| `SKILL.md`                          | No. The copy decides which macro the model runs, and with which arguments |
 
 ## Skills and git templates
 
@@ -343,8 +533,10 @@ in the fork of an agent changes nothing that runs
   command that invokes a skill by name.
 - **`loadSkills` sets no size limit.** Each file of the set is in the
   memory of the host, and each copy writes every file.
-- **The guidance lists every skill of the set.** Each skill adds its name,
-  its description, and its location to the system prompt of every
-  activation.
-- **The workspace does not read `allowed-tools`.** A seat holds the tools
-  of its definition, whatever a skill names.
+- **A macro cannot call a macro.** `tools` binds native tools alone.
+- **The free `code` form stays.** The guidance asks the model to run a macro
+  when a skill names one. The model can still write code.
+- **No agent writes a macro of its own.** A macro comes from a skill set that
+  the host loads.
+- **No tool reviews the skills of another agent.** The kernel does not
+  defend this ([Trust](trust.md#what-the-kernel-does-not-defend)).

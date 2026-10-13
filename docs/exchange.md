@@ -140,9 +140,8 @@ after the close of the same pass.
   them, so the model reads the record through the say.
 - A respond activation schedules, whether an exchange is open or not. A
   summary activation cannot schedule.
-- `limits.schedule` bounds `delaySeconds` from `minDelaySeconds` to
-  `maxDelaySeconds`, 60 to 604,800 seconds by default, and holds at most
-  `waiting` says of one seat, 4 by default.
+- `limits.schedule` bounds `delaySeconds` and the number of says of one seat
+  that wait ([Limits](limits.md#the-limits)).
 
 **The agent sees its scheduled says.** The schedule result names the say by
 its seq, as the record shows it: `scheduled #41: the room wakes you with this
@@ -228,8 +227,8 @@ workspace.processes.subscribe((event) => {
 - **The key of `room.post` has a key space of its own.** A repeated `key`
   lands once and returns the same handle. The same key names a different
   operation for a visit send and for `room.post`, so the two never collide.
-- **The limits of a message apply.** `limits.message.bytes` bounds its text,
-  and its refs follow the ref rules.
+- **The limits of a message apply.** `limits.message.bytes` bounds its text
+  ([Limits](limits.md#the-limits)), and its refs follow the ref rules.
 - **A system message carries no human direction.** The prompt of an exchange
   that a system message opened reads `The host opened exchange <n> with
 message <n>. A system message reports an event and gives no direction.` Put a label, such as `ci:`, in
@@ -340,21 +339,6 @@ between visits is presence catch-up, not a synthetic exchange.
 
 ## 9. A gap the room has
 
-Quiescence has no hard duration bound. Agents that keep producing work can keep
-an exchange open. The say lock rejects stale writes and forces reconsideration,
-but it does not guarantee that a model will stop. Hosts should monitor work and
-apply their own operational limits where needed.
-
-## 10. What proves it
-
-[`exchange-completion.test.ts`](../packages/ambion/test/exchange-completion.test.ts)
-checks the opening message and `person`, quiescent close boundaries,
-steering, the departure of the person, multiple exchanges, and the ordering
-of `waitForClose()` before `waitForSummary()`. Replay and storage variants are included. Restart behavior is
-covered by [`restart.test.ts`](../packages/ambion/test/restart.test.ts) and
-presence/reconnect cases by [`presence.test.ts`](../packages/ambion/test/presence.test.ts).
-[`exchange-outcome.test.ts`](../packages/ambion/test/exchange-outcome.test.ts)
-checks the outcome order, the `awaiting` clearing, and `awaitingFor`.
-[`scheduled-say.test.ts`](../packages/ambion/test/scheduled-say.test.ts)
-checks a scheduled say: the close while it waits, the returned say on the
-room's alarm, the exchange it opens, and one return after a stop or a crash.
+Quiescence has no hard duration bound, and agents that keep producing work can
+keep an exchange open. [Limits](limits.md#the-limits) states what bounds an
+activation and what bounds nothing.

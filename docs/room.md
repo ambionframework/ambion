@@ -7,8 +7,7 @@ roster, the presence, and each exchange.
 
 The [repository README](../README.md) holds the positioning and the current
 surface. The [runnable example](example.md) shows a room at work. The
-[documentation index](README.md) links every contract. The
-[road to 1.0.0](../planning/1.0.0.md) defines the scope of each release.
+[documentation index](README.md) links every contract.
 
 **The journal holds speech. Tools do the work.** An agent contributes to the
 room through `say`. An agent reaches data through its tools and the resources
@@ -17,64 +16,38 @@ call is work that the room does not replay.
 
 ## Glossary
 
-| Term             | Meaning                                                                                                                                                 | Specified in                                                                      |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Definition       | An immutable value: a name, an identity, and an executor                                                                                                | [agent.md](agent.md)                                                              |
-| Room             | Participants that collaborate through one ordered journal                                                                                               | This page                                                                         |
-| Seat             | An agent's place on the roster, with its attention                                                                                                      | [roster.md](roster.md)                                                            |
-| Attention        | Which messages wake an idle seat                                                                                                                        | [roster.md](roster.md)                                                            |
-| Reserve          | The definitions that the room knows and has not seated                                                                                                  | [roster.md](roster.md)                                                            |
-| Visit            | A person's speaking identity and presence lifetime                                                                                                      | [presence.md](presence.md)                                                        |
-| Exchange         | A person's question or a returned say, and every activation until the room is quiet                                                                     | [exchange.md](exchange.md)                                                        |
-| Person           | Of an exchange: the first person who spoke in it, and the one its summary goes to                                                                       | [exchange.md](exchange.md#4-who-directs-one-and-who-receives-its-result)          |
-| Activation       | The room waking one seat: a bounded execution with one room grant                                                                                       | This page                                                                         |
-| Step             | One recorded unit of an activation's work                                                                                                               | [executors.md](executors.md)                                                      |
-| Resource         | Application data that an agent's tools reach, with provenance. `WorkspaceResource` is the handle that serialises operations on one backend              | [resources.md](resources.md)                                                      |
-| Journal          | The ordered, append-only record that the room folds into its state                                                                                      | [durability.md](durability.md)                                                    |
-| Entry            | One item that the journal holds                                                                                                                         | [durability.md](durability.md)                                                    |
-| Message          | One item of the record: a say, a system message, a presence change, a summary, or a dismissal                                                           | [agent.md](agent.md), [presence.md](presence.md)                                  |
-| Presence message | A change in who is in the room: a person or a seat                                                                                                      | [presence.md](presence.md)                                                        |
-| Record           | The messages of the journal in seq order, as a seat or a person reads them. `readThrough` and the record window are positions on it                     | [durability.md](durability.md)                                                    |
-| Summary          | A closing message that stands for a closed exchange in agent context                                                                                    | [summary.md](summary.md)                                                          |
-| System message   | A message of the system with no author: one that the host posts, or a returned say                                                                      | [exchange.md](exchange.md#7-the-edges-a-host-sees)                                |
-| Returned say     | A system message that gives a say that an agent scheduled for itself back when it is due                                                                | [exchange.md](exchange.md#6-a-scheduled-say)                                      |
-| Lease            | The time-limited right of one activation to run and commit                                                                                              | [durability.md](durability.md)                                                    |
-| Commit           | The write of a seat to the room: a say, a seating change, or a dismissal. The two-word term `commit ref` and `CommitUri` use the git sense              | [durability.md](durability.md)                                                    |
-| Ref              | One absolute URI that a message cites                                                                                                                   | [agent.md](agent.md)                                                              |
-| Snapshot         | The frozen bytes of one workspace file, and the ref that names them by digest                                                                           | [workspace.md](workspace.md#snapshot-a-file)                                      |
-| Commit ref       | The ref of one commit of a workspace repository, by its full hash                                                                                       | [git.md](git.md#cite-a-commit)                                                    |
-| Executor         | The value in a definition that names an executor kind and holds its options                                                                             | [agent.md](agent.md#definitions)                                                  |
-| Executor kind    | The name of an executor implementation, such as `pi`, `claude`, or `codex`                                                                              | [executors.md](executors.md#the-executor-contract)                                |
-| Execution        | The services that run the seats of one executor kind                                                                                                    | [executors.md](executors.md#the-executor-contract)                                |
-| Pass             | One iteration of the executor's loop inside one activation                                                                                              | [executors.md](executors.md#the-pass-contract)                                    |
-| Due activation   | An activation that the room owes a seat; each attempt is an activation                                                                                  | [durability.md](durability.md#4-what-a-lease-promises)                            |
-| Driver           | The code of the kernel that runs one activation of an executor: it owns the lease and the state of the activation, and it runs the passes               | [executors.md](executors.md#the-pass-contract)                                    |
-| Wake             | The request that the room sends to the port of a seat for one activation                                                                                | [executors.md](executors.md#the-executor-contract)                                |
-| Cut              | The end of one running activation through its port                                                                                                      | [durability.md](durability.md#cancellation)                                       |
-| Cancel           | The end of work, which the record keeps as an entry or as a process state                                                                               | [durability.md](durability.md#cancellation)                                       |
-| Stop             | The end of one run of a room; the next run resumes from the record                                                                                      | [durability.md](durability.md#stop)                                               |
-| Run              | One run of a room over its journal, which starts with a fence                                                                                           | [durability.md](durability.md#1-the-journal-is-the-source-of-collaboration-state) |
-| Reconcile        | The host verb that folds the journal, decides the work that is due, writes the entries, and sends the requests to the seats. `Room.reconcile` is public | [durability.md](durability.md)                                                    |
-| Host             | The application that embeds a room through `startRoom`, `resumeRoom`, and the `hosting` entry                                                           | [deployment.md](deployment.md)                                                    |
-| Port             | An interface boundary that another process can implement                                                                                                | [executors.md](executors.md#the-executor-contract)                                |
-| Through          | An inclusive position on the record                                                                                                                     | [exchange.md](exchange.md#7-the-edges-a-host-sees)                                |
-| After            | An exclusive position on the record                                                                                                                     | [exchange.md](exchange.md#7-the-edges-a-host-sees)                                |
-| From             | An inclusive first position of a range, as in `ExchangeRange {from, through}`                                                                           | [exchange.md](exchange.md#7-the-edges-a-host-sees)                                |
+Each term names one thing in every page. The right column names the page
+that specifies it.
 
-## Controlled vocabulary
-
-**One word has one meaning in every page.**
-
-- An **activation** is the room waking one seat.
-- An **exchange** is a person's question or a returned say, and every
-  activation until the room goes quiet. It has no owner. Its `person` is the
-  first person who spoke in it.
-- A **turn** belongs to a vendor loop (Pi, Codex, or Claude). It is one request
-  to a provider. The room has no turns.
-- No page uses the word `round`.
-- The journal holds an **entry**. `row` names a database table row only.
-- An agent comes from a **definition**. The set of them is "the definitions",
-  with no other name.
+| Term           | Meaning                                                                                                                                                 | Specified in                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Room           | Participants that collaborate through one ordered journal                                                                                               | This page                                                                |
+| Definition     | An immutable value: a name, an identity, and an executor. The set of them is "the definitions"                                                          | [agent.md](agent.md#definitions)                                         |
+| Seat           | An agent's place on the roster, with its attention                                                                                                      | [roster.md](roster.md)                                                   |
+| Attention      | Which messages wake an idle seat                                                                                                                        | [roster.md](roster.md#attention)                                         |
+| Reserve        | The definitions that the room knows and has not seated                                                                                                  | [roster.md](roster.md)                                                   |
+| Visit          | A person's speaking identity and presence lifetime                                                                                                      | [presence.md](presence.md)                                               |
+| Exchange       | A person's question or a returned say, and every activation until the room is quiet                                                                     | [exchange.md](exchange.md)                                               |
+| Person         | Of an exchange: the first person who spoke in it, and the one its summary goes to                                                                       | [exchange.md](exchange.md#4-who-directs-one-and-who-receives-its-result) |
+| Activation     | The room waking one seat: a bounded execution with one room grant                                                                                       | This page                                                                |
+| Due activation | An activation that the room owes a seat. Each attempt is an activation                                                                                  | [durability.md](durability.md#4-what-a-lease-promises)                   |
+| Resource       | Application data that an agent's tools reach, with provenance. `WorkspaceResource` is the handle that serialises operations on one backend              | [resources.md](resources.md)                                             |
+| Journal        | The ordered, append-only record that the room folds into its state                                                                                      | [durability.md](durability.md)                                           |
+| Entry          | One item that the journal holds                                                                                                                         | [durability.md](durability.md)                                           |
+| Message        | One item of the record: a say, a system message, a presence change, a summary, or a dismissal                                                           | [agent.md](agent.md), [presence.md](presence.md)                         |
+| Record         | The messages of the journal in seq order, as a seat or a person reads them. `readThrough` and the record window are positions on it                     | [durability.md](durability.md)                                           |
+| Pass           | One iteration of the executor's loop inside one activation                                                                                              | [executors.md](executors.md#the-pass-contract)                           |
+| Step           | One recorded unit of an activation's work                                                                                                               | [executors.md](executors.md)                                             |
+| Summary        | A closing message that stands for a closed exchange in agent context                                                                                    | [summary.md](summary.md)                                                 |
+| System message | A message of the system with no author: one that the host posts, or a returned say                                                                      | [exchange.md](exchange.md#7-the-edges-a-host-sees)                       |
+| Returned say   | A system message that gives a say that an agent scheduled for itself back when it is due                                                                | [exchange.md](exchange.md#6-a-scheduled-say)                             |
+| Lease          | The time-limited right of one activation to run and commit                                                                                              | [durability.md](durability.md)                                           |
+| Commit         | The write of a seat to the room: a say, a seating change, or a dismissal. In `commit ref` and `CommitUri`, the word has the git sense                   | [durability.md](durability.md)                                           |
+| Ref            | One absolute URI that a message cites                                                                                                                   | [agent.md](agent.md)                                                     |
+| Executor       | The value in a definition that names an executor kind, such as `pi`, `claude`, or `codex`, and holds its options                                        | [executors.md](executors.md#the-executor-contract)                       |
+| Port           | The interface of a seat that another process can implement: `wake`, `steer`, and `cut`                                                                  | [executors.md](executors.md#the-executor-contract)                       |
+| Reconcile      | The host verb that folds the journal, decides the work that is due, writes the entries, and sends the requests to the seats. `Room.reconcile` is public | [durability.md](durability.md)                                           |
+| Host           | The application that embeds a room through `startRoom`, `resumeRoom`, and the `hosting` entry                                                           | [deployment.md](deployment.md)                                           |
 
 ## The two spans
 
@@ -89,10 +62,9 @@ every activation from its opening question to its durable close. See
 
 ## Roster and people
 
-`startRoom` writes a composition and starts the room. `seats` names
-the initial seated agents and their attention. If `seats` is omitted, every defined
-agent starts seated with `broadcast` attention. An empty map starts all
-defined agents in the reserve.
+`startRoom` writes a composition and starts the room. `agents` supplies the
+definitions and `seats` names the initial seated agents.
+[Roster](roster.md) owns seats, attention, the reserve, and fixed seats.
 
 ```ts
 const runtime = createRuntime({ storage: memoryJournals() });
@@ -107,17 +79,10 @@ const room = await startRoom({
 });
 ```
 
-`startRoom` takes `seating: false` to remove `seat` and `unseat` from the
-agents of the room. See [Roster](roster.md#turn-off-seating-for-agents).
-
-`room.seat(name)` adds a defined agent to the roster. `room.unseat(name)`
-removes a seated agent and returns the definition to the reserve. A live activation
-may call the same operations for another agent or itself, unless the target
-seat is fixed: the summary writer's seat is fixed by default, and only the
-host can unseat it. The room refuses an unknown name and a name that belongs
-to a person. See [Roster](roster.md) for seating, attention, and
-duplicate-operation semantics. Attention selects work and does not authorize
-contributions.
+**`goal` is public context for every agent.** It states what the room tries
+to accomplish. It is optional and has no effect on the journal when omitted.
+It helps a seat decide whether an arrival matters. The `identity` and the
+instructions of an agent stay its own domain context.
 
 `definePerson` supplies a name, identity, and optional reading preferences.
 `room.visit(person)` records arrival and returns a visit. `visit.send` records
@@ -142,8 +107,10 @@ provenance fields. A caller cannot claim the name of another participant.
 
 The room serializes accepted writes. Agents can reason concurrently. A speech
 commit carries `readThrough`, the highest message position its activation
-read. The room refuses a stale commit and returns the missed messages. Lease
-renewal extends execution time and does not acknowledge new context.
+read. The room refuses a stale commit and returns the missed messages. The room
+checks no position for a scheduled say, a closing summary, a seating, an
+unseating, or a dismissal. Lease renewal extends execution time and does not
+acknowledge new context.
 
 An agent may finish without calling `say`. The room records the lease
 outcome. Model failure, retry exhaustion, deliberate silence, and an accepted
@@ -151,19 +118,17 @@ message remain distinct outcomes.
 
 ## Value ownership
 
-**Room reads return detached values.** Messages, participant lists, reads,
-exchange discussions, and summary responses belong to their caller. A change
-to these values cannot change the journal, the projection, or later reads.
-Nested routing lists and summary ranges follow the same rule.
+**Room reads and notifications return detached values.** Messages,
+participant lists, reads, exchange discussions, summary responses, nested
+routing lists, and summary ranges belong to their caller. Each listener
+receives its own notification value. A change to a value cannot change the
+journal, the projection, later reads, or the value of another listener. An
+error notification keeps the original `Error`, with its cause and provider
+fields. Errors describe execution and are not room facts. An activation event
+names its activation.
 
-**Each listener receives its own notification value.** Collaboration facts
-inside that notification are detached from the room and from other listeners.
-Error notifications retain the original `Error` object, with its cause and
-provider fields. Errors describe execution and are not room facts. An
-activation event names its activation.
-
-**An in-process port has the same ownership boundary as a remote call.**
-The room captures commit and lease requests before it awaits work. Results and
+**An in-process port has the same ownership boundary as a remote call.** The
+room captures commit and lease requests before it awaits work. Results and
 steering messages carry detached collaboration facts. A later edit by a caller
 cannot change the submitted request or the context of another executor.
 
@@ -180,9 +145,10 @@ activation reads every message through its fixed exchange, plus its recipient
 and the preferences of that person. It cannot change the recipient or the
 exchange it covers.
 
-Active agents receive new eligible context between provider requests. A steer
-does not acknowledge that context. The next contribution must report what the
-activation consumed.
+An active agent receives new eligible context between provider requests when
+its framework takes a message during a run. Otherwise the agent receives it on
+its next pass. A steer does not acknowledge that context. The next
+contribution must report what the activation consumed.
 
 ## History and limits
 
@@ -208,10 +174,8 @@ the newest blocks of the record whose estimated tokens fit the limit, and
 at least the newest block. A summarised range counts once, as the line of
 its summary. An older exchange falls out of context, and its summary stands
 for it when one exists. An agent with no limit reads what the cap serves.
-
-**The room runs the estimator of the seat.** `estimateTokens` is a function
-from a text to a token count. The default counts
-`Math.ceil(text.length / 4)`.
+[Definitions and tools](agent.md#definitions) states the option and its
+estimator.
 
 **`recall` reads below the window.** `view(activation, message)` returns
 the view of that one message when the purpose may read it. No cap and no
@@ -223,29 +187,33 @@ line: `── N earlier messages not shown ──`. The line shows for summarise
 unsummarised history alike. The room does not record the cap. A room resumed
 under another cap serves a different view of the same record.
 
-[Limits and fold cost](limits.md) holds the table of every limit and the measured
-cost of the fold.
+[Limits and fold cost](limits.md) holds the table of every limit and the cost of
+the fold.
 
 Ambion does not promise bounded replay. The record window bounds model input
 and not the journal fold. Domain tools can act before a contribution commits.
-Room freshness does not make external effects transactional. Hosts own
-credentials, process lifetime, and recovery.
+Room freshness does not make external effects transactional. The journal owns
+no domain transactions and no credentials. Hosts own credentials, process
+lifetime, and recovery.
 
-## The map
+## Collaboration patterns
 
-- [Definitions and tools](agent.md): `defineAgent`, `defineTool`, `say`, and
-  refs.
-- [Executors](executors.md): the execution boundary, steps, the trace, and how
-  to write an adapter.
-- [Default assistant](assistant.md): the `assistant` room option and package.
-- [Exchange](exchange.md): human questions, completion, and result handles.
-- [Presence](presence.md): visits, arrivals, departures, and catch-up.
-- [Roster](roster.md): seating, reserve, and attention.
-- [Summaries](summary.md): closing work and context replacement.
-- [Resources](resources.md): the resource contract, references, and provenance.
-- [Workspace](workspace.md): the workspace interface, its backends, and its tools.
-- [Durability](durability.md): journal guarantees, recovery, and leases.
-- [Deployment](deployment.md): host placement, storage, and reconnect.
-- [Limits and fold cost](limits.md): configurable limits and the fold cost.
-- [Formal](formal.md): the verified rules and the proof gate.
-- [Toolchain](toolchain.md): package layout, checks, CI, and release.
+Each row reads one pattern of people at work against the primitives of the
+room. A row adds no mechanism. It links the page that owns the mechanism.
+
+| Pattern                             | How the room represents it                                                                                                                                                                                                       |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ask and get an answer               | A question opens an [exchange](exchange.md). Quiescence closes it, and the closed `Exchange` carries the outcome. A [summary](summary.md) is optional.                                                                           |
+| Ongoing room over days              | `lastDeparture` and `room.read({ messages: { after } })` catch a returning person up ([Presence](presence.md#6-catch-up)).                                                                                                       |
+| Broadcast, no reply owed            | A said message. Seats may stay silent, and no reply is owed.                                                                                                                                                                     |
+| Bring in a specialist               | An agent seats a reserve agent with `seat` and addresses it with `say({ to })` ([Roster](roster.md#seating-operations)).                                                                                                         |
+| Steer work in progress              | A message that lands in an open exchange steers each eligible active seat ([three rules](exchange.md#3-three-rules)).                                                                                                            |
+| Two people in one discussion        | A second question joins the open exchange, and the person whose question opened it stays its `person`. The room assigns one summary to each person who spoke ([summary activation](summary.md#summary-activation)).              |
+| Waiting on a person                 | The closed exchange reads `awaiting` with the `person`, and `awaitingFor(read, person)` lists what waits on one person ([outcomes](exchange.md#7-the-edges-a-host-sees)).                                                        |
+| Approve before an agent acts        | The agent asks a person with `say({ to })` and ends its activation. The exchange reads `awaiting`, and the reply of the person clears it. The kernel enforces no gate. The tools and the definition of an agent govern its acts. |
+| Stop one agent, keep the room       | `room.unseat` or the `unseat` tool removes a seat, and the room continues. An agent cannot unseat a [fixed seat](roster.md#fixed-seats). The host can.                                                                           |
+| Consult privately                   | The room has no private channel. Open a second room and cite it by reference.                                                                                                                                                    |
+| Delegate to a working group         | An agent opens a breakout room for background work. The canvas records its parent and opener ([Canvas](canvas.md)).                                                                                                              |
+| Vote, sign off, structured decision | Outside the kernel by design. A tool can write the record of the decision.                                                                                                                                                       |
+| Scheduled check-in                  | The agent calls `schedule` with `delaySeconds`, and the room returns the say when it is due ([scheduled say](exchange.md#6-a-scheduled-say)).                                                                                    |
+| An event from the host              | The host calls `room.post`. The system message opens an exchange when none is open, and routes as a say does: it wakes the seat that `to` names ([host calls](exchange.md#7-the-edges-a-host-sees)).                             |

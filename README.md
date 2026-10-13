@@ -4,6 +4,10 @@
 
 [ambionframework.com](https://ambionframework.com) · [documentation](docs/README.md)
 
+**Status: 0.x.** A release before 1.0.0 may change an export, a journal body, or a
+stored format. [The road to 1.0.0](planning/1.0.0.md) states the scope of each
+release.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-overview-dark.svg">
   <img alt="The canvas for people at the top, the workspace for agents at the bottom, and the agents between them. People visit a root room and a breakout room, and read a frame widget. Each room is a shared journal. Agent A on Pi and Agent B on Claude say in the root room. Agent B opens the breakout room, and Agent C on Codex says in it and shows the widget. The host reads the source of the widget, a process on $PORT. The agents call the workspace tools: files, snapshots, skills and compose, and processes." src="docs/assets/ambion-overview.svg">
@@ -241,7 +245,7 @@ eval as a vitest test.
 - **The boundaries are narrow.** The journal owns no domain transactions and
   no credentials. Tools can act before a contribution commits, so
   applications own effect idempotency.
-  [Technical facts](docs/technical-facts.md) lists every limit.
+  [Limits](docs/limits.md) lists every configurable limit.
 
 ## What an agent can do
 
@@ -252,10 +256,10 @@ tools.
 | Capability   | Tools                                  | When                                   | Read                                                     |
 | ------------ | -------------------------------------- | -------------------------------------- | -------------------------------------------------------- |
 | Files        | `read`, `write`, `edit`, `apply_patch` | Every workspace                        | [Workspace](docs/workspace.md)                           |
-| Snapshots    | `snapshot`, `restore`                  | Every workspace                        | [Snapshot a file](docs/workspace.md#snapshot-a-file)     |
+| Snapshots    | `snapshot`, `restore`                  | Every workspace                        | [Snapshots](docs/snapshots.md)                           |
 | Processes    | `bash`, `ps`, `cancel`, `wait`         | Every workspace                        | [Processes](docs/processes.md)                           |
 | HTTP reads   | `fetch`                                | With a bash backend that has endpoints | [Processes](docs/processes.md#processes-that-serve-http) |
-| Tables       | `sql`                                  | With a SQL backend                     | [Workspace](docs/workspace.md#query-the-shared-database) |
+| Tables       | `sql`                                  | With a SQL backend                     | [Tables](docs/sql.md)                                    |
 | Repositories | `repos`, `fork`                        | With a git backend                     | [Git](docs/git.md)                                       |
 | Skills       | `read`, `bash`                         | When the host passes skills            | [Skills](docs/skills.md)                                 |
 
@@ -267,7 +271,7 @@ workspace keeps the body as a snapshot.
 joins the tools of the seat in one call through short code, and the model
 reads only the returned value. A skill can store a procedure as a macro,
 and the model runs the macro by name. See [Compose](docs/compose.md) and
-[Macros](docs/macros.md).
+[Macros](docs/skills.md#macros).
 
 ## Where a room runs
 

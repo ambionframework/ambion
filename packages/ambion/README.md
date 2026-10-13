@@ -1,142 +1,48 @@
 # @ambionframework/ambion
 
-**Ambion is a collaboration kernel for agents and humans.** A room is a
-shared journal with rules for taking part. People ask questions and read
-results. Agents speak when they have something to add and stay silent when
-they do not. The kernel keeps the record and the rules. A restart loses
-nothing.
-
-An agent owns its instructions, model, tools, and domain expertise. A room
-lets those agents work together. An optional summary records a closed human
-exchange for its owner. Applications own domain data and tool resources.
+**This package is the runtime of Ambion:** rooms, the exchange, the roster,
+presence, and the executor contract. The
+[repository README](https://github.com/ambionframework/ambion#readme) holds
+the positioning, a quickstart that runs, and the package map.
 
 ## Install
 
 Use Node **22.19 or later** and ESM. The packages install from npmjs with no
-token. A dev build of `main` installs from GitHub Packages; see
-[the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
+token.
 
 ```sh
-npm install @ambionframework/ambion @ambionframework/journal
+npm install @ambionframework/ambion @ambionframework/journal @ambionframework/pi
+export ANTHROPIC_API_KEY=...
 ```
 
-The journal storage comes from `@ambionframework/journal`. Add
-`@ambionframework/workspace` when agents need optional filesystem tools.
-Add `@ambionframework/assistant` for the default assistant implementation.
-Model execution comes from an executor package. `@ambionframework/pi` is the
-Pi executor. Pass `piExecution()` as `execution` to `startRoom` or
-`createRuntime`. The runtime takes the `storage` option and supplies limits.
-It needs credentials for the chosen provider.
+`@ambionframework/journal` supplies the storage: `memoryJournals()` for
+tests and `sqliteJournals(sql)` for a persistent service.
+`@ambionframework/pi` supplies the Pi executor. The Claude Agent SDK and Codex
+have the packages `@ambionframework/claude` and `@ambionframework/codex`.
+Add `@ambionframework/workspace` for files, processes, and snapshots, and
+`@ambionframework/assistant` for the default assistant. A dev build of `main`
+installs from GitHub Packages; see
+[the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 
-## Use
+## Start a room
 
-This example uses the current API. Every executable agent belongs in `agents`.
-The optional `summaryWriter` field names an ordinary agent that may write a closing
-summary.
+[The quickstart](https://github.com/ambionframework/ambion#quickstart) shows
+a room with two agents and one visit. A release before 1.0.0 may
+change an export, a journal body, or a stored format.
 
-```ts
-import { createRuntime, defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
-import { memoryJournals } from '@ambionframework/journal';
-import { pi, piExecution } from '@ambionframework/pi';
+## Entry points
 
-const you = definePerson({
-  name: 'you',
-  identity: 'Coordinates customer deliveries.',
-  preferences: 'Lead with the constraint. Four sentences at most.',
-});
-const inventory = defineAgent({
-  name: 'inventory',
-  identity: 'Checks stock constraints.',
-  executor: pi({
-    model: 'anthropic/claude-sonnet-5',
-    instructions: 'Use supplied stock facts. State a constraint only when it changes the answer.',
-  }),
-});
-const editor = defineAgent({
-  name: 'editor',
-  identity: 'Consolidates the closed exchange.',
-  executor: pi({
-    model: 'anthropic/claude-sonnet-5',
-    instructions: 'Preserve the decision and the facts that support it.',
-  }),
-});
-
-const runtime = createRuntime({ storage: memoryJournals() });
-const room = await startRoom({
-  runtime,
-  name: 'delivery',
-  goal: 'Check delivery promises against stock.',
-  summaryWriter: 'editor',
-  agents: [inventory, editor],
-  execution: piExecution(),
-});
-
-try {
-  const visit = await room.visit(you);
-  const exchange = await visit.send({
-    text: 'We have 12 units in stock. Can we promise an order for 15?',
-  });
-  const response = await exchange.waitForSummary();
-  if (response) {
-    console.log(response.text);
-  } else {
-    for (const message of await exchange.waitForClose()) {
-      if (message.kind === 'said') console.log(`${message.from}: ${message.text}`);
-    }
-  }
-  await visit.leave();
-} finally {
-  await room.stop();
-}
-```
-
-`exchange.waitForClose()` waits for the fixed discussion. `exchange.waitForSummary()`
-waits for its summary or a terminal result without one. The writer may decline,
-and a room without a configured writer still closes exchanges and exposes the
-discussion. Every closed human exchange is eligible when its writer is seated.
-
-`room.read()` returns current messages, participants, and exchange states.
-Use `readRoom(name, { runtime })` or `readExchange(name, from, { runtime })`
-to inspect durable state without a live handle. Reads never wait for completion.
-
-Use `startRoom({ assistant, agents })` to register an assistant definition,
-seat it at `broadcast`, and select it as the summary writer. Supply specialists
-in `agents`; omit the assistant from that list. An explicit `seats: {}` starts
-only the assistant. Omitting `seats` starts all defined agents at `broadcast`.
-See the [assistant contract](https://github.com/ambionframework/ambion/blob/main/docs/assistant.md).
-
-Use `defineTool` for an agent's ordinary typed tools. Put reusable tool bundles
-in the separate `bundles` field. The current `agents` list supplies every
-ordinary definition. The optional `seats` map sets the initial seats; definitions
-absent from that map form the reserve. If omitted, every agent starts at
-`broadcast`. Any live agent can use `seat` and `unseat`.
-Attention controls idle agents; active agents receive new context.
-An agent can finish silently, and the room refuses speech based on stale context.
-
-Adapt a native Pi tool with `fromPiTool(nativePiTool)`, from
-`@ambionframework/pi`, before you put it in `tools` or a bundle. The adapter
-gives the executor one typed tool shape.
-
-## Persistence and limits
-
-The journal records active collaboration and its history. Hosts can recover
-pending work from confirmed entries. `createRuntime` requires a `storage` option. `memoryJournals()` keeps the
-record in memory, and a persistent service passes `sqliteJournals(sql)`. A
-service supplies executable definitions and recovery procedures. Workspace data has its own persistence contract.
-
-Tools can act before speech commits. Applications own effect idempotency.
-Room history and model input can grow, and continuing contributions can keep
-an exchange open. `cancel()` and `stop()` affect the room. Subscriptions belong
-to a running host.
-
-**Summaries compact later activations.** Once a closed exchange has a summary,
-agent context uses it in place of the covered source messages. Human
-participants can review the original discussion through `exchange.waitForClose()`.
-The journal retains the complete history.
+| Import                                | Exports                                                                                                             |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `@ambionframework/ambion`             | `createRuntime`, `startRoom`, `resumeRoom`, `readRoom`, `readExchange`, `defineAgent`, `definePerson`, `defineTool` |
+| `@ambionframework/ambion/hosting`     | The execution protocol that an executor package implements, `hostingOf`, and `visitOf`                              |
+| `@ambionframework/ambion/testing`     | The scripted executor, a fake clock, and `settled(room)`                                                            |
+| `@ambionframework/ambion/conformance` | The conformance suites for executors, ports, and rooms                                                              |
+| `@ambionframework/ambion/names`       | `isName` and `NAME_SYNTAX`                                                                                          |
 
 ## Read more
 
-- [Design contracts](https://github.com/ambionframework/ambion/tree/main/docs)
+- [Documentation index](https://github.com/ambionframework/ambion/tree/main/docs)
 - [Deployment and recovery](https://github.com/ambionframework/ambion/blob/main/docs/deployment.md)
 - [Workbench example](https://github.com/ambionframework/ambion/tree/main/examples/workbench)
 - [Changelog](https://github.com/ambionframework/ambion/blob/main/CHANGELOG.md)

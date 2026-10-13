@@ -1,8 +1,8 @@
 # Actuators
 
 > **Actuators are a pattern over processes.** The workbench ships the
-> [actuator controller template](../templates/actuator-controller),
-> and its tests pass. A cancel sends `SIGTERM`, waits the `grace` of the
+> [actuator controller template](../templates/actuator-controller).
+> A cancel sends `SIGTERM`, waits the `grace` of the
 > `bash` call, then sends `SIGKILL` ([Processes](../../../docs/processes.md#the-cancel)).
 
 **An actuator is a controller command that runs as a process.** The
@@ -209,27 +209,9 @@ has `v`, `at`, and `kind`: `target`, `observe`, `drive`, or `state`. The
 agent reads the log with `read` or `bash`.
 
 **`start` keeps `node` as the only process.** It takes the lock on a file
-descriptor and replaces itself with `node`. A probe showed why: a forking
-`flock` reported 143 on `SIGTERM` while its child cleaned up and exited 0.
-`flock -F` and `exec` both passed the 0 through. A busy lock makes `start`
+descriptor and replaces itself with `node`. A busy lock makes `start`
 log `gave_up` and exit 0, so no cleanup acts on the device of the
 controller that holds the lock.
-
-**The template tests check the contract with real signals.** They run
-the controller as a process against the simulated plant.
-
-| Case                           | Result                                                      |
-| ------------------------------ | ----------------------------------------------------------- |
-| The deadline                   | `reached`, `holding`, then `safe`; exit 0; the output is 0  |
-| `SIGTERM` while it holds       | `stopping` and `safe` in under 1 s; exit 0; the output is 0 |
-| `SIGKILL` while it holds       | The output stays on; `finally.mjs` sets 0, twice over       |
-| A failed read                  | `safe` with the error; exit 1; the output is 0              |
-| A second `start` on one device | `gave_up` and exit 0; the first controller runs on          |
-
-**The workbench test guards the template.** It checks that the lab
-registers the template and that a fork holds every file. It runs the
-template tests, then removes the stop handlers and checks that the
-`SIGTERM` case fails.
 
 **The agent starts it and returns later.**
 
@@ -287,25 +269,3 @@ command. A sensor confirms it.
 **The kernel does not defend physical effects.** A command changes the
 world before any `say` commits. The room does not run an effect once
 ([Durability](../../../docs/durability.md#5-what-the-room-does-not-promise)).
-
-## Decisions taken
-
-| Decision                            | Reason                                                                     |
-| ----------------------------------- | -------------------------------------------------------------------------- |
-| Actuators are a pattern over `bash` | Every mechanism serves other processes; a separate tool gates nothing      |
-| A Git template carries the practice | The agent owns, versions, and tests its controller like a sensor server    |
-| `start` replaces itself with `node` | A parent that dies on `SIGTERM` reports 143 while the controller cleans up |
-| Exit 0 means safe                   | The agent judges the goal; the exit code states the safety of the world    |
-| The command owns its inputs         | A loop through the host would take SSH latency and stop with the host run  |
-| Sensors serve agents                | The agent confirms and revises through its own view of the stock           |
-| Six `state` words                   | The agent reads one vocabulary across every controller                     |
-
-## Out of scope
-
-- An actuator tool, an actuator API, or a server for actuators.
-- A sensor as an input of a command.
-- A lock in the workspace; `flock` in the command does it.
-- A check of the goal by the workspace; the agent confirms convergence.
-- Hard real-time guarantees on any path through the workspace.
-- A cleanup that the workspace runs, and a status that the workspace reads
-  from the log.

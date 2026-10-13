@@ -50,20 +50,20 @@ newer, the OpenTUI floor.
 
 ## Read before you change
 
-| Change                                  | Read first                                                       |
-| --------------------------------------- | ---------------------------------------------------------------- |
-| The runtime                             | `docs/agent.md`, then `exchange`, `presence`, `roster`           |
-| The record under failure                | `docs/durability.md`, `docs/deployment.md`                       |
-| A `rules.verified.ts`                   | `docs/formal.md`                                                 |
-| The assistant or the `assistant` option | `docs/assistant.md`, `docs/summary.md`                           |
-| The simulator                           | `docs/simulator.md`                                              |
-| The `compose` tool or a runtime         | `docs/compose.md`, then `macros`, `executors`, `limits`          |
-| The workspace or its tools              | `docs/workspace.md`, then `skills`, `macros`, `processes`, `git` |
-| The canvas or the widgets               | `docs/canvas.md`, `docs/widgets.md`                              |
-| The workstation                         | `docs/workstation.md`, `docs/workstation-git.md`                 |
-| A room open to untrusted agents         | `docs/trust.md`                                                  |
-| `.github/`, `scripts/`, a root config   | `docs/toolchain.md`                                              |
-| The example                             | `docs/example.md`                                                |
+| Change                                  | Read first                                                                 |
+| --------------------------------------- | -------------------------------------------------------------------------- |
+| The runtime                             | `docs/agent.md`, then `exchange`, `presence`, `roster`                     |
+| The record under failure                | `docs/durability.md`, `docs/deployment.md`                                 |
+| A `rules.verified.ts`                   | `docs/formal.md`                                                           |
+| The assistant or the `assistant` option | `docs/assistant.md`, `docs/summary.md`                                     |
+| The simulator                           | `docs/simulator.md`                                                        |
+| The `compose` tool or a runtime         | `docs/compose.md`, then `skills` (Macros), `executors`, `limits`           |
+| The workspace or its tools              | `docs/workspace.md`, then `snapshots`, `sql`, `skills`, `processes`, `git` |
+| The canvas or the widgets               | `docs/canvas.md`, `docs/widgets.md`                                        |
+| The workstation                         | `docs/workstation.md`, `docs/workstation-git.md`                           |
+| A room open to untrusted agents         | `docs/trust.md`                                                            |
+| `.github/`, `scripts/`, a root config   | `docs/toolchain.md`                                                        |
+| The example                             | `docs/example.md`                                                          |
 
 [`docs/README.md`](docs/README.md) indexes every page.
 
