@@ -42,8 +42,8 @@ export interface RoomToolBinding {
 	acknowledgeThrough(seq: Seq): void;
 	/** The result of call `call` carries the record through `seq` to the model. */
 	resultExpected(call: string, seq: Seq): void;
-	/** The result of the `compose` call `compose` shows the results of the nested calls `calls`. */
-	reported(compose: string, calls: readonly string[]): void;
+	/** The result of the tool call `parent` shows the results of the nested calls `calls`. */
+	reported(parent: string, calls: readonly string[]): void;
 	/** The entry `seq` is the activation's own act, so the record after `after` through it counts as read. */
 	ownEntry(after: Seq, seq: Seq): void;
 	/** End the activation. */
@@ -116,7 +116,7 @@ export function roomTools(view: ActivationView, binding: RoomToolBinding): Bound
 	// Any of them can run in a `compose` call, which then shows the results of the nested calls.
 	return tools.map((tool) => ({
 		...tool,
-		reported: (compose, calls) => binding.reported(compose, calls),
+		reported: (parent, calls) => binding.reported(parent, calls),
 	}));
 }
 

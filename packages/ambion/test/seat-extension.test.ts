@@ -7,7 +7,7 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import type { AmbionTool, ToolContext } from '../src/bundle.ts';
-import { ROOM_TOOL_NAMES } from '../src/define.ts';
+import { ROOM_TOOL_NAMES, SAY } from '../src/define.ts';
 import {
 	type ActivationAccess,
 	activationTool,
@@ -93,6 +93,39 @@ describe('a seat extension', () => {
 		expect(() =>
 			describeExecutor({ kind: 'test', instructions: 'Test.', extensions: extensions as never }),
 		).toThrow('Agent extensions must be an array of functions.');
+	});
+
+	it.each([
+		['no object', () => undefined],
+		['no tools', () => ({ guidance: 'x' })],
+		['tools that are no list', () => ({ tools: 'x' })],
+	])('refuses an extension that returns %s', (_name, returned) => {
+		expect(() =>
+			describeExecutor({
+				kind: 'test',
+				instructions: 'Test.',
+				extensions: [returned as never],
+			}),
+		).toThrow('An extension of the agent must return an object with a tools array.');
+	});
+
+	it('gives an extension a frozen copy of the room tools, so a change reaches no room', () => {
+		const before = JSON.stringify(SAY.parameters);
+		expect(() =>
+			describeExecutor({
+				kind: 'test',
+				instructions: 'Test.',
+				extensions: [
+					({ room }) => {
+						const say = room.find((spec) => spec.name === 'say');
+						const parameters = say?.parameters as { properties: Record<string, unknown> };
+						parameters.properties.evil = { type: 'string' };
+						return { tools: [] };
+					},
+				],
+			}),
+		).toThrow(TypeError);
+		expect(JSON.stringify(SAY.parameters)).toBe(before);
 	});
 
 	it('hands the tools of the seat, the bundles, and the room tools as values that it cannot change', () => {

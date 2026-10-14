@@ -22,7 +22,12 @@ import type {
 import { assertToolCompose, COMPOSE_TOOL_NAME, DESCRIBE_TOOL_NAME, mismatchOf } from './compose.ts';
 import { AmbionError } from './errors.ts';
 import { isName } from './names.ts';
-import { extensionsOf, type RoomSpec, type SeatExtension } from './seat-extension.ts';
+import {
+	checkedOutput,
+	extensionsOf,
+	type RoomSpec,
+	type SeatExtension,
+} from './seat-extension.ts';
 import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
 
 export interface DefineAgentOptions {
@@ -132,7 +137,7 @@ export function describeExecutor(options: ExecutorOptions): Executor {
 	const input = flattenTools(options.tools, options.bundles);
 	const own = Object.freeze(input.map((tool) => captureTool(tool)));
 	const added = extensionsOf(options.extensions).map((extension) =>
-		extension({ tools: own, bundles: options.bundles ?? [], room: ROOM_SPECS }),
+		checkedOutput(extension({ tools: own, bundles: options.bundles ?? [], room: ROOM_SPECS })),
 	);
 	const guidance = joined([
 		guidanceOf(options.bundles),
@@ -412,7 +417,7 @@ const ROOM_TOOLS: readonly RoomSpec[] = [
 
 /** The room tools as an extension reads them: frozen, so no extension changes a tool of the room. */
 const ROOM_SPECS: readonly RoomSpec[] = Object.freeze(
-	ROOM_TOOLS.map((spec) => Object.freeze({ ...spec })),
+	ROOM_TOOLS.map((spec) => Object.freeze(capture(spec))),
 );
 
 /** The names that the room supplies for an activation. An agent's own tool takes none of them. */

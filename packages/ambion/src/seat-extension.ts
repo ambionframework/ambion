@@ -176,3 +176,10 @@ export function extensionsOf(extensions: unknown): readonly SeatExtension[] {
 		throw new Error('Agent extensions must be an array of functions.');
 	return extensions;
 }
+
+/** What an extension returned, or an error when it holds no list of tools. */
+export function checkedOutput(output: SeatExtensionOutput): SeatExtensionOutput {
+	if (typeof output !== 'object' || output === null || !Array.isArray(output.tools))
+		throw new Error('An extension of the agent must return an object with a tools array.');
+	return output;
+}

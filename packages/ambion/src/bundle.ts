@@ -139,7 +139,7 @@ export interface ToolBundle {
 	readonly tools: readonly AmbionTool[];
 	readonly guidance?: string;
 	/**
-	 * The programs that the bundle carries, as data. The core reads none. A
+	 * The programs that the bundle carries, as data. The core reads none. An
 	 * extension that runs programs, such as `compose`, checks each one. A seat
 	 * without that extension ignores them.
 	 */
