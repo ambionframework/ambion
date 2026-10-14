@@ -369,11 +369,11 @@ refusal. At a start, the canvas removes the assistant from the definitions that 
 **The canvas hears each breakout room that it starts or resumes.** It
 calls `room.subscribe` once for each breakout handle and reacts to
 `exchange_closed`.
-With a `workspace` option, it calls `workspace.mirror(room)` after each start and
-resume, and keeps the `RoomMirror`. The option takes any value with that
-one method (`MirrorHost`), and a `Workspace` is one. A failed attach goes to `onError`,
-and the room keeps running. A stop stops the room first, then its mirror,
-so the mirror holds the last message.
+With a `workspace` option, it calls `workspace.mirror(room)` after each
+start and resume, and keeps the `RoomMirror`. The option takes any value
+with that one method (`MirrorHost`), and a `Workspace` is one. A failed
+attach goes to `onError`, and the room keeps running. A stop stops the room
+first, then its mirror, so the mirror holds the last message.
 
 ### The store
 

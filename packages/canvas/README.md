@@ -26,7 +26,7 @@ const canvas = openCanvas({
   name: 'lab',
   runtime,
   store: sqliteCanvas(sql),
-  workspace,
+  workspace, // optional: a Workspace from @ambionframework/workspace
   onError: (failure) => console.error(failure.room, failure.operation),
 });
 await canvas.resume({ agents: [planner, writer, scout] });

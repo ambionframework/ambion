@@ -4,11 +4,11 @@
 
 ### Breaking changes
 
-**`@ambionframework/canvas` does not depend on `@ambionframework/workspace`.** The
-`workspace` option of `openCanvas` takes a `MirrorHost`, a value with the
-one method `mirror(room, options)`, and a `Workspace` meets it. The package
-exports the types `MirrorHost` and `RoomMirror`. Install the workspace
-only to use it.
+**`@ambionframework/canvas` does not depend on
+`@ambionframework/workspace`.** The `workspace` option of `openCanvas`
+takes a `MirrorHost`, a value with the one method `mirror(room, options)`,
+and a `Workspace` meets it. The package exports the types `MirrorHost` and
+`RoomMirror`. Install the workspace only to use it.
 
 **`sqliteBackend` has no append-only guard and no provenance stamp.** The
 options `appendOnly` and `provenance` are gone, and so are the type
