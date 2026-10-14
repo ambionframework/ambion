@@ -23,6 +23,12 @@ export const aliases = [
 	{ find: '@ambionframework/ambion/names', replacement: source('../ambion/src/names.ts') },
 	{ find: /^@ambionframework\/ambion$/, replacement: source('../ambion/src/index.ts') },
 	{
+		find: '@ambionframework/compose/conformance',
+		replacement: source('../compose/src/conformance.ts'),
+	},
+	{ find: '@ambionframework/compose/runtime', replacement: source('../compose/src/runtime.ts') },
+	{ find: /^@ambionframework\/compose$/, replacement: source('../compose/src/index.ts') },
+	{
 		find: '@ambionframework/journal/conformance',
 		replacement: source('../journal/src/conformance.ts'),
 	},

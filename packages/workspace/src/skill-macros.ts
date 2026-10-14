@@ -5,7 +5,7 @@
  * the blob hash of the file (`docs/skills.md`).
  */
 
-import { type ComposeMacro, composeMacro } from '@ambionframework/ambion';
+import { type ComposeMacro, composeMacro } from '@ambionframework/compose';
 import {
 	decodeText,
 	FRONTMATTER,

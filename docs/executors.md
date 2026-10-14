@@ -303,7 +303,7 @@ protocol types with their TSDoc.
   tools. It appends the tools and the guidance that each extension returns. With
   no extension, it adds none. An extension reads the tools of the seat, not
   the tools of another extension. `pi()`, `claude()`, and `codex()` add the
-  extension that `composeExtension` builds from `compose` after the
+  extension that `composeExtension` of `@ambionframework/compose` builds from `compose` after the
   extensions of the options. The `compose` value defaults to
   `quickjsRuntime()`. A second `composeExtension` in `extensions` brings
   duplicate tools named `compose`.
@@ -315,6 +315,10 @@ protocol types with their TSDoc.
   activation tool alone.
 - **`invokeChecked`** makes the same call for a harness that prepared and
   checked the arguments already, as Pi does.
+- **`checkedArguments`, `messageOf`, and `mismatchOf`** serve a tool that
+  calls other tools. `checkedArguments` prepares and checks the arguments of a
+  call. `messageOf` gives the message of a thrown value. `mismatchOf` says
+  what a schema refuses.
 
 **`RoomProtocol.view(activation, message?)` takes no range.** The room
 serves the record windowed to its cap and to the token limit of the seat,

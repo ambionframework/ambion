@@ -2,12 +2,9 @@
  * The vocabulary of the `compose` tool: the option that a seat opts in with,
  * the runtime that runs the code, and the result and the ledger that a
  * compose call reports. The tool joins the tools of a seat into one call
- * (`docs/compose.md`). The checks of the option and of the tool field live
- * here too.
+ * (`docs/compose.md`). The check of the option lives here too.
  */
-import { IsSchema, type TSchema } from 'typebox';
-import { Errors } from 'typebox/value';
-import type { ToolContext } from './bundle.ts';
+import type { ToolContext } from '@ambionframework/ambion';
 
 /** A value that JSON holds. */
 export type JsonValue =
@@ -191,20 +188,6 @@ export class ComposeFailure extends Error {
 }
 
 /**
- * What the arguments of a call break in a schema, as the model reads it:
- * each property path and its rule, such as `processes must not have fewer
- * than 1 items`. A rule on the whole value has no path.
- */
-export function mismatchOf(schema: TSchema, value: unknown): string {
-	return Errors(schema, value)
-		.map((error) => {
-			const path = error.instancePath.slice(1).replaceAll('/', '.');
-			return path === '' ? error.message : `${path} ${error.message}`;
-		})
-		.join('; ');
-}
-
-/**
  * A copy of a value that JSON holds. A function, a symbol, a bigint, a
  * number that is not finite, a value that is not a plain object, and a cycle
  * each throw an error that names the place. An object property that holds
@@ -245,14 +228,6 @@ const LIMIT_NAMES = ['calls', 'concurrent', 'bytes', 'time'];
 
 const isRecord = (value: unknown): value is Record<PropertyKey, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
-
-/** Refuse a tool `compose` that is not absent, `false`, or an object with a TypeBox `output`. */
-export function assertToolCompose(compose: unknown): void {
-	if (compose === undefined || compose === false) return;
-	if (!isRecord(compose) || !isRecord(compose.output) || !IsSchema(compose.output)) {
-		throw new Error('Tool compose must be false or an object with an output schema.');
-	}
-}
 
 /** Refuse a malformed `compose` option, when the agent is defined. */
 export function assertComposeOptions(compose: unknown): void {

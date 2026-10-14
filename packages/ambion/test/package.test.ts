@@ -46,14 +46,12 @@ it('builds every entry the manifest names', async () => {
 it('exports exactly what an application needs to build a room, and nothing a host needs beyond it', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'AmbionError',
-		'COMPOSE_GUIDANCE',
 		'DEFAULT_RESPOND_POLICY',
 		'DEFAULT_SUMMARY_POLICY',
 		'REF_LIMITS',
 		'addUsage',
 		'awaitingFor',
 		'commitUri',
-		'composeMacro',
 		'contentText',
 		'createRuntime',
 		'defineAgent',
@@ -85,8 +83,8 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'PermanentError',
 		'ROOM_SERVER',
 		'activationTool',
+		'checkedArguments',
 		'classifyCause',
-		'composeExtension',
 		'describeExecutor',
 		'executorOfKind',
 		'failedPass',
@@ -94,6 +92,8 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'invokeChecked',
 		'invokeTool',
 		'localExecution',
+		'messageOf',
+		'mismatchOf',
 		'pickPresent',
 		'present',
 		'providerMessage',
@@ -109,7 +109,6 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 it('exports exactly the conformance suites, their shared parts, and the in-process executor', () => {
 	expect(Object.keys(conformance).sort()).toEqual([
 		'check',
-		'composeRuntimeConformance',
 		'conformanceSuite',
 		'executorConformance',
 		'portConformance',

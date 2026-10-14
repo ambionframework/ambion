@@ -19,7 +19,6 @@ import type {
 	ToolContext,
 	ToolResult,
 } from './bundle.ts';
-import { assertToolCompose, COMPOSE_TOOL_NAME, DESCRIBE_TOOL_NAME, mismatchOf } from './compose.ts';
 import { AmbionError } from './errors.ts';
 import { isName } from './names.ts';
 import {
@@ -28,6 +27,7 @@ import {
 	type RoomSpec,
 	type SeatExtension,
 } from './seat-extension.ts';
+import { mismatchOf } from './tool-call.ts';
 import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
 
 export interface DefineAgentOptions {
@@ -443,15 +443,8 @@ function flattenTools(
 
 function appendTools(tools: readonly AmbionTool[], into: AmbionTool[], source: string): void {
 	if (!Array.isArray(tools)) throw new Error(`Agent ${source} must be an array.`);
-	for (const tool of tools) {
-		assertTool(tool);
-		if (tool.name === COMPOSE_TOOL_NAME || tool.name === DESCRIBE_TOOL_NAME)
-			throw new AmbionError(
-				'invalid_tool',
-				`A tool of the agent ${source} is named '${tool.name}': the names 'compose' and 'describe' are reserved. Give the tool another name.`,
-			);
-		into.push(tool);
-	}
+	for (const tool of tools) assertTool(tool);
+	into.push(...tools);
 }
 
 function captureTool(tool: AmbionTool): AmbionTool {
@@ -465,6 +458,14 @@ function captureTool(tool: AmbionTool): AmbionTool {
 		...captureCompose(tool.compose),
 		invoke: tool.invoke,
 	});
+}
+
+/** Refuse a tool `compose` that is not absent, `false`, or an object with a TypeBox `output`. */
+function assertToolCompose(compose: unknown): void {
+	if (compose === undefined || compose === false) return;
+	const output = isRecord(compose) ? compose.output : undefined;
+	if (!isRecord(output) || Array.isArray(output) || !IsSchema(output))
+		throw new Error('Tool compose must be false or an object with an output schema.');
 }
 
 /** The `compose` field of a tool, copied. The `output` schema is captured as `parameters` is. */

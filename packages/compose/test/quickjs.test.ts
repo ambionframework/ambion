@@ -1,6 +1,6 @@
-import { composeRuntimeConformance } from '@ambionframework/ambion/conformance';
 import { DEBUG_SYNC, RELEASE_SYNC } from 'quickjs-emscripten';
 import { describe, expect, it, vi } from 'vitest';
+import { composeRuntimeConformance } from '../src/conformance.ts';
 import { quickjsRuntime } from '../src/runtime.ts';
 
 const limits = { memoryLimit: 16 * 1024 * 1024, cpuLimit: 500 };

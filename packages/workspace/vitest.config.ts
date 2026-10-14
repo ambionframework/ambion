@@ -33,6 +33,10 @@ const testing = fileURLToPath(new URL('../ambion/src/testing.ts', import.meta.ur
 const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
 /** The journal's conformance entry, which the core's conformance entry names. */
 const journalConformance = fileURLToPath(new URL('../journal/src/conformance.ts', import.meta.url));
+/** The compose package, which names the core; one module. */
+const compose = fileURLToPath(new URL('../compose/src/index.ts', import.meta.url));
+const composeRuntime = fileURLToPath(new URL('../compose/src/runtime.ts', import.meta.url));
+const composeConformance = fileURLToPath(new URL('../compose/src/conformance.ts', import.meta.url));
 /** The Pi executor, which names the core; one module, the way the core's own suite reads it. */
 const pi = fileURLToPath(new URL('../pi/src/index.ts', import.meta.url));
 /** This package's own entries, for the just-bash source that names them. */
@@ -44,6 +48,9 @@ export const alias = [
 	{ find: '@ambionframework/ambion/testing', replacement: testing },
 	{ find: '@ambionframework/ambion/names', replacement: names },
 	{ find: /^@ambionframework\/ambion$/, replacement: core },
+	{ find: '@ambionframework/compose/conformance', replacement: composeConformance },
+	{ find: '@ambionframework/compose/runtime', replacement: composeRuntime },
+	{ find: /^@ambionframework\/compose$/, replacement: compose },
 	{ find: '@ambionframework/pi', replacement: pi },
 	{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
 	{ find: '@ambionframework/journal', replacement: journal },

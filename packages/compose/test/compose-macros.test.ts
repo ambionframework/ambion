@@ -3,20 +3,19 @@
  * that carries macros, the guidance lines, and a compose call that runs a
  * macro by name. The code runs in the runtime of `test/support`.
  */
+
+import { AmbionError, defineTool, type ToolBundle } from '@ambionframework/ambion';
+import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import type { ToolBundle } from '../src/bundle.ts';
 import { ComposeFailure } from '../src/compose.ts';
-import { describeExecutor } from '../src/define.ts';
-import { composeExtension, invokeTool } from '../src/hosting.ts';
 import {
-	AmbionError,
 	COMPOSE_GUIDANCE,
 	type ComposeMacro,
 	type ComposeRequest,
 	type ComposeResult,
+	composeExtension,
 	composeMacro,
-	defineTool,
 } from '../src/index.ts';
 import { functionRuntime } from './support/compose-runtime.ts';
 import { echo, table, total } from './support/compose-tools.ts';

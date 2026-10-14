@@ -4,13 +4,13 @@
  * `claude()` builds the executor an agent definition takes. The room reads
  * none of the fields Claude adds; the Claude executor does.
  */
-import type { ComposeOptions, Executor } from '@ambionframework/ambion';
+import type { Executor } from '@ambionframework/ambion';
 import {
-	composeExtension,
 	describeExecutor,
 	type ExecutorBaseOptions,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
+import { type ComposeOptions, composeExtension } from '@ambionframework/compose';
 import { quickjsRuntime } from '@ambionframework/compose/runtime';
 
 /**

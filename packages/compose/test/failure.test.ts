@@ -3,10 +3,11 @@
  * tool and the real runtime: the error for a name that the call does not
  * bind, and the results of the calls that completed.
  */
-import { type ComposeRuntime, defineTool, type ToolContext } from '@ambionframework/ambion';
-import { composeExtension, describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
+import { defineTool, type ToolContext } from '@ambionframework/ambion';
+import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { type ComposeRuntime, composeExtension } from '../src/index.ts';
 import { quickjsRuntime } from '../src/runtime.ts';
 
 const bash = defineTool({

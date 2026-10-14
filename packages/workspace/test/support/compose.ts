@@ -5,9 +5,10 @@
  * `describeExecutor` appends, so the check of the declared output runs on
  * the real result of each tool.
  */
-import type { ComposeResult, ToolBundle } from '@ambionframework/ambion';
-import { composeExtension, describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
-import { functionRuntime } from '../../../ambion/test/support/compose-runtime.ts';
+import type { ToolBundle } from '@ambionframework/ambion';
+import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
+import { type ComposeResult, composeExtension } from '@ambionframework/compose';
+import { functionRuntime } from '../../../compose/test/support/compose-runtime.ts';
 import { callAs } from './backends.ts';
 
 /**

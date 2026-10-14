@@ -6,19 +6,23 @@
  * steps of the trace. It adds a context with the provenance of the compose
  * call and the declared output check.
  */
+
+import type { AmbionTool, ToolContext, ToolResult } from '@ambionframework/ambion';
+import {
+	type ActivationAccess,
+	checkedArguments,
+	messageOf,
+	mismatchOf,
+} from '@ambionframework/ambion/hosting';
 import { Check } from 'typebox/value';
-import type { AmbionTool, ToolContext, ToolResult } from './bundle.ts';
 import {
 	type ComposeLimits,
 	type ComposeResult,
 	type ComposeRuntime,
 	type JsonValue,
 	type LedgerEntry,
-	mismatchOf,
 	plainJson,
 } from './compose.ts';
-import type { ActivationAccess } from './seat-extension.ts';
-import { checkedArguments, messageOf } from './tool-call.ts';
 
 /** What a rejected binding carries across the runtime: the message and the details of the error. */
 interface CallError {

@@ -27,9 +27,9 @@ newer, the OpenTUI floor.
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
   library. The `claude` tests run on a fake executable. The `codex` tests run
   the real binary on a scripted model, and its live tier runs a real model.
-- `packages/compose`: the runtime of the `compose` tool, in the `/runtime`
-  entry. `quickjsRuntime` runs the code in QuickJS and passes
-  `composeRuntimeConformance`.
+- `packages/compose`: the `compose` tool and the `describe` tool, as a seat
+  extension. The `/runtime` entry holds `quickjsRuntime`, which runs the code in
+  QuickJS. The `/conformance` entry holds `composeRuntimeConformance`.
 - `packages/cloudflare`: a room as Durable Objects, one for each room and one
   for each seat. Tests run in workerd.
 - `packages/workspace`: the workspace resource and its tools, the helpers of

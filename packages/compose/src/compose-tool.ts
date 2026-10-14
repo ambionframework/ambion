@@ -8,11 +8,27 @@
  * `composeExtension` adds both tools to a seat.
  *
  * The tool needs the step sink of the activation. It is an activation tool
- * (`seat-extension.ts`), so the core hands it the sink and the room tools.
+ * (`activationTool` of `@ambionframework/ambion/hosting`), so the core hands it the sink and the room tools.
  */
+
+import {
+	AmbionError,
+	type AmbionTool,
+	contentText,
+	type ToolContext,
+	type ToolResult,
+} from '@ambionframework/ambion';
+import {
+	type ActivationAccess,
+	activationTool,
+	messageOf,
+	mismatchOf,
+	type RoomCall,
+	type RoomSpec,
+	type SeatExtension,
+} from '@ambionframework/ambion/hosting';
 import { type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
-import { type AmbionTool, contentText, type ToolContext, type ToolResult } from './bundle.ts';
 import {
 	assertComposeOptions,
 	COMPOSE_GUIDANCE,
@@ -25,23 +41,15 @@ import {
 	type ComposeRequest,
 	type ComposeResult,
 	DEFAULT_COMPOSE_LIMITS,
+	DESCRIBE_TOOL_NAME,
 	type JsonValue,
 	type LedgerEntry,
-	mismatchOf,
 	plainJson,
 } from './compose.ts';
 import { bindable } from './compose-catalog.ts';
 import { bindingsText, describeTool, namedTools, signatureText } from './compose-describe.ts';
 import { assertMacros, macroGuidance, macrosOf } from './compose-macros.ts';
 import { type ComposeOutcome, ComposeRun } from './compose-run.ts';
-import {
-	type ActivationAccess,
-	activationTool,
-	type RoomCall,
-	type RoomSpec,
-	type SeatExtension,
-} from './seat-extension.ts';
-import { messageOf } from './tool-call.ts';
 
 const DESCRIPTION =
 	'Run JavaScript that calls your tools as tools.<name>, in one call. Use it when a result feeds a later call, or when you need a part of a large result. You read only the value that the code returns.';
@@ -460,9 +468,7 @@ function composeTools(
 	const parameters = macros.length === 0 ? FREE_ARGUMENTS : MACRO_ARGUMENTS;
 	for (const entry of entries) ROOM_ENTRIES.add(entry);
 	const catalog = new Map(
-		[...tools.filter((tool) => bindable(tool) && tool.name !== COMPOSE_TOOL_NAME), ...entries].map(
-			(tool) => [tool.name, tool],
-		),
+		[...tools.filter((tool) => bindable(tool)), ...entries].map((tool) => [tool.name, tool]),
 	);
 	assertMacros(macros, new Set(catalog.keys()));
 	const limits = limitsOf(options);
@@ -514,6 +520,7 @@ function composeTools(
 export function composeExtension(options: ComposeOptions): SeatExtension {
 	assertComposeOptions(options);
 	return ({ tools, bundles, room }) => {
+		assertNamesFree(tools);
 		const macros = macrosOf(bundles);
 		const guidance = composeGuidance(options, tools, macros);
 		return {
@@ -521,4 +528,16 @@ export function composeExtension(options: ComposeOptions): SeatExtension {
 			...(guidance === undefined ? {} : { guidance }),
 		};
 	};
+}
+
+/** Refuse a tool of the seat that takes the name of the `compose` tool or the `describe` tool. */
+function assertNamesFree(tools: readonly AmbionTool[]): void {
+	const taken = tools.find(
+		(tool) => tool.name === COMPOSE_TOOL_NAME || tool.name === DESCRIBE_TOOL_NAME,
+	);
+	if (taken !== undefined)
+		throw new AmbionError(
+			'invalid_tool',
+			`A tool of the agent is named '${taken.name}': the names '${COMPOSE_TOOL_NAME}' and '${DESCRIBE_TOOL_NAME}' are reserved. Give the tool another name.`,
+		);
 }

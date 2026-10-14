@@ -8,6 +8,7 @@ import { memoryJournals } from '@ambionframework/journal';
  */
 import { Type } from 'typebox';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { COMPOSE_GUIDANCE } from '../../compose/src/index.ts';
 import {
 	fromPiTool,
 	type NativePiTool,
@@ -15,13 +16,8 @@ import {
 	pi,
 	piExecution,
 } from '../../pi/src/index.ts';
-import { COMPOSE_PROCESS_GUIDANCE } from '../src/compose.ts';
-import { composeExtension, describeExecutor } from '../src/hosting.ts';
 import {
 	type AmbionTool,
-	COMPOSE_GUIDANCE,
-	type ComposeOptions,
-	composeMacro,
 	createRuntime,
 	defineAgent,
 	definePerson,
@@ -92,18 +88,6 @@ describe('the definition of agent tools', () => {
 		['seat', { tools: [tool('seat')] }, /room supplies it for an activation/],
 		['unseat', { tools: [tool('unseat')] }, /room supplies it for an activation/],
 		['dismiss', { tools: [tool('dismiss')] }, /room supplies it for an activation/],
-		['compose', { tools: [tool('compose')] }, /the names 'compose' and 'describe' are reserved/],
-		['describe', { tools: [tool('describe')] }, /the names 'compose' and 'describe' are reserved/],
-		[
-			'compose in a bundle',
-			{ bundles: [{ tools: [tool('compose')] }] },
-			/A tool of the agent bundle is named 'compose'/,
-		],
-		[
-			'describe in a bundle',
-			{ bundles: [{ tools: [tool('describe')] }] },
-			/A tool of the agent bundle is named 'describe'/,
-		],
 		[
 			'a duplicate after a bundle',
 			{ tools: [tool('read')], bundles: [{ tools: [tool('read')] }] },
@@ -166,123 +150,6 @@ describe('the definition of agent tools', () => {
 		expect(Object.isFrozen(kept?.compose)).toBe(true);
 		expect(left?.compose).toBe(false);
 		expect(plain).not.toHaveProperty('compose');
-	});
-
-	const ok = { evaluate: async () => undefined };
-
-	it.each([
-		['the value false', false],
-		['an option with no runtime', {}],
-		['a runtime with no evaluate', { runtime: {} }],
-		['an approve that is not a function', { runtime: ok, approve: 'yes' }],
-		['guidance that is not a string', { runtime: ok, guidance: 1 }],
-		['limits that are not an object', { runtime: ok, limits: 3 }],
-		['limits that are an array', { runtime: ok, limits: [] }],
-		['a limit of zero', { runtime: ok, limits: { calls: 0 } }],
-		['a limit of a fraction', { runtime: ok, limits: { time: 1.5 } }],
-		['a limit that has no name', { runtime: ok, limits: { speed: 2 } }],
-	])('refuses a compose option with %s', (_name, compose) => {
-		expect(() => worker({ compose: compose as never })).toThrow(/Agent compose/);
-	});
-
-	it('appends the compose and describe tools after the tools and the bundles, and keeps the option off the frozen executor', () => {
-		const compose: ComposeOptions = {
-			runtime: { evaluate: async () => undefined },
-			approve: () => 'allow',
-			limits: { calls: 8 },
-		};
-		const hidden = defineTool({
-			name: 'hidden',
-			description: 'Stays out.',
-			parameters: Type.Object({}),
-			compose: false,
-			execute: () => 'x',
-		});
-		const bundle = { tools: [tool('inspect')], guidance: 'Use inspect.' };
-		const agent = worker({ tools: [tool('lookup'), hidden], bundles: [bundle], compose });
-		expect(agent.executor).not.toHaveProperty('compose');
-		expect(agent.executor.tools.map((one) => one.name)).toEqual([
-			'lookup',
-			'hidden',
-			'inspect',
-			'compose',
-			'describe',
-		]);
-
-		// The guidance of the bundles comes first, and the guidance of compose follows it.
-		expect(agent.executor.guidance).toBe(`Use inspect.\n\n${COMPOSE_GUIDANCE}`);
-		expect(worker({ compose }).executor.guidance).toBe(COMPOSE_GUIDANCE);
-		// The process lines belong to a seat that holds bash, and to no other.
-		expect(COMPOSE_GUIDANCE).not.toMatch(/\bbash\b|\bwait\b|handle/);
-		expect(worker({ tools: [tool('bash')], compose }).executor.guidance).toBe(
-			`${COMPOSE_GUIDANCE}\n\n${COMPOSE_PROCESS_GUIDANCE}`,
-		);
-		expect(worker({ compose: { ...compose, guidance: 'Compose often.' } }).executor.guidance).toBe(
-			'Compose often.',
-		);
-		expect(worker({ compose: { ...compose, guidance: '  ' } }).executor).not.toHaveProperty(
-			'guidance',
-		);
-		expect(worker({ tools: [tool('lookup')] }).executor.tools.map((one) => one.name)).toEqual([
-			'lookup',
-			'compose',
-			'describe',
-		]);
-	});
-
-	it('runs the extensions of the options before compose, which does not bind their tools', () => {
-		const extra = tool('extra');
-		const agent = worker({
-			tools: [tool('lookup')],
-			extensions: [() => ({ tools: [extra], guidance: 'Use extra.' })],
-		});
-		expect(agent.executor.tools.map((one) => one.name)).toEqual([
-			'lookup',
-			'extra',
-			'compose',
-			'describe',
-		]);
-		expect(agent.executor.guidance).toBe(`Use extra.\n\n${COMPOSE_GUIDANCE}`);
-		const describer = agent.executor.tools.find((one) => one.name === 'describe');
-		expect(() => describer?.invoke({ tools: ['extra'] }, {} as ToolContext)).toThrow(
-			"The catalog holds no tool named 'extra'",
-		);
-		expect(() =>
-			worker({ extensions: [composeExtension({ runtime: { evaluate: async () => undefined } })] }),
-		).toThrow("brings duplicate tools named 'compose'");
-	});
-
-	it('adds no compose tool, no guidance, and no macro check to a bare describeExecutor with no compose extension', () => {
-		const macro = composeMacro({
-			name: 'bundle/orphan',
-			description: 'Calls a tool that the catalog lacks.',
-			uses: ['missing'],
-			code: 'return 1;',
-			args: { type: 'object', properties: {} },
-			hash: 'orphan',
-		});
-		const executor = describeExecutor({
-			kind: 'scripted',
-			instructions: 'Work.',
-			tools: [tool('lookup')],
-			bundles: [{ tools: [], macros: [macro] }],
-		});
-		expect(executor.tools.map((one) => one.name)).toEqual(['lookup']);
-		expect(executor).not.toHaveProperty('guidance');
-	});
-
-	it('refuses a second compose tool in a definition, and treats a hand-built compose tool as an ordinary one', () => {
-		const withCompose = worker({ compose: { runtime: { evaluate: async () => undefined } } });
-		const duplicate = {
-			...withCompose.executor,
-			tools: [...withCompose.executor.tools, tool('compose')],
-		};
-		expect(() => defineAgent({ name: 'twin', identity: 'Twin.', executor: duplicate })).toThrow(
-			"brings duplicate tools named 'compose'",
-		);
-		// With no option, the executor has no compose tool, and a tool that a hand builds binds nothing.
-		const own = { kind: 'scripted', instructions: 'Work.', tools: [tool('compose')] };
-		expect(() => defineAgent({ name: 'own', identity: 'Own.', executor: own })).not.toThrow();
 	});
 
 	it('captures caller-owned tool arrays, records, and schemas', () => {

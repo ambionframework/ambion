@@ -31,6 +31,11 @@ export const journalConformance = fileURLToPath(
 export const core = fileURLToPath(new URL('./src/index.ts', import.meta.url));
 export const names = fileURLToPath(new URL('./src/names.ts', import.meta.url));
 export const hosting = fileURLToPath(new URL('./src/hosting.ts', import.meta.url));
+export const composeRuntime = fileURLToPath(new URL('../compose/src/runtime.ts', import.meta.url));
+export const composeConformance = fileURLToPath(
+	new URL('../compose/src/conformance.ts', import.meta.url),
+);
+export const compose = fileURLToPath(new URL('../compose/src/index.ts', import.meta.url));
 /** The Pi test entry reads the verbs of the core test entry by the same name. */
 export const testing = fileURLToPath(new URL('./src/testing.ts', import.meta.url));
 
@@ -41,6 +46,9 @@ export default defineConfig({
 			{ find: '@ambionframework/ambion/testing', replacement: testing },
 			{ find: '@ambionframework/ambion/names', replacement: names },
 			{ find: /^@ambionframework\/ambion$/, replacement: core },
+			{ find: '@ambionframework/compose/conformance', replacement: composeConformance },
+			{ find: '@ambionframework/compose/runtime', replacement: composeRuntime },
+			{ find: /^@ambionframework\/compose$/, replacement: compose },
 			{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
 			{ find: '@ambionframework/journal', replacement: journal },
 		],

@@ -4,11 +4,11 @@
  * shows (`docs/compose.md`). A macro is data that a bundle carries. A skill
  * set makes it (`docs/skills.md`), and `compose` runs it by name.
  */
+
+import { AmbionError, type ToolBundle } from '@ambionframework/ambion';
 import { Meta } from 'typebox/schema';
 import { Check, Errors } from 'typebox/value';
-import type { ToolBundle } from './bundle.ts';
 import { type ComposeMacro, plainJson } from './compose.ts';
-import { AmbionError } from './errors.ts';
 
 const METASCHEMA = Meta['https://json-schema.org/draft/2020-12/schema'];
 

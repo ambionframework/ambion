@@ -2,9 +2,12 @@
 
 Every Pi, Claude, and Codex seat has the `compose` tool and the `describe`
 tool, with `quickjsRuntime()` by default. A seat cannot turn them off. The
-main entry exports the types of the option and `COMPOSE_GUIDANCE`. The
-package `@ambionframework/compose/runtime` holds `quickjsRuntime`, which
-passes `composeRuntimeConformance`.
+package `@ambionframework/compose` exports `composeExtension`,
+`composeMacro`, `COMPOSE_GUIDANCE`, and the types of the option. Its
+`/runtime` entry holds `quickjsRuntime`, and its `/conformance` entry
+exports `composeRuntimeConformance`, which `quickjsRuntime` passes. The
+kernel holds the generic hook that `compose` uses, and no
+`compose` tool.
 
 **Macros are the main use of `compose`.** A skill stores a procedure as a
 [macro](skills.md#macros), and the model runs it by name with arguments. The
@@ -151,7 +154,7 @@ and the ledger, and the signatures of the tools that the failure names
 ([Catalog](#the-catalog)). Every executor kind turns a thrown error into an error result
 with that message. The model then knows which calls completed. It knows which
 effects can stand. The error is a `ComposeFailure`, an internal class of the
-core that the main entry does not export. Its `details` hold the
+compose package that no entry exports. Its `details` hold the
 `ComposeResult`, and no executor passes them on. The ledger never holds the
 input or the output of a call.
 
@@ -188,7 +191,7 @@ Claude and Codex, the model and the trace read the rendered content.
 ## The catalog
 
 **The description of `compose` lists the bindings with a typed result by
-name and result type.** It holds no signature. The core builds one entry for
+name and result type.** It holds no signature. `composeExtension` builds one entry for
 each tool that a seat can bind and that declares an output, in the order of
 the tools. One sentence says that the other tools return text:
 
@@ -226,10 +229,10 @@ error names the refused tools and lists the bindable names. The result of a
 refusal is an ordinary tool error, so the model corrects the list and calls
 again.
 
-**`describe` is fixed when the agent is defined.** The kernel builds it with
-`compose` from the same catalog, so the tool list of a seat is the same in
-every activation. The kernel reserves the name `describe` as it reserves
-`compose`. A definition that brings a tool of that name fails with
+**`describe` is fixed when the agent is defined.** `composeExtension` builds
+it with `compose` from the same catalog, so the tool list of a seat is the
+same in every activation. The extension reserves the name `describe` as it
+reserves `compose`. A definition that brings a tool of that name fails with
 `invalid_tool`. `describe` is not bindable: a compose call cannot call it.
 
 **A failed compose call appends the signatures that it needs.** A wrong
@@ -322,8 +325,7 @@ policy, as it renders the guidance of every bundle
 ([Executors](executors.md#the-prompt-the-driver-renders)). The description of
 `compose` holds its uses, the limits, and the list of bindings.
 
-**The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
-entry exports it. `ComposeOptions.guidance` replaces it and the process
+**The text is `COMPOSE_GUIDANCE`.** `@ambionframework/compose` exports it. `ComposeOptions.guidance` replaces it and the process
 paragraph, as the `respondPolicy` option replaces `DEFAULT_RESPOND_POLICY`. The text tells the model to plan
 first, to compose when a result feeds a later call or the model needs a
 part of a large result, and to call `describe` for a tool whose result has
@@ -585,7 +587,8 @@ outcome of each call, so code that wants every result uses it.
 
 **`compose` is a definition tool.** The executor options of `pi()`,
 `claude()`, and `codex()` take a `compose` option, beside `tools` and
-`bundles`. Each executor builds a `SeatExtension` from it with `composeExtension`
+`bundles`. Each executor builds a `SeatExtension` from it with `composeExtension` of
+`@ambionframework/compose`
 and passes the extension in `extensions`. `describeExecutor` flattens the tools,
 then appends the `compose` and `describe` tools that the extension returns.
 `describeExecutor` alone adds no extension, because the kernel imports no
@@ -595,16 +598,17 @@ once, when the agent is defined, so every seat has both tools, and the tool
 list of a definition is the same in every activation. The frozen executor
 keeps no `compose` field: the tool closes over the option.
 
-**The names `compose` and `describe` are reserved.** `appendTools` refuses a
-tool of either name while it flattens the tools of the options, before the
-two tools are appended. The check of the agent tools runs later, and its duplicate rule
-refuses a second `compose`.
+**The names `compose` and `describe` are reserved.** `composeExtension`
+refuses a tool of the seat that has either name, before it appends its own two
+tools. The check of the agent tools runs later, and its duplicate rule
+refuses a second `compose`. An executor with no `compose` extension reserves
+no name.
 
 **Every executor kind hosts `compose` as one more tool.** Pi builds its
 tools from the definition. Claude and Codex host `pass.tools`, which holds
 each tool of the definition as a `BoundTool`. The `invoke` of `compose`
 closes over the other tools of the definition. It runs each nested call
-through `tool-call.ts`. A Codex
+through the `nested` function of the activation access. A Codex
 seat gets `compose` through the same `agentTools` path as a Claude seat.
 
 **`compose` runs each nested call as Pi runs a tool.** It takes these
@@ -785,8 +789,7 @@ definition by name in the worker, so no function crosses a wire.
 
 **`@ambionframework/compose/runtime` holds `quickjsRuntime`.** It passes
 one conformance suite, `composeRuntimeConformance`, which
-`@ambionframework/ambion/conformance` exports beside the other suites of
-the kernel. A runtime of a host passes the same suite. The
+`@ambionframework/compose/conformance` exports. A runtime of a host passes the same suite. The
 [package README](../packages/compose/README.md) states the options and the
 defaults of `quickjsRuntime`.
 

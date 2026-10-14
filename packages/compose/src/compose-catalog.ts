@@ -10,7 +10,7 @@
  * renders the signatures of the tools that a call names, and a failed compose
  * call renders the signatures of the tools that it names.
  */
-import type { AmbionTool } from './bundle.ts';
+import type { AmbionTool } from '@ambionframework/ambion';
 
 type Node = Readonly<Record<string, unknown>>;
 
