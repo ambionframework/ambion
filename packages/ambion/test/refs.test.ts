@@ -81,6 +81,8 @@ describe('refs', () => {
 		'Ambion://room/site',
 		'ambion://room/site/message/0',
 		'ambion://room/site/extra',
+		'ambion://room',
+		'AMBION://room/x',
 	])('refuses %j', (ref) => {
 		expect(isRef(ref)).toBe(false);
 	});

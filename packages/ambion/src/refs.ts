@@ -16,7 +16,7 @@ export const REF_LIMITS = { count: 16, length: 2048 } as const;
 const SCHEME = /^([A-Za-z][A-Za-z0-9+.-]*):(.+)$/s;
 const FORBIDDEN = /[\s\p{Cc}]/u;
 const ROOM_URI = /^ambion:\/\/room\/([^/]+)(?:\/message\/([1-9][0-9]*))?$/;
-const ROOM_PREFIX = 'ambion://room/';
+const ROOM_AUTHORITY = /^ambion:\/\/room(?:\/|$)/i;
 
 /** What a room URI names. `message` is the seq of the message it names. */
 export interface RoomUri {
@@ -32,7 +32,7 @@ export function isRef(value: unknown): value is string {
 	if (typeof value !== 'string' || value.length > REF_LIMITS.length) return false;
 	if (FORBIDDEN.test(value)) return false;
 	if (!SCHEME.test(value)) return false;
-	if (value.toLowerCase().startsWith(ROOM_PREFIX)) return parseRoomUri(value) !== undefined;
+	if (ROOM_AUTHORITY.test(value)) return parseRoomUri(value) !== undefined;
 	return true;
 }
 

@@ -153,7 +153,7 @@ and refuses a bad one.
 
 **The kernel owns the `ambion://room/` forms.** The kernel builds and reads
 them. The room refuses an `ambion://room/` ref in any other form. The room
-checks no other ref beyond the rules above: the package that makes a ref reads
+checks no other ref beyond the rules above. The package that makes a ref reads
 and checks it. A workspace makes the snapshot ref and the commit ref
 ([Snapshots](snapshots.md#snapshot-a-file), [Cite a commit](git.md#cite-a-commit)).
 
