@@ -26,7 +26,7 @@
  * design contract for the wire.
  */
 
-export { invokeChecked, invokeTool } from './compose-tool.ts';
+export { composeExtension } from './compose-tool.ts';
 export type { ExecutorBaseOptions, ExecutorOptions } from './define.ts';
 export { describeExecutor, executorOfKind, pickPresent, present } from './define.ts';
 export type {
@@ -64,6 +64,16 @@ export type {
 	Wake,
 } from './protocol.ts';
 export { visitOf } from './room.ts';
+export type {
+	ActivationAccess,
+	ActivationEntry,
+	RoomCall,
+	RoomSpec,
+	SeatExtension,
+	SeatExtensionInput,
+	SeatExtensionOutput,
+} from './seat-extension.ts';
+export { activationTool, invokeChecked, invokeTool } from './seat-extension.ts';
 export type {
 	ActivationEvent,
 	AgentDefinition,

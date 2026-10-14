@@ -87,9 +87,9 @@ export interface ComposeMacro {
 }
 
 /**
- * The `compose` option of the executor options. `describeExecutor` adds the
- * `compose` tool and the `describe` tool for an option, and none for an
- * absent option. `pi()`, `claude()`, and `codex()` fill an absent option.
+ * The `compose` option of `pi()`, `claude()`, and `codex()`. `composeExtension`
+ * makes the extension that adds the `compose` tool and the `describe` tool.
+ * The executors fill an absent option.
  */
 export interface ComposeOptions {
 	readonly runtime: ComposeRuntime;

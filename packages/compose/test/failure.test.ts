@@ -4,7 +4,7 @@
  * bind, and the results of the calls that completed.
  */
 import { type ComposeRuntime, defineTool, type ToolContext } from '@ambionframework/ambion';
-import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
+import { composeExtension, describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { quickjsRuntime } from '../src/runtime.ts';
@@ -36,7 +36,7 @@ async function failure(runtime: ComposeRuntime, uses: string[], code: string): P
 		kind: 'test',
 		instructions: 'Test.',
 		tools: [bash, wait],
-		compose: { runtime },
+		extensions: [composeExtension({ runtime })],
 	});
 	const compose = executor.tools.find((tool) => tool.name === 'compose');
 	if (compose === undefined) throw new Error('The executor has no compose tool.');

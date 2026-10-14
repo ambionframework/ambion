@@ -73,8 +73,8 @@ model library, so each package brings its own harness at an exact version.
 
 **`pi()`, `claude()`, and `codex()` return a frozen executor of their kind.**
 The kernel validates the shared fields, which are `ExecutorBaseOptions`. Each
-adapter also requires `model` and adds options of its own. The adapter page
-lists them.
+adapter also requires `model` and adds options of its own, such as `compose`.
+The adapter page lists them.
 
 | Option                 | Required | Default                      | Meaning                                                                                                |
 | ---------------------- | -------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -82,6 +82,7 @@ lists them.
 | `tools`                | No       | None                         | The tools of the agent, from `defineTool`. They run in the host process.                               |
 | `bundles`              | No       | None                         | Tool bundles. Their guidance joins the prompt after the respond policy.                                |
 | `compose`              | No       | `quickjsRuntime()`           | The `compose` and `describe` tools of the seat: a runtime and optional limits ([Compose](compose.md)). |
+| `extensions`           | No       | None                         | Extensions of the seat, which the executor runs before `compose`. Each adds tools and guidance.        |
 | `respondPolicy`        | No       | `DEFAULT_RESPOND_POLICY`     | The respond policy. It replaces the default.                                                           |
 | `summaryPolicy`        | No       | `DEFAULT_SUMMARY_POLICY`     | The summary policy. It replaces the default.                                                           |
 | `activationTokenLimit` | No       | The whole record             | The token limit of the record one activation reads. A positive integer.                                |
@@ -297,13 +298,21 @@ internal. Participant views omit `sessionId`. The `hosting.ts` file lists the
 protocol types with their TSDoc.
 
 - **`describeExecutor`** builds the neutral half of an executor definition,
-  which an executor kind extends with its fields. It appends the `compose`
-  and `describe` tools when `compose` is an object. An absent field adds none.
-  `pi()`, `claude()`, and `codex()` fill an absent field with
-  `quickjsRuntime()`.
+  which an executor kind extends with its fields. It calls each `SeatExtension`
+  of `extensions` once, with the tools of the seat, its bundles, and the room
+  tools. It appends the tools and the guidance that each extension returns. With
+  no extension, it adds none. An extension reads the tools of the seat, not
+  the tools of another extension. `pi()`, `claude()`, and `codex()` add the
+  extension that `composeExtension` builds from `compose` after the
+  extensions of the options. The `compose` value defaults to
+  `quickjsRuntime()`. A second `composeExtension` in `extensions` brings
+  duplicate tools named `compose`.
+- **`activationTool`** builds a tool whose entry receives the access of the
+  activation: the room tools, `nested`, and `approved`. `compose` is such a
+  tool. The `invoke` field of an activation tool runs with no activation.
 - **`invokeTool`** runs one direct call of a tool: it prepares and checks the
-  arguments, then invokes. It hands the step sink and the room tools to the
-  `compose` tool alone.
+  arguments, then invokes. It hands the access of the activation to an
+  activation tool alone.
 - **`invokeChecked`** makes the same call for a harness that prepared and
   checked the arguments already, as Pi does.
 

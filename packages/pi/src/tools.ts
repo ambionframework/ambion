@@ -91,8 +91,8 @@ function toExecution(result: Awaited<ReturnType<AmbionTool['invoke']>>): ToolExe
  * A tool registration from a normalized tool. `contextOf` gives each call its
  * context. A tool that throws gives an error result, and an abort of the
  * call throws on, so the harness records the abort. `record` is the step
- * sink of the activation, which only the `compose` tool receives. With no
- * sink, a compose call records no nested step.
+ * sink of the activation, which only an activation tool, such as `compose`,
+ * receives as access. With no sink, a nested call records no step.
  *
  * The harness has prepared and checked the arguments, so the call goes to
  * `invokeChecked`, which prepares and checks nothing again.
@@ -170,8 +170,8 @@ function toPiTool(
  *   gives the content alone.
  *
  * The context of each call comes from `toolContext`, as it does in the core.
- * `sink` is the step sink of the activation. Only the `compose` tool
- * receives it, through `invokeChecked`, with the room tools of `tools`.
+ * `sink` is the step sink of the activation. Only an activation tool
+ * receives its access, through `invokeChecked`, with the room tools of `tools`.
  */
 export function toolsFor(
 	view: ActivationView,

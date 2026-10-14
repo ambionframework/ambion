@@ -37,11 +37,11 @@ export interface BoundTool {
 	/** Run one call. `call` is the id the harness gave it, and the idempotency key of a commit. */
 	run(args: unknown, call: string): Promise<BoundToolResult>;
 	/**
-	 * A room tool only. The `compose` call `compose` shows the results of the
+	 * A room tool only. The tool call `parent` shows the results of the
 	 * nested calls `calls` in its own result, so the model reads them when it
 	 * reads that result.
 	 */
-	reported?(compose: string, calls: readonly string[]): void;
+	reported?(parent: string, calls: readonly string[]): void;
 }
 
 /** What the driver and the executor write to. One sink serves one activation. */

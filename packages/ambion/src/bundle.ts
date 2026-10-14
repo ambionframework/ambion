@@ -5,7 +5,6 @@
  * flattens bundles at definition time (`define.ts`).
  */
 import type { Static, TSchema } from 'typebox';
-import type { ComposeMacro } from './compose.ts';
 import type { ExchangeRef } from './types.ts';
 
 /**
@@ -140,10 +139,11 @@ export interface ToolBundle {
 	readonly tools: readonly AmbionTool[];
 	readonly guidance?: string;
 	/**
-	 * The compose programs that the bundle carries, as data. A seat with the
-	 * `compose` option runs one by name. A seat without it ignores them.
+	 * The programs that the bundle carries, as data. The core reads none. An
+	 * extension that runs programs, such as `compose`, checks each one. A seat
+	 * without that extension ignores them.
 	 */
-	readonly macros?: readonly ComposeMacro[];
+	readonly macros?: readonly unknown[];
 	/**
 	 * Text for one respond activation of one seat, or undefined for none. The
 	 * executor calls it once, at the start of the activation, and the text

@@ -316,7 +316,7 @@ when a result feeds a later call, or when the model needs a part of a large
 result. The guidance names no count of calls.
 
 **`compose` adds guidance, as a bundle does.** `describeExecutor` joins
-the guidance of `compose` after the guidance of the bundles, in the
+the guidance of the `compose` extension after the guidance of the bundles, in the
 `guidance` field of the executor. The prompt renders it after the respond
 policy, as it renders the guidance of every bundle
 ([Executors](executors.md#the-prompt-the-driver-renders)). The description of
@@ -329,7 +329,7 @@ first, to compose when a result feeds a later call or the model needs a
 part of a large result, and to call `describe` for a tool whose result has
 fields that the code reads.
 
-**The guidance follows the tools of the seat.** `describeExecutor` builds
+**The guidance follows the tools of the seat.** `composeExtension` builds
 the text once, from the tools that the definition holds, so the tool list
 and the guidance of a seat do not change between its activations. A seat
 that holds `bash` gets one more paragraph. It tells the model to call
@@ -583,16 +583,17 @@ outcome of each call, so code that wants every result uses it.
 
 ## How compose runs a nested call
 
-**`compose` is a definition tool.** The executor options take a `compose`
-option, beside `tools` and `bundles`. `describeExecutor` flattens the
-tools, then appends `compose` and `describe` when the option is an object.
-An absent option adds no tool, because the kernel imports no runtime.
-The option takes no `false`, and `assertComposeOptions` refuses it. `pi()`,
-`claude()`, and `codex()` fill an absent option with
-`{ runtime: quickjsRuntime() }` once, when the agent is defined, so every
-seat has both tools, and the tool list of a definition is the same in every
-activation. The frozen executor keeps no `compose` field: the tool closes
-over the option.
+**`compose` is a definition tool.** The executor options of `pi()`,
+`claude()`, and `codex()` take a `compose` option, beside `tools` and
+`bundles`. Each executor builds a `SeatExtension` from it with `composeExtension`
+and passes the extension in `extensions`. `describeExecutor` flattens the tools,
+then appends the `compose` and `describe` tools that the extension returns.
+`describeExecutor` alone adds no extension, because the kernel imports no
+runtime. The option takes no `false`, and `assertComposeOptions` refuses it.
+The executors fill an absent option with `{ runtime: quickjsRuntime() }`
+once, when the agent is defined, so every seat has both tools, and the tool
+list of a definition is the same in every activation. The frozen executor
+keeps no `compose` field: the tool closes over the option.
 
 **The names `compose` and `describe` are reserved.** `appendTools` refuses a
 tool of either name while it flattens the tools of the options, before the
@@ -644,11 +645,13 @@ its own.
 **Each nested call records its steps.** The core records a `tool_call`
 step and a `tool_result` step for each nested call, with a `parent` field
 that holds the call id of `compose`. The core raises the tool events from
-them, as it does for every tool. `ToolContext` has no `record`, so no tool
-can write a step.
+them, as it does for every tool. `ToolContext` has no `record`. An activation
+tool gets `nested` and `approved` from the core, and no function that writes
+a step of its own choice.
 
-**Only the core hands the step sink to `compose`.** The hosting exports
-`invokeTool` and `invokeChecked` do it
+**Only the core hands the access of the activation to an activation tool,
+and `compose` is one.** The access holds the room tools, `nested`, and
+`approved`. The hosting exports `invokeTool` and `invokeChecked` do it
 ([Executors](executors.md#the-hosting-entry-exports)), and
 [Pi](pi.md#tools-and-bundles-an-agent-can-add) states the Pi path. The
 public `invoke` of `compose` holds no sink.
@@ -775,7 +778,7 @@ const analyst = defineAgent({
 
 **The kernel imports no runtime.** An executor package imports the
 default one from `@ambionframework/compose/runtime`, and `describeExecutor`
-alone adds no tool for an absent option. A definition already holds the
+alone adds no `compose` extension. A definition already holds the
 `invoke` function of each tool, so it can hold a runtime. No journal
 entry holds a definition, and `@ambionframework/cloudflare` finds each
 definition by name in the worker, so no function crosses a wire.

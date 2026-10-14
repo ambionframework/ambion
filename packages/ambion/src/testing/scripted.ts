@@ -1,5 +1,4 @@
 import { contentText, type ToolContext, type ToolResult } from '../bundle.ts';
-import { invokeTool } from '../compose-tool.ts';
 import { ROOM_TOOL_NAMES } from '../define.ts';
 import { localConnector } from '../execution/connector.ts';
 import type {
@@ -13,6 +12,7 @@ import { failedPass } from '../execution/failure.ts';
 import { answerOf } from '../execution/room-tools.ts';
 import type { Execution } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
+import { invokeTool } from '../seat-extension.ts';
 import type { AgentDefinition, FailureCause, Usage } from '../types.ts';
 
 /** One tool call of a scripted reply. */

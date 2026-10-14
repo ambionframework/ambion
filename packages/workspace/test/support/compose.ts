@@ -6,7 +6,7 @@
  * the real result of each tool.
  */
 import type { ComposeResult, ToolBundle } from '@ambionframework/ambion';
-import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
+import { composeExtension, describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
 import { functionRuntime } from '../../../ambion/test/support/compose-runtime.ts';
 import { callAs } from './backends.ts';
 
@@ -24,7 +24,7 @@ export async function composed(
 		kind: 'test',
 		instructions: 'Test.',
 		bundles: [bundle],
-		compose: { runtime: functionRuntime },
+		extensions: [composeExtension({ runtime: functionRuntime })],
 	});
 	const tool = executor.tools.find((one) => one.name === 'compose');
 	if (tool === undefined) throw new Error('The executor has no compose tool.');

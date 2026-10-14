@@ -4,6 +4,21 @@
 
 ### Breaking changes
 
+**`ExecutorBaseOptions` has `extensions` and no `compose`.** A `SeatExtension`
+reads the tools, the bundles, and the room tools of a seat, and returns tools
+and guidance that `describeExecutor` appends after those of the bundles. The
+`pi()`, `claude()`, and `codex()` options keep `compose`, and each adds the
+extension that `composeExtension` builds from it after the `extensions` of the
+options. `@ambionframework/ambion/hosting` exports `SeatExtension`,
+`SeatExtensionInput`, `SeatExtensionOutput`, `RoomSpec`, `RoomCall`,
+`ActivationAccess`, `ActivationEntry`, `activationTool`, and
+`composeExtension`. `activationTool` builds the one kind of tool whose entry
+receives the room tools, a `nested` call that records its two steps with the
+running call as `parent`, and an `approved` record. The step sink is not
+passed to any tool. `invokeTool` and `invokeChecked` pass the access.
+`ToolBundle.macros` is `readonly unknown[]`. The error for a reserved tool
+name reads "the names 'compose' and 'describe' are reserved".
+
 **`@ambionframework/canvas` does not depend on
 `@ambionframework/workspace`.** The `workspace` option of `openCanvas`
 takes a `MirrorHost`, a value with the one method `mirror(room, options)`,
