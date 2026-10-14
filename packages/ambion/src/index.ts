@@ -21,19 +21,6 @@ export type {
 	ToolUpdate,
 } from './bundle.ts';
 export { contentText } from './bundle.ts';
-export type {
-	ComposeLimits,
-	ComposeMacro,
-	ComposeOptions,
-	ComposeRequest,
-	ComposeResult,
-	ComposeRuntime,
-	ComposeRuntimeInput,
-	JsonValue,
-	LedgerEntry,
-} from './compose.ts';
-export { COMPOSE_GUIDANCE } from './compose.ts';
-export { composeMacro } from './compose-macros.ts';
 export type { DefineAgentOptions, DefineHumanOptions } from './define.ts';
 export { defineAgent, definePerson, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';

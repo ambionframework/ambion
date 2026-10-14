@@ -389,7 +389,7 @@ text of the macro. The copy in `~/.skills` holds the file too.
 
 **`workspace.tools({ skills })` puts the macros on the bundle.** The field
 is `ToolBundle.macros`. It holds `ComposeMacro` values, and
-`composeMacro(fields)` checks the fields and gives a frozen copy. A bundle
+`composeMacro(fields)` of `@ambionframework/compose` checks the fields and gives a frozen copy. A bundle
 only carries the data.
 
 ### How compose runs a macro

@@ -7,9 +7,7 @@
  * says, so any executor that speaks once passes the same cases.
  *
  * `executorConformance` is the second suite. It lives in
- * `conformance-executor.ts` and is exported here. `composeRuntimeConformance` is
- * the third suite. It checks a `ComposeRuntime` of the `compose` tool, and it
- * lives in `conformance-compose.ts`.
+ * `conformance-executor.ts` and is exported here.
  *
  * A case is a name and a `run` that throws on failure. The suite needs no
  * test framework, so it runs in Node and in workerd alike.
@@ -36,7 +34,6 @@ import type {
 	RoomProtocol,
 } from './protocol.ts';
 
-export { composeRuntimeConformance } from './conformance-compose.ts';
 export {
 	type ExecutorCapabilities,
 	type ExecutorCaseReport,

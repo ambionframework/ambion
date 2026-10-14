@@ -4,13 +4,13 @@
  * `codex()` builds the executor an agent definition takes. The room reads
  * none of the fields Codex adds; the Codex executor does.
  */
-import type { ComposeOptions, Executor } from '@ambionframework/ambion';
+import type { Executor } from '@ambionframework/ambion';
 import {
-	composeExtension,
 	describeExecutor,
 	type ExecutorBaseOptions,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
+import { type ComposeOptions, composeExtension } from '@ambionframework/compose';
 import { quickjsRuntime } from '@ambionframework/compose/runtime';
 
 /** How much the model reasons before it answers. Codex 0.160.1 takes these values. */

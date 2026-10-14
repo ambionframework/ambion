@@ -10,7 +10,7 @@
  * `docs/skills.md`.
  */
 
-import type { ComposeMacro } from '@ambionframework/ambion';
+import type { ComposeMacro } from '@ambionframework/compose';
 import type { WorkspaceEnv } from './backend.ts';
 import { shellQuote } from './execution-env.ts';
 import { macrosOf } from './skill-macros.ts';

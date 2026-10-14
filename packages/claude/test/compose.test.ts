@@ -3,17 +3,12 @@
  * tool is one tool of the room server, so the model reads its content alone:
  * the returned value, or the error and the ledger as an error result.
  */
-import {
-	type AmbionTool,
-	COMPOSE_GUIDANCE,
-	type ComposeOptions,
-	defineTool,
-	type ToolContext,
-} from '@ambionframework/ambion';
+import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
+import { COMPOSE_GUIDANCE, type ComposeOptions } from '@ambionframework/compose';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
-import { broken, echo, table, total } from '../../ambion/test/support/compose-tools.ts';
+import { functionRuntime } from '../../compose/test/support/compose-runtime.ts';
+import { broken, echo, table, total } from '../../compose/test/support/compose-tools.ts';
 import { claude } from '../src/index.ts';
 import { open, seat, viewOf } from './support.ts';
 

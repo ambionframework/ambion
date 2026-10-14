@@ -11,7 +11,7 @@
  * sets a small memory limit and a CPU limit under one second when the
  * runtime keeps them. A runtime that a cut stops needs neither limit.
  */
-import { type ConformanceCase, check } from '@ambionframework/journal/conformance';
+import { type ConformanceCase, check } from '@ambionframework/ambion/conformance';
 import type { ComposeRuntime, ComposeRuntimeInput, JsonValue } from './compose.ts';
 import { pause, until } from './conformance-support.ts';
 

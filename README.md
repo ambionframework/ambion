@@ -297,7 +297,7 @@ and the model runs the macro by name. See [Compose](docs/compose.md) and
 | `@ambionframework/pi`          | The Pi executor, on the Pi harness                                                    |
 | `@ambionframework/claude`      | The Claude Agent SDK executor                                                         |
 | `@ambionframework/codex`       | The Codex `app-server` executor                                                       |
-| `@ambionframework/compose`     | The runtime of `compose`: `quickjsRuntime`                                            |
+| `@ambionframework/compose`     | The `compose` tool and its runtime: `composeExtension`, `quickjsRuntime`              |
 | `@ambionframework/workspace`   | The workspace interface, its tools, the SQLite backend, and conformance suites        |
 | `@ambionframework/just-bash`   | The just-bash shell and filesystem in the process, and a git backend in `/git`        |
 | `@ambionframework/workstation` | A bash backend over SSH, with one Unix account for each agent, and a git backend      |

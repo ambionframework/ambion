@@ -303,7 +303,7 @@ protocol types with their TSDoc.
   tools. It appends the tools and the guidance that each extension returns. With
   no extension, it adds none. An extension reads the tools of the seat, not
   the tools of another extension. `pi()`, `claude()`, and `codex()` add the
-  extension that `composeExtension` builds from `compose` after the
+  extension that `composeExtension` of `@ambionframework/compose` builds from `compose` after the
   extensions of the options. The `compose` value defaults to
   `quickjsRuntime()`. A second `composeExtension` in `extensions` brings
   duplicate tools named `compose`.

@@ -1,5 +1,15 @@
 import { defineConfig } from 'vitest/config';
-import { core, hosting, journal, journalConformance, names, testing } from './vitest.config.ts';
+import {
+	compose,
+	composeConformance,
+	composeRuntime,
+	core,
+	hosting,
+	journal,
+	journalConformance,
+	names,
+	testing,
+} from './vitest.config.ts';
 
 /**
  * The live tier: the same room, on a real model, with a real key. Each file
@@ -21,6 +31,9 @@ export default defineConfig({
 			{ find: '@ambionframework/ambion/testing', replacement: testing },
 			{ find: '@ambionframework/ambion/names', replacement: names },
 			{ find: /^@ambionframework\/ambion$/, replacement: core },
+			{ find: '@ambionframework/compose/conformance', replacement: composeConformance },
+			{ find: '@ambionframework/compose/runtime', replacement: composeRuntime },
+			{ find: /^@ambionframework\/compose$/, replacement: compose },
 			{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
 			{ find: '@ambionframework/journal', replacement: journal },
 		],

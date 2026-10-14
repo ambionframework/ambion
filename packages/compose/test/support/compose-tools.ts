@@ -3,9 +3,9 @@
  * tool that holds, a tool that counts the calls that run together, and a
  * tool that fails. Only tests import this file.
  */
+
+import { defineTool, type ToolResult } from '@ambionframework/ambion';
 import { Type } from 'typebox';
-import type { ToolResult } from '../../src/bundle.ts';
-import { defineTool } from '../../src/index.ts';
 
 export const text = (value: string): ToolResult['content'] => [{ type: 'text', text: value }];
 export const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

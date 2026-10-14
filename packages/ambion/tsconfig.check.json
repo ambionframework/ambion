@@ -10,6 +10,9 @@
 		// source tree.
 		"paths": {
 			"@ambionframework/ambion": ["./src/index.ts"],
+			"@ambionframework/compose": ["../compose/src/index.ts"],
+			"@ambionframework/compose/runtime": ["../compose/src/runtime.ts"],
+			"@ambionframework/compose/conformance": ["../compose/src/conformance.ts"],
 			"@ambionframework/ambion/hosting": ["./src/hosting.ts"]
 		}
 	},

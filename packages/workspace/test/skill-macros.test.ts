@@ -9,20 +9,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
 	AmbionError,
-	COMPOSE_GUIDANCE,
-	type ComposeRequest,
 	createRuntime,
 	defineAgent,
 	type Step,
 	startRoom,
 } from '@ambionframework/ambion';
-import { composeExtension, describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
+import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
 import { callTool, quiet, say, scripted, settled } from '@ambionframework/ambion/testing';
+import { COMPOSE_GUIDANCE, type ComposeRequest, composeExtension } from '@ambionframework/compose';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
 import { andrei, roomName } from '../../ambion/test/support/room.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
+import { functionRuntime } from '../../compose/test/support/compose-runtime.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { loadSkills, openWorkspace, type Workspace } from '../src/index.ts';
 import { hashesOf } from '../src/sources.ts';

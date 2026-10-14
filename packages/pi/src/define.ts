@@ -4,13 +4,10 @@
  * `pi()` builds the executor an agent definition takes. `fromPiTool` adapts
  * one native Pi tool to the tool the room normalizes.
  */
-import type { AmbionTool, ComposeOptions, Executor, ToolContent } from '@ambionframework/ambion';
+import type { AmbionTool, Executor, ToolContent } from '@ambionframework/ambion';
 import { defineTool } from '@ambionframework/ambion';
-import {
-	composeExtension,
-	describeExecutor,
-	type ExecutorBaseOptions,
-} from '@ambionframework/ambion/hosting';
+import { describeExecutor, type ExecutorBaseOptions } from '@ambionframework/ambion/hosting';
+import { type ComposeOptions, composeExtension } from '@ambionframework/compose';
 import { quickjsRuntime } from '@ambionframework/compose/runtime';
 import type { ModelThinkingLevel, Static, TSchema } from '@earendil-works/pi-ai';
 import type { CompactionPolicy } from '@earendil-works/pi-durable';

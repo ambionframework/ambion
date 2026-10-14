@@ -11,13 +11,25 @@ and guidance that `describeExecutor` appends after those of the bundles. The
 extension that `composeExtension` builds from it after the `extensions` of the
 options. `@ambionframework/ambion/hosting` exports `SeatExtension`,
 `SeatExtensionInput`, `SeatExtensionOutput`, `RoomSpec`, `RoomCall`,
-`ActivationAccess`, `ActivationEntry`, `activationTool`, and
-`composeExtension`. `activationTool` builds the one kind of tool whose entry
+`ActivationAccess`, `ActivationEntry`, and `activationTool`.
+`activationTool` builds the one kind of tool whose entry
 receives the room tools, a `nested` call that records its two steps with the
 running call as `parent`, and an `approved` record. The step sink is not
 passed to any tool. `invokeTool` and `invokeChecked` pass the access.
 `ToolBundle.macros` is `readonly unknown[]`. The error for a reserved tool
 name reads "the names 'compose' and 'describe' are reserved".
+
+**The `compose` tool lives in `@ambionframework/compose`.** The package exports
+`composeExtension`, `composeMacro`, `COMPOSE_GUIDANCE`, and the types
+`ComposeLimits`, `ComposeMacro`, `ComposeOptions`, `ComposeRequest`,
+`ComposeResult`, `ComposeRuntime`, `ComposeRuntimeInput`, `JsonValue`, and
+`LedgerEntry`. Its `/conformance` entry exports `composeRuntimeConformance`.
+`@ambionframework/ambion` and its `/conformance` entry export none of them.
+`@ambionframework/ambion/hosting` exports `checkedArguments`, `messageOf`, and
+`mismatchOf`. `describeExecutor` reserves no tool name: `composeExtension`
+refuses a tool named `compose` or `describe`. `@ambionframework/workspace`
+depends on `@ambionframework/compose`. The text that a model reads does not
+change.
 
 **`@ambionframework/canvas` does not depend on
 `@ambionframework/workspace`.** The `workspace` option of `openCanvas`

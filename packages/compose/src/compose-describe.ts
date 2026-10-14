@@ -5,10 +5,12 @@
  * that a call names, and runs nothing. A failed compose call appends the
  * signatures of the tools that it names (`docs/compose.md`).
  */
+
+import type { AmbionTool } from '@ambionframework/ambion';
+import { mismatchOf } from '@ambionframework/ambion/hosting';
 import { Type } from 'typebox';
 import { Check } from 'typebox/value';
-import type { AmbionTool } from './bundle.ts';
-import { type ComposeResult, DESCRIBE_TOOL_NAME, mismatchOf } from './compose.ts';
+import { type ComposeResult, DESCRIBE_TOOL_NAME } from './compose.ts';
 import { renderBindings, renderCatalog } from './compose-catalog.ts';
 
 type Catalog = ReadonlyMap<string, AmbionTool>;

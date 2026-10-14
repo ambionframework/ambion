@@ -1,3 +1,21 @@
+import {
+	type AmbionTool,
+	contentText,
+	createRuntime,
+	defineAgent,
+	defineTool,
+	type Step,
+	startRoom,
+	systemClock,
+	type ToolContext,
+} from '@ambionframework/ambion';
+import {
+	type CommitRequest,
+	describeExecutor,
+	invokeTool,
+	type RoomCall,
+} from '@ambionframework/ambion/hosting';
+import { callTool, quiet, say, scripted, settled } from '@ambionframework/ambion/testing';
 import { memoryJournals } from '@ambionframework/journal';
 /**
  * The `compose` tool, run through the `invoke` that `describeExecutor` appends:
@@ -7,25 +25,20 @@ import { memoryJournals } from '@ambionframework/journal';
  */
 import { type TSchema, Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { piExecution } from '../../pi/src/index.ts';
-import { type AmbionTool, contentText, type ToolContext } from '../src/bundle.ts';
-import { ComposeFailure } from '../src/compose.ts';
-import { describeExecutor } from '../src/define.ts';
-import { composeExtension, invokeTool } from '../src/hosting.ts';
+import { faulty } from '../../ambion/test/support/ports.ts';
 import {
-	type ComposeOptions,
-	type ComposeResult,
-	type ComposeRuntime,
-	createRuntime,
-	defineAgent,
-	defineTool,
-	type Step,
-	startRoom,
-	systemClock,
-} from '../src/index.ts';
-import type { CommitRequest } from '../src/protocol.ts';
-import type { RoomCall } from '../src/seat-extension.ts';
-import { callTool, quiet, say, scripted, settled } from '../src/testing.ts';
+	andrei,
+	collect,
+	deferred,
+	messagesOf,
+	participantsOf,
+	roomName,
+	stateOf,
+} from '../../ambion/test/support/room.ts';
+import { stopAtEnd } from '../../ambion/test/support/stop.ts';
+import { ComposeFailure } from '../src/compose.ts';
+import type { ComposeOptions, ComposeResult, ComposeRuntime } from '../src/index.ts';
+import { composeExtension } from '../src/index.ts';
 import { functionRuntime } from './support/compose-runtime.ts';
 import {
 	broken,
@@ -38,19 +51,6 @@ import {
 	text,
 	total,
 } from './support/compose-tools.ts';
-import { faulty } from './support/ports.ts';
-import {
-	andrei,
-	collect,
-	deferred,
-	messagesOf,
-	participantsOf,
-	roomName,
-	scriptedAgent,
-	stateOf,
-} from './support/room.ts';
-import { scriptedStream, toolResultTexts } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
 
 const hidden = defineTool({
 	name: 'hidden',
@@ -1399,25 +1399,17 @@ describe('a compose call over the room tools', () => {
 			await startRoom({
 				runtime: createRuntime({ storage: memoryJournals() }),
 				name: roomName('compose-time'),
-				agents: [
-					scriptedAgent('worker', 'worker.', {
-						compose: { runtime: functionRuntime, limits: { time: 40 } },
-					}),
-				],
+				agents: [composer('worker', [], { limits: { time: 40 } })],
 				seats: { worker: 'broadcast' },
 				execution: faulty(
-					piExecution({
-						sessions: 'memory',
-						stream: scriptedStream((context) => {
-							const results = toolResultTexts(context);
-							if (results.length === 0)
-								return callTool('compose', {
-									uses: ['say'],
-									code: `await tools.say({ text: 'Done.' }); return 'said';`,
-								});
-							read.push(...results);
-							return quiet();
-						}),
+					scripted((step, _seat, request) => {
+						if (request === 1)
+							return callTool('compose', {
+								uses: ['say'],
+								code: `await tools.say({ text: 'Done.' }); return 'said';`,
+							});
+						read.push(...step.results.map((result) => result.text));
+						return quiet();
 					}),
 					[
 						holdCommit('said', async () => {
