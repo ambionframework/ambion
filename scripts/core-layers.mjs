@@ -29,7 +29,7 @@ export const CORE_LAYERS = [
 			'record.ts',
 			'refs.ts',
 			'scheduling.ts',
-			'seat-layer.ts',
+			'seat-extension.ts',
 			'session-facts.ts',
 			'single-flight.ts',
 			'tool-call.ts',

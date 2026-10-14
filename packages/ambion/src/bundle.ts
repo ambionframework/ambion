@@ -140,8 +140,8 @@ export interface ToolBundle {
 	readonly guidance?: string;
 	/**
 	 * The programs that the bundle carries, as data. The core reads none. A
-	 * layer that runs programs, such as `compose`, checks each one. A seat
-	 * without that layer ignores them.
+	 * extension that runs programs, such as `compose`, checks each one. A seat
+	 * without that extension ignores them.
 	 */
 	readonly macros?: readonly unknown[];
 	/**

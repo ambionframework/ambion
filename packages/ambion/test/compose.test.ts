@@ -11,7 +11,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import { type AmbionTool, contentText, type ToolContext } from '../src/bundle.ts';
 import { ComposeFailure } from '../src/compose.ts';
 import { describeExecutor } from '../src/define.ts';
-import { composeLayer, invokeTool } from '../src/hosting.ts';
+import { composeExtension, invokeTool } from '../src/hosting.ts';
 import {
 	type ComposeOptions,
 	type ComposeResult,
@@ -24,7 +24,7 @@ import {
 	systemClock,
 } from '../src/index.ts';
 import type { CommitRequest } from '../src/protocol.ts';
-import type { RoomCall } from '../src/seat-layer.ts';
+import type { RoomCall } from '../src/seat-extension.ts';
 import { callTool, quiet, say, scripted, settled } from '../src/testing.ts';
 import { functionRuntime } from './support/compose-runtime.ts';
 import {
@@ -95,7 +95,7 @@ function toolOf(
 		kind: 'test',
 		instructions: 'Test.',
 		tools,
-		layers: [composeLayer({ runtime: functionRuntime, ...options })],
+		extensions: [composeExtension({ runtime: functionRuntime, ...options })],
 	});
 	const tool = executor.tools.find((one) => one.name === name);
 	if (tool === undefined) throw new Error(`The executor has no ${name} tool.`);
@@ -1072,7 +1072,7 @@ describe('a compose call in a room', () => {
 				kind: 'scripted',
 				instructions: 'Compose.',
 				tools: [table, total, later('later', false)],
-				layers: [composeLayer({ runtime: functionRuntime })],
+				extensions: [composeExtension({ runtime: functionRuntime })],
 			}),
 		});
 		const logged: Step[] = [];
@@ -1147,7 +1147,7 @@ function composer(
 			kind: 'scripted',
 			instructions: 'Compose.',
 			tools,
-			layers: [composeLayer({ runtime: functionRuntime, ...options })],
+			extensions: [composeExtension({ runtime: functionRuntime, ...options })],
 		}),
 	});
 }
@@ -1513,8 +1513,8 @@ describe('a compose call over the room tools', () => {
 			executor: describeExecutor({
 				kind: 'scripted',
 				instructions: 'Compose.',
-				layers: [
-					composeLayer({
+				extensions: [
+					composeExtension({
 						runtime: functionRuntime,
 						approve: (request) => {
 							requests.push(request);

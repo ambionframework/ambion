@@ -17,8 +17,8 @@ import {
 	mismatchOf,
 	plainJson,
 } from './compose.ts';
-import { callChecked, checkedArguments, messageOf } from './tool-call.ts';
-import type { Step } from './types.ts';
+import type { ActivationAccess } from './seat-extension.ts';
+import { checkedArguments, messageOf } from './tool-call.ts';
 
 /** What a rejected binding carries across the runtime: the message and the details of the error. */
 interface CallError {
@@ -50,8 +50,8 @@ export interface ComposeRunInput {
 	readonly limits: ComposeLimits;
 	/** The context of the compose call. */
 	readonly ctx: ToolContext;
-	/** Where the steps of the nested calls go. Absent, the run records no step. */
-	readonly record?: (step: Step) => void;
+	/** Calls a tool as a nested call of the compose call, and records its steps when the activation has a sink. */
+	readonly nested: ActivationAccess['nested'];
 	/**
 	 * Whether a call of the tool cannot be cancelled and answers with record
 	 * lines. The run waits for such a call to settle before it reports.
@@ -370,11 +370,9 @@ export class ComposeRun {
 
 	/** Steps 3 to 5: the context, `invoke` with its steps, the declared output, and the binding value. It never rejects. */
 	private async execute(call: Call): Promise<void> {
-		const { ctx, record } = this.input;
-		const nest = record === undefined ? undefined : { parent: ctx.callId, record };
 		let result: string | ToolResult;
 		try {
-			result = await callChecked(call.tool, call.input, call.params, this.contextOf(call), nest);
+			result = await this.input.nested(call.tool, call.input, call.params, this.contextOf(call));
 		} catch (error) {
 			this.fail(call, error);
 			return;

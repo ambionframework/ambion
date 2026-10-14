@@ -6,7 +6,7 @@
  */
 import type { ComposeOptions, Executor } from '@ambionframework/ambion';
 import {
-	composeLayer,
+	composeExtension,
 	describeExecutor,
 	type ExecutorBaseOptions,
 	pickPresent,
@@ -45,11 +45,14 @@ export interface CodexExecutor extends Executor {
 
 /** The Codex executor: the Codex loop, model, instructions, and tools. */
 export function codex(options: CodexOptions): CodexExecutor {
-	const { compose, layers, ...rest } = options;
+	const { compose, extensions, ...rest } = options;
 	return Object.freeze({
 		...describeExecutor({
 			...rest,
-			layers: [...(layers ?? []), composeLayer(compose ?? { runtime: quickjsRuntime() })],
+			extensions: [
+				...(extensions ?? []),
+				composeExtension(compose ?? { runtime: quickjsRuntime() }),
+			],
 			kind: 'codex',
 		}),
 		...pickPresent(options, ['modelReasoningEffort']),

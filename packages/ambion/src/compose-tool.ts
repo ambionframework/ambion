@@ -5,10 +5,10 @@
  * (`docs/compose.md`). Its description lists the bindable tools and the type
  * of each result. The `describe` tool is the counterpart: it renders the
  * signatures and the types of the tools that a call names, and runs nothing.
- * `composeLayer` adds both tools to a seat.
+ * `composeExtension` adds both tools to a seat.
  *
  * The tool needs the step sink of the activation. It is an activation tool
- * (`seat-layer.ts`), so the core hands it the sink and the room tools.
+ * (`seat-extension.ts`), so the core hands it the sink and the room tools.
  */
 import { type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
@@ -34,9 +34,14 @@ import { bindable } from './compose-catalog.ts';
 import { bindingsText, describeTool, namedTools, signatureText } from './compose-describe.ts';
 import { assertMacros, macroGuidance, macrosOf } from './compose-macros.ts';
 import { type ComposeOutcome, ComposeRun } from './compose-run.ts';
-import { activationTool, type RoomCall, type RoomSpec, type SeatLayer } from './seat-layer.ts';
+import {
+	type ActivationAccess,
+	activationTool,
+	type RoomCall,
+	type RoomSpec,
+	type SeatExtension,
+} from './seat-extension.ts';
 import { messageOf } from './tool-call.ts';
-import type { Step } from './types.ts';
 
 const DESCRIPTION =
 	'Run JavaScript that calls your tools as tools.<name>, in one call. Use it when a result feeds a later call, or when you need a part of a large result. You read only the value that the code returns.';
@@ -249,7 +254,7 @@ async function approve(
 	options: ComposeOptions,
 	request: ComposeRequest,
 	ctx: ToolContext,
-	record: ((step: Step) => void) | undefined,
+	access: ActivationAccess,
 ): Promise<void> {
 	if (options.approve === undefined) return;
 	let answer: 'allow' | 'deny';
@@ -260,7 +265,7 @@ async function approve(
 		answer = 'deny';
 		failed = `The approval failed: ${messageOf(error)}`;
 	}
-	record?.({ type: 'approval', call: ctx.callId, answer });
+	access.approved(answer);
 	if (answer === 'allow') return;
 	throw refusal(failed ?? 'The approval refused this compose call. No code ran.');
 }
@@ -464,15 +469,15 @@ function composeTools(
 	const entry = async (
 		params: unknown,
 		ctx: ToolContext,
-		record: ((step: Step) => void) | undefined,
-		calls: readonly RoomCall[] | undefined,
+		access: ActivationAccess,
 	): Promise<ToolResult<ComposeResult>> => {
+		const calls = access.room;
 		// The public `invoke` reaches this entry with unchecked arguments, so the check stays.
 		if (!Check(parameters, params))
 			throw new Error(`Invalid arguments for tool 'compose': ${mismatchOf(parameters, params)}.`);
 		const notes: RoomNotes = { lines: [], calls: [] };
 		const program = liveRoom(resolveProgram(params, catalog, held), calls, notes);
-		await approve(options, requestOf(program), ctx, record);
+		await approve(options, requestOf(program), ctx, access);
 		const run = new ComposeRun({
 			tools: program.tools,
 			unlisted: [...catalog.keys()].filter((name) => !program.tools.has(name)),
@@ -481,7 +486,7 @@ function composeTools(
 			...(program.macro === undefined ? {} : { args: program.macro.args }),
 			limits,
 			ctx,
-			...(record === undefined ? {} : { record }),
+			nested: access.nested,
 			commits: (nested) => ROOM_ENTRIES.has(nested),
 		});
 		const outcome = await run.run();
@@ -502,11 +507,11 @@ function composeTools(
 }
 
 /**
- * The layer that adds the `compose` tool and the `describe` tool to a seat.
+ * The extension that adds the `compose` tool and the `describe` tool to a seat.
  * It binds each tool of the seat that does not set `compose: false`, and the
- * room tools. The option is checked here, when the layer is made.
+ * room tools. The option is checked here, when the extension is made.
  */
-export function composeLayer(options: ComposeOptions): SeatLayer {
+export function composeExtension(options: ComposeOptions): SeatExtension {
 	assertComposeOptions(options);
 	return ({ tools, bundles, room }) => {
 		const macros = macrosOf(bundles);

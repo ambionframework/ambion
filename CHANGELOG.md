@@ -4,16 +4,20 @@
 
 ### Breaking changes
 
-**`ExecutorBaseOptions` has `layers` and no `compose`.** A `SeatLayer` reads the
-tools, the bundles, and the room tools of a seat, and returns tools and
-guidance that `describeExecutor` appends after those of the bundles. The
+**`ExecutorBaseOptions` has `extensions` and no `compose`.** A `SeatExtension`
+reads the tools, the bundles, and the room tools of a seat, and returns tools
+and guidance that `describeExecutor` appends after those of the bundles. The
 `pi()`, `claude()`, and `codex()` options keep `compose`, and each adds the
-layer that `composeLayer` builds from it. `@ambionframework/ambion/hosting`
-exports `SeatLayer`, `SeatLayerInput`, `SeatLayerOutput`, `RoomSpec`,
-`RoomCall`, `ActivationEntry`, `activationTool`, and `composeLayer`.
-`activationTool` builds the one kind of tool that `invokeTool` and
-`invokeChecked` give the step sink and the room tools. `ToolBundle.macros` is
-`readonly unknown[]`.
+extension that `composeExtension` builds from it after the `extensions` of the
+options. `@ambionframework/ambion/hosting` exports `SeatExtension`,
+`SeatExtensionInput`, `SeatExtensionOutput`, `RoomSpec`, `RoomCall`,
+`ActivationAccess`, `ActivationEntry`, `activationTool`, and
+`composeExtension`. `activationTool` builds the one kind of tool whose entry
+receives the room tools, a `nested` call that records its two steps with the
+running call as `parent`, and an `approved` record. The step sink is not
+passed to any tool. `invokeTool` and `invokeChecked` pass the access.
+`ToolBundle.macros` is `readonly unknown[]`. The error for a reserved tool
+name reads "the names 'compose' and 'describe' are reserved".
 
 **`sqliteBackend` has no append-only guard and no provenance stamp.** The
 options `appendOnly` and `provenance` are gone, and so are the type

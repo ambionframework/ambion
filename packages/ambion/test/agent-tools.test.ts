@@ -16,7 +16,7 @@ import {
 	piExecution,
 } from '../../pi/src/index.ts';
 import { COMPOSE_PROCESS_GUIDANCE } from '../src/compose.ts';
-import { describeExecutor } from '../src/hosting.ts';
+import { composeExtension, describeExecutor } from '../src/hosting.ts';
 import {
 	type AmbionTool,
 	COMPOSE_GUIDANCE,
@@ -92,8 +92,8 @@ describe('the definition of agent tools', () => {
 		['seat', { tools: [tool('seat')] }, /room supplies it for an activation/],
 		['unseat', { tools: [tool('unseat')] }, /room supplies it for an activation/],
 		['dismiss', { tools: [tool('dismiss')] }, /room supplies it for an activation/],
-		['compose', { tools: [tool('compose')] }, /the compose option reserves the name/],
-		['describe', { tools: [tool('describe')] }, /the compose option reserves the name/],
+		['compose', { tools: [tool('compose')] }, /the names 'compose' and 'describe' are reserved/],
+		['describe', { tools: [tool('describe')] }, /the names 'compose' and 'describe' are reserved/],
 		[
 			'compose in a bundle',
 			{ bundles: [{ tools: [tool('compose')] }] },
@@ -230,7 +230,29 @@ describe('the definition of agent tools', () => {
 		]);
 	});
 
-	it('adds no compose tool, no guidance, and no macro check to a bare describeExecutor with no compose option', () => {
+	it('runs the extensions of the options before compose, which does not bind their tools', () => {
+		const extra = tool('extra');
+		const agent = worker({
+			tools: [tool('lookup')],
+			extensions: [() => ({ tools: [extra], guidance: 'Use extra.' })],
+		});
+		expect(agent.executor.tools.map((one) => one.name)).toEqual([
+			'lookup',
+			'extra',
+			'compose',
+			'describe',
+		]);
+		expect(agent.executor.guidance).toBe(`Use extra.\n\n${COMPOSE_GUIDANCE}`);
+		const describer = agent.executor.tools.find((one) => one.name === 'describe');
+		expect(() => describer?.invoke({ tools: ['extra'] }, {} as ToolContext)).toThrow(
+			"The catalog holds no tool named 'extra'",
+		);
+		expect(() =>
+			worker({ extensions: [composeExtension({ runtime: { evaluate: async () => undefined } })] }),
+		).toThrow("brings duplicate tools named 'compose'");
+	});
+
+	it('adds no compose tool, no guidance, and no macro check to a bare describeExecutor with no compose extension', () => {
 		const macro = composeMacro({
 			name: 'bundle/orphan',
 			description: 'Calls a tool that the catalog lacks.',

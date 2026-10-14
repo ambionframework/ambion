@@ -86,7 +86,7 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'ROOM_SERVER',
 		'activationTool',
 		'classifyCause',
-		'composeLayer',
+		'composeExtension',
 		'describeExecutor',
 		'executorOfKind',
 		'failedPass',

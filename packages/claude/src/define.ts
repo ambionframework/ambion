@@ -6,7 +6,7 @@
  */
 import type { ComposeOptions, Executor } from '@ambionframework/ambion';
 import {
-	composeLayer,
+	composeExtension,
 	describeExecutor,
 	type ExecutorBaseOptions,
 	pickPresent,
@@ -41,11 +41,14 @@ const POLICY = ['maxBudgetUsd', 'effort'] as const;
 
 /** The Claude executor: the Claude Agent SDK's loop, model, instructions, tools and policy. */
 export function claude(options: ClaudeOptions): ClaudeExecutor {
-	const { compose, layers, ...rest } = options;
+	const { compose, extensions, ...rest } = options;
 	return Object.freeze({
 		...describeExecutor({
 			...rest,
-			layers: [...(layers ?? []), composeLayer(compose ?? { runtime: quickjsRuntime() })],
+			extensions: [
+				...(extensions ?? []),
+				composeExtension(compose ?? { runtime: quickjsRuntime() }),
+			],
 			kind: 'claude',
 		}),
 		...pickPresent(options, POLICY),

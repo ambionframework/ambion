@@ -7,7 +7,7 @@
 import type { AmbionTool, ComposeOptions, Executor, ToolContent } from '@ambionframework/ambion';
 import { defineTool } from '@ambionframework/ambion';
 import {
-	composeLayer,
+	composeExtension,
 	describeExecutor,
 	type ExecutorBaseOptions,
 } from '@ambionframework/ambion/hosting';
@@ -90,13 +90,16 @@ function checkCompaction(options: CompactionOptions): void {
 
 /** The Pi executor: the pi-durable harness, model, instructions, and tools. */
 export function pi(options: PiOptions): PiExecutor {
-	const { compaction, thinking, compose, layers, ...rest } = options;
+	const { compaction, thinking, compose, extensions, ...rest } = options;
 	if (compaction !== undefined) checkCompaction(compaction);
 	checkThinking(thinking);
 	return Object.freeze({
 		...describeExecutor({
 			...rest,
-			layers: [...(layers ?? []), composeLayer(compose ?? { runtime: quickjsRuntime() })],
+			extensions: [
+				...(extensions ?? []),
+				composeExtension(compose ?? { runtime: quickjsRuntime() }),
+			],
 			kind: 'pi',
 		}),
 		kind: 'pi' as const,

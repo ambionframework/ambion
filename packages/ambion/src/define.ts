@@ -22,7 +22,7 @@ import type {
 import { assertToolCompose, COMPOSE_TOOL_NAME, DESCRIBE_TOOL_NAME, mismatchOf } from './compose.ts';
 import { AmbionError } from './errors.ts';
 import { isName } from './names.ts';
-import type { RoomSpec, SeatLayer } from './seat-layer.ts';
+import { extensionsOf, type RoomSpec, type SeatExtension } from './seat-extension.ts';
 import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
 
 export interface DefineAgentOptions {
@@ -82,12 +82,12 @@ export interface ExecutorBaseOptions {
 	 */
 	readonly estimateTokens?: (text: string) => number;
 	/**
-	 * Layers over the tools of the seat, in order. Each adds tools and guidance
-	 * after the tools and the guidance of the bundles. An executor package gives
-	 * the `compose` layer by default. `describeExecutor` by itself adds no
-	 * layer.
+	 * Extensions of the seat, in order. Each reads the tools of the seat, not the
+	 * tools that another extension adds, and adds tools and guidance after the
+	 * tools and the guidance of the bundles. An executor package adds the
+	 * `compose` extension after these. `describeExecutor` by itself adds none.
 	 */
-	readonly layers?: readonly SeatLayer[];
+	readonly extensions?: readonly SeatExtension[];
 }
 
 /** What `describeExecutor` reads: the fields every executor kind shares. */
@@ -130,14 +130,17 @@ export function pickPresent<T extends object, K extends keyof T>(
  */
 export function describeExecutor(options: ExecutorOptions): Executor {
 	const input = flattenTools(options.tools, options.bundles);
-	const own = input.map((tool) => captureTool(tool));
-	const added = (options.layers ?? []).map((layer) =>
-		layer({ tools: own, bundles: options.bundles ?? [], room: ROOM_TOOLS }),
+	const own = Object.freeze(input.map((tool) => captureTool(tool)));
+	const added = extensionsOf(options.extensions).map((extension) =>
+		extension({ tools: own, bundles: options.bundles ?? [], room: ROOM_SPECS }),
 	);
-	const guidance = joined([guidanceOf(options.bundles), ...added.map((layer) => layer.guidance)]);
+	const guidance = joined([
+		guidanceOf(options.bundles),
+		...added.map((one) => one.guidance?.trim() || undefined),
+	]);
 	const reminders = remindersOf(options.bundles);
-	// A layer closes over its option and the tools above. The executor keeps no field of it.
-	const tools = Object.freeze([...own, ...added.flatMap((layer) => layer.tools.map(captureTool))]);
+	// An extension closes over its option and the tools above. The executor keeps no field of it.
+	const tools = Object.freeze([...own, ...added.flatMap((one) => one.tools.map(captureTool))]);
 	return Object.freeze({
 		kind: options.kind,
 		instructions: options.instructions,
@@ -407,6 +410,11 @@ const ROOM_TOOLS: readonly RoomSpec[] = [
 	DISMISS,
 ];
 
+/** The room tools as an extension reads them: frozen, so no extension changes a tool of the room. */
+const ROOM_SPECS: readonly RoomSpec[] = Object.freeze(
+	ROOM_TOOLS.map((spec) => Object.freeze({ ...spec })),
+);
+
 /** The names that the room supplies for an activation. An agent's own tool takes none of them. */
 export const ROOM_TOOL_NAMES: readonly string[] = ROOM_TOOLS.map((spec) => spec.name);
 
@@ -435,7 +443,7 @@ function appendTools(tools: readonly AmbionTool[], into: AmbionTool[], source: s
 		if (tool.name === COMPOSE_TOOL_NAME || tool.name === DESCRIBE_TOOL_NAME)
 			throw new AmbionError(
 				'invalid_tool',
-				`A tool of the agent ${source} is named '${tool.name}': the compose option reserves the name. Give the tool another name.`,
+				`A tool of the agent ${source} is named '${tool.name}': the names 'compose' and 'describe' are reserved. Give the tool another name.`,
 			);
 		into.push(tool);
 	}

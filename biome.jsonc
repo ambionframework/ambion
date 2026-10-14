@@ -113,7 +113,7 @@
 				"packages/ambion/src/record.ts",
 				"packages/ambion/src/types.ts",
 				"packages/ambion/src/scheduling.ts",
-				"packages/ambion/src/seat-layer.ts",
+				"packages/ambion/src/seat-extension.ts",
 				"packages/ambion/src/session-facts.ts",
 				"packages/ambion/src/single-flight.ts",
 				"packages/ambion/src/tool-call.ts",
