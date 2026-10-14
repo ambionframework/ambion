@@ -44,7 +44,7 @@ workspace ──▶ ambion
 just-bash ──▶ workspace
 workstation ──▶ ambion, workspace
 assistant ──▶ ambion
-canvas ──▶ ambion, journal, workspace
+canvas ──▶ ambion, journal
 simulator ──▶ ambion, pi
 ```
 

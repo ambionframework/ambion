@@ -19,6 +19,12 @@ passed to any tool. `invokeTool` and `invokeChecked` pass the access.
 `ToolBundle.macros` is `readonly unknown[]`. The error for a reserved tool
 name reads "the names 'compose' and 'describe' are reserved".
 
+**`@ambionframework/canvas` does not depend on
+`@ambionframework/workspace`.** The `workspace` option of `openCanvas`
+takes a `MirrorHost`, a value with the one method `mirror(room, options)`,
+and a `Workspace` meets it. The package exports the types `MirrorHost` and
+`RoomMirror`. Install the workspace only to use it.
+
 **`sqliteBackend` has no append-only guard and no provenance stamp.** The
 options `appendOnly` and `provenance` are gone, and so are the type
 `SqlProvenance` and the field `SqlRunOptions.provenance`. The `sql` tool
