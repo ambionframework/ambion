@@ -10,7 +10,6 @@ import {
 	type ToolBundle,
 } from '@ambionframework/ambion';
 import { isName } from '@ambionframework/ambion/names';
-import type { RoomMirror } from '@ambionframework/workspace';
 import { type ActPort, type Answer, Answers, actOn } from './acts.ts';
 import { type BreakoutPort, DEFAULT_PER_OPENER, isRoot, startOf } from './breakout.ts';
 import { Bridge } from './bridge.ts';
@@ -26,6 +25,7 @@ import type {
 	CanvasOperation,
 	CanvasRoomOptions,
 	OpenCanvasOptions,
+	RoomMirror,
 	WidgetAct,
 	WidgetActResult,
 	WidgetOptions,

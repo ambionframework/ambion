@@ -12,7 +12,7 @@ holds the contract.
 ## Install
 
 ```sh
-pnpm add @ambionframework/canvas @ambionframework/journal @ambionframework/workspace
+pnpm add @ambionframework/canvas @ambionframework/journal
 ```
 
 The package needs Node 22.19 or newer.
@@ -26,7 +26,7 @@ const canvas = openCanvas({
   name: 'lab',
   runtime,
   store: sqliteCanvas(sql),
-  workspace,
+  workspace, // optional: a Workspace from @ambionframework/workspace
   onError: (failure) => console.error(failure.room, failure.operation),
 });
 await canvas.resume({ agents: [planner, writer, scout] });
