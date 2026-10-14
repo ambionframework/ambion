@@ -4,6 +4,17 @@
 
 ### Breaking changes
 
+**`ExecutorBaseOptions` has `layers` and no `compose`.** A `SeatLayer` reads the
+tools, the bundles, and the room tools of a seat, and returns tools and
+guidance that `describeExecutor` appends after those of the bundles. The
+`pi()`, `claude()`, and `codex()` options keep `compose`, and each adds the
+layer that `composeLayer` builds from it. `@ambionframework/ambion/hosting`
+exports `SeatLayer`, `SeatLayerInput`, `SeatLayerOutput`, `RoomSpec`,
+`RoomCall`, `ActivationEntry`, `activationTool`, and `composeLayer`.
+`activationTool` builds the one kind of tool that `invokeTool` and
+`invokeChecked` give the step sink and the room tools. `ToolBundle.macros` is
+`readonly unknown[]`.
+
 **`sqliteBackend` has no append-only guard and no provenance stamp.** The
 options `appendOnly` and `provenance` are gone, and so are the type
 `SqlProvenance` and the field `SqlRunOptions.provenance`. The `sql` tool

@@ -18,11 +18,11 @@
  */
 
 import type { ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
-import { invokeTool } from '../compose-tool.ts';
 import { DISMISS, RECALL, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
 import type { ActivationView, CommitResult, Intent, RoomProtocol, Unchanged } from '../protocol.ts';
 import { renderLine } from '../record.ts';
 import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
+import { invokeTool } from '../seat-layer.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
 import type { BoundTool, BoundToolResult, StepSink } from './contract.ts';
 import { offersSeat, refusal, summaryToolDescription } from './render.ts';

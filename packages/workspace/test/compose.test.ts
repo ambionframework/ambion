@@ -9,7 +9,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AmbionTool, ToolBundle } from '@ambionframework/ambion';
-import { describeExecutor } from '@ambionframework/ambion/hosting';
+import { composeLayer, describeExecutor } from '@ambionframework/ambion/hosting';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
 import { justGitBackend, sqliteGitStorage } from '../../just-bash/src/git/index.ts';
@@ -344,7 +344,7 @@ describe('the compose field of the workspace tools', () => {
 			kind: 'test',
 			instructions: 'Test.',
 			bundles: [bundle],
-			compose: { runtime: functionRuntime },
+			layers: [composeLayer({ runtime: functionRuntime })],
 		});
 		const [compose, describer] = ['compose', 'describe'].map((name) =>
 			executor.tools.find((tool) => tool.name === name),

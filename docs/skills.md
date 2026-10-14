@@ -316,7 +316,7 @@ returned value alone, and then cites the refs in a `say`:
 ```
 
 **The code runs under the tools of `uses` alone.** `uses` belongs to the
-file. `describeExecutor` checks it once, when the definition is made, and
+file. `composeLayer` checks it once, when the definition is made, and
 the model cannot widen it. A macro binds only tools that the seat holds, so
 its authority is the authority of a direct call.
 
@@ -329,8 +329,8 @@ call with its schema, its checks, its provenance, and its steps. The ledger,
 the limits, and the audit log apply.
 
 **One skill set fits every seat.** A definition that `describeExecutor`
-builds with no `compose` option ignores the macros and lists none. The
-executor packages always set the option.
+builds with no `compose` layer ignores the macros and lists none. The
+executor packages always add the layer.
 
 ### The file format
 
@@ -394,7 +394,7 @@ only carries the data.
 
 ### How compose runs a macro
 
-**`describeExecutor` checks the macros of a seat that has the `compose` tool.** It
+**`composeLayer` checks the macros of a seat that has the `compose` tool.** It
 collects the macros of every bundle. It refuses a macro that names a tool
 which the catalog lacks. The catalog holds the tools of the seat and the room
 tools. A tool with `compose: false` is not in the catalog. It refuses two

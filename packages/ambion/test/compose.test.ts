@@ -10,9 +10,8 @@ import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { type AmbionTool, contentText, type ToolContext } from '../src/bundle.ts';
 import { ComposeFailure } from '../src/compose.ts';
-import type { RoomCall } from '../src/compose-tool.ts';
 import { describeExecutor } from '../src/define.ts';
-import { invokeTool } from '../src/hosting.ts';
+import { composeLayer, invokeTool } from '../src/hosting.ts';
 import {
 	type ComposeOptions,
 	type ComposeResult,
@@ -25,6 +24,7 @@ import {
 	systemClock,
 } from '../src/index.ts';
 import type { CommitRequest } from '../src/protocol.ts';
+import type { RoomCall } from '../src/seat-layer.ts';
 import { callTool, quiet, say, scripted, settled } from '../src/testing.ts';
 import { functionRuntime } from './support/compose-runtime.ts';
 import {
@@ -95,7 +95,7 @@ function toolOf(
 		kind: 'test',
 		instructions: 'Test.',
 		tools,
-		compose: { runtime: functionRuntime, ...options },
+		layers: [composeLayer({ runtime: functionRuntime, ...options })],
 	});
 	const tool = executor.tools.find((one) => one.name === name);
 	if (tool === undefined) throw new Error(`The executor has no ${name} tool.`);
@@ -1072,7 +1072,7 @@ describe('a compose call in a room', () => {
 				kind: 'scripted',
 				instructions: 'Compose.',
 				tools: [table, total, later('later', false)],
-				compose: { runtime: functionRuntime },
+				layers: [composeLayer({ runtime: functionRuntime })],
 			}),
 		});
 		const logged: Step[] = [];
@@ -1147,7 +1147,7 @@ function composer(
 			kind: 'scripted',
 			instructions: 'Compose.',
 			tools,
-			compose: { runtime: functionRuntime, ...options },
+			layers: [composeLayer({ runtime: functionRuntime, ...options })],
 		}),
 	});
 }
@@ -1513,13 +1513,15 @@ describe('a compose call over the room tools', () => {
 			executor: describeExecutor({
 				kind: 'scripted',
 				instructions: 'Compose.',
-				compose: {
-					runtime: functionRuntime,
-					approve: (request) => {
-						requests.push(request);
-						return 'allow';
-					},
-				},
+				layers: [
+					composeLayer({
+						runtime: functionRuntime,
+						approve: (request) => {
+							requests.push(request);
+							return 'allow';
+						},
+					}),
+				],
 			}),
 		});
 		const room = stopAtEnd(

@@ -19,18 +19,10 @@ import type {
 	ToolContext,
 	ToolResult,
 } from './bundle.ts';
-import {
-	assertComposeOptions,
-	assertToolCompose,
-	COMPOSE_TOOL_NAME,
-	type ComposeOptions,
-	DESCRIBE_TOOL_NAME,
-	mismatchOf,
-} from './compose.ts';
-import { macrosOf } from './compose-macros.ts';
-import { composeGuidance, composeTools, type RoomSpec } from './compose-tool.ts';
+import { assertToolCompose, COMPOSE_TOOL_NAME, DESCRIBE_TOOL_NAME, mismatchOf } from './compose.ts';
 import { AmbionError } from './errors.ts';
 import { isName } from './names.ts';
+import type { RoomSpec, SeatLayer } from './seat-layer.ts';
 import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
 
 export interface DefineAgentOptions {
@@ -90,12 +82,12 @@ export interface ExecutorBaseOptions {
 	 */
 	readonly estimateTokens?: (text: string) => number;
 	/**
-	 * The `compose` tool for this seat. It joins the tools of the seat into
-	 * one call, and the `describe` tool that returns the signatures of the
-	 * tools it binds. The executor packages give a default when the field is
-	 * absent. `describeExecutor` by itself adds no tool for an absent field.
+	 * Layers over the tools of the seat, in order. Each adds tools and guidance
+	 * after the tools and the guidance of the bundles. An executor package gives
+	 * the `compose` layer by default. `describeExecutor` by itself adds no
+	 * layer.
 	 */
-	readonly compose?: ComposeOptions;
+	readonly layers?: readonly SeatLayer[];
 }
 
 /** What `describeExecutor` reads: the fields every executor kind shares. */
@@ -137,20 +129,15 @@ export function pickPresent<T extends object, K extends keyof T>(
  * executor kind adds its own fields to the value this returns.
  */
 export function describeExecutor(options: ExecutorOptions): Executor {
-	assertComposeOptions(options.compose);
-	const compose = options.compose;
 	const input = flattenTools(options.tools, options.bundles);
-	// A seat without `compose` ignores the macros, so one skill set fits every seat.
-	const macros = compose === undefined ? [] : macrosOf(options.bundles);
 	const own = input.map((tool) => captureTool(tool));
-	const guidance = joined([guidanceOf(options.bundles), composeGuidance(compose, own, macros)]);
-	const reminders = remindersOf(options.bundles);
-	// The `compose` tool closes over the option and the tools above. The executor keeps no field of it.
-	const tools = Object.freeze(
-		compose === undefined
-			? own
-			: [...own, ...composeTools(compose, own, macros, ROOM_TOOLS).map(captureTool)],
+	const added = (options.layers ?? []).map((layer) =>
+		layer({ tools: own, bundles: options.bundles ?? [], room: ROOM_TOOLS }),
 	);
+	const guidance = joined([guidanceOf(options.bundles), ...added.map((layer) => layer.guidance)]);
+	const reminders = remindersOf(options.bundles);
+	// A layer closes over its option and the tools above. The executor keeps no field of it.
+	const tools = Object.freeze([...own, ...added.flatMap((layer) => layer.tools.map(captureTool))]);
 	return Object.freeze({
 		kind: options.kind,
 		instructions: options.instructions,
@@ -410,7 +397,8 @@ export const RECALL = {
  * catalog, the tools that commit, and the scripted executor read this list.
  */
 const ROOM_TOOLS: readonly RoomSpec[] = [
-	SAY,
+	// Two says that start together carry the same read position, so the room refuses the second.
+	{ ...SAY, executionMode: 'sequential' },
 	SCHEDULE,
 	RECALL,
 	// The room offers `seat` and `unseat` to some rooms alone, so the catalog lists them apart.

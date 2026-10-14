@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import type { ToolBundle } from '../src/bundle.ts';
 import { ComposeFailure } from '../src/compose.ts';
 import { describeExecutor } from '../src/define.ts';
-import { invokeTool } from '../src/hosting.ts';
+import { composeLayer, invokeTool } from '../src/hosting.ts';
 import {
 	AmbionError,
 	COMPOSE_GUIDANCE,
@@ -64,7 +64,7 @@ function seatOf(
 		kind: 'test',
 		instructions: 'Test.',
 		bundles: [bundle],
-		compose: { runtime, ...(approve === undefined ? {} : { approve }) },
+		layers: [composeLayer({ runtime, ...(approve === undefined ? {} : { approve }) })],
 	});
 	const tool = executor.tools.find((one) => one.name === 'compose');
 	if (tool === undefined) throw new Error('The executor has no compose tool.');
@@ -168,7 +168,7 @@ describe('the definition of a seat with macros', () => {
 				kind: 'test',
 				instructions: 'Test.',
 				bundles: [carrying(macro('a/b')), second],
-				compose: { runtime: functionRuntime },
+				layers: [composeLayer({ runtime: functionRuntime })],
 			}),
 		).toThrow("Two macros are named 'a/b'");
 	});
@@ -220,7 +220,7 @@ describe('the definition of a seat with macros', () => {
 			kind: 'test',
 			instructions: 'Test.',
 			bundles: [carrying(macro('a/b'))],
-			compose: { runtime: functionRuntime, guidance: '  ' },
+			layers: [composeLayer({ runtime: functionRuntime, guidance: '  ' })],
 		});
 		expect(executor.guidance).toMatch(/^The macros of your skills\./);
 	});

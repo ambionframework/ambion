@@ -4,9 +4,13 @@
  * `pi()` builds the executor an agent definition takes. `fromPiTool` adapts
  * one native Pi tool to the tool the room normalizes.
  */
-import type { AmbionTool, Executor, ToolContent } from '@ambionframework/ambion';
+import type { AmbionTool, ComposeOptions, Executor, ToolContent } from '@ambionframework/ambion';
 import { defineTool } from '@ambionframework/ambion';
-import { describeExecutor, type ExecutorBaseOptions } from '@ambionframework/ambion/hosting';
+import {
+	composeLayer,
+	describeExecutor,
+	type ExecutorBaseOptions,
+} from '@ambionframework/ambion/hosting';
 import { quickjsRuntime } from '@ambionframework/compose/runtime';
 import type { ModelThinkingLevel, Static, TSchema } from '@earendil-works/pi-ai';
 import type { CompactionPolicy } from '@earendil-works/pi-durable';
@@ -20,6 +24,8 @@ export type CompactionOptions = Partial<CompactionPolicy>;
 export interface PiOptions extends ExecutorBaseOptions {
 	/** A Pi model identifier, `provider/model-id`. */
 	model: string;
+	/** The `compose` and `describe` tools of the seat. Absent, QuickJS runs the code. */
+	compose?: ComposeOptions;
 	/**
 	 * When the harness compacts the session: `enabled`, `reserveTokens`,
 	 * `keepRecentTokens`, and `backgroundTokens`. A field that is absent
@@ -84,13 +90,13 @@ function checkCompaction(options: CompactionOptions): void {
 
 /** The Pi executor: the pi-durable harness, model, instructions, and tools. */
 export function pi(options: PiOptions): PiExecutor {
-	const { compaction, thinking, ...rest } = options;
+	const { compaction, thinking, compose, layers, ...rest } = options;
 	if (compaction !== undefined) checkCompaction(compaction);
 	checkThinking(thinking);
 	return Object.freeze({
 		...describeExecutor({
 			...rest,
-			compose: rest.compose ?? { runtime: quickjsRuntime() },
+			layers: [...(layers ?? []), composeLayer(compose ?? { runtime: quickjsRuntime() })],
 			kind: 'pi',
 		}),
 		kind: 'pi' as const,
