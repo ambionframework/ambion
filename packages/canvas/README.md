@@ -12,7 +12,7 @@ holds the contract.
 ## Install
 
 ```sh
-pnpm add @ambionframework/canvas @ambionframework/journal @ambionframework/workspace
+pnpm add @ambionframework/canvas @ambionframework/journal
 ```
 
 The package needs Node 22.19 or newer.

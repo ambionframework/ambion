@@ -97,7 +97,7 @@ After `close`, every tool call is a refusal. The widget calls of a room run
 in a queue of their own ([Widgets](widgets.md#the-tools)), so a stop never
 waits behind one.
 
-**Reads use the mirror.** The `RoomMirror` gives the path of the mirror
+**Reads use the mirror.** The mirror gives the path of its
 file, and `breakout` returns it. The opener reads it with `jq`, as it reads
 its own room ([Workspace](workspace.md#mirror-a-rooms-messages)).
 `recall` reads the own room alone ([Trust](trust.md)).
@@ -369,8 +369,9 @@ refusal. At a start, the canvas removes the assistant from the definitions that 
 **The canvas hears each breakout room that it starts or resumes.** It
 calls `room.subscribe` once for each breakout handle and reacts to
 `exchange_closed`.
-With a workspace, it calls `workspace.mirror(room)` after each start and
-resume, and keeps the `RoomMirror`. A failed attach goes to `onError`,
+With a `workspace` option, it calls `workspace.mirror(room)` after each start and
+resume, and keeps the `RoomMirror`. The option takes any value with that
+one method (`MirrorHost`), and a `Workspace` is one. A failed attach goes to `onError`,
 and the room keeps running. A stop stops the room first, then its mirror,
 so the mirror holds the last message.
 
