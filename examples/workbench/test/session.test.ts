@@ -1,6 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseSnapshotUri, snapshotUri } from '@ambionframework/ambion';
+import { parseSnapshotUri, snapshotUri } from '@ambionframework/workspace';
 import { describe, expect, it, vi } from 'vitest';
 import { ProcessBrowser, stateText } from '../src/process-browser.ts';
 import { lastPart } from '../src/processes.ts';

@@ -8,10 +8,10 @@
  * host shows it to a person.
  */
 
-import { commitUri, parseCommitUri } from '@ambionframework/ambion';
 import type { GitCommit, GitEnv, GitRevision } from './git-backend.ts';
 import { revisionOf } from './git-names.ts';
 import { assertRefLength, assertRefWorkspace } from './ref-rules.ts';
+import { commitUri, parseCommitUri } from './refs.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 
 /** How a refusal names `at`: `branch 'main'`, `tag 'v1'`, or `commit abc1234`. */

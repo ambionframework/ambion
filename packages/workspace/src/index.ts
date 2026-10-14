@@ -83,6 +83,8 @@ export type { Process, ProcessState } from './process-files.ts';
 export { resolveProcess } from './process-ref.ts';
 export { MAX_TIMER_SECONDS } from './process-run.ts';
 export type { ProcessEvent, ProcessQuery } from './process-table.ts';
+export type { CommitUri, CommitVia, SnapshotUri } from './refs.ts';
+export { commitUri, parseCommitUri, parseSnapshotUri, snapshotUri } from './refs.ts';
 export type { SkillInfo, SkillSet } from './skills.ts';
 export { loadSkills } from './skills.ts';
 export type { SnapshotDetails, SnapshotOptions } from './snapshots.ts';

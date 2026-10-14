@@ -37,6 +37,16 @@ takes a `MirrorHost`, a value with the one method `mirror(room, options)`,
 and a `Workspace` meets it. The package exports the types `MirrorHost` and
 `RoomMirror`. Install the workspace only to use it.
 
+**The workspace package owns the snapshot ref and the commit ref.**
+`snapshotUri`, `parseSnapshotUri`, `commitUri`, `parseCommitUri`, and the types
+`SnapshotUri`, `CommitUri`, and `CommitVia` come from
+`@ambionframework/workspace`, and `@ambionframework/ambion` no longer exports
+them. The kernel keeps `roomUri`, `messageUri`, `parseRoomUri`, `RoomUri`, and
+`REF_LIMITS`. The room refuses an `ambion://room/` ref in a form it does not
+define. It accepts every other absolute URI, so a malformed
+`ambion://workspace/` ref enters the record, and `restore` and `readCommit`
+refuse it where they read it.
+
 **`sqliteBackend` has no append-only guard and no provenance stamp.** The
 options `appendOnly` and `provenance` are gone, and so are the type
 `SqlProvenance` and the field `SqlRunOptions.provenance`. The `sql` tool

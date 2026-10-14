@@ -9,14 +9,13 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { commitUri } from '@ambionframework/ambion';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { callTool, quiet } from '../../ambion/test/support/scripted.ts';
 import { justGitBackend, sqliteGitStorage } from '../../just-bash/src/git/index.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { validRefName } from '../src/git-names.ts';
 import { gitToolGuidance } from '../src/git-tools.ts';
-import { openWorkspace } from '../src/index.ts';
+import { commitUri, openWorkspace } from '../src/index.ts';
 import { roomMirrorGuidance } from '../src/mirror.ts';
 import { sqliteBackend } from '../src/sqlite-entry.ts';
 import { callAs, FILES_NOTE, invokeText, toolOf } from './support/backends.ts';

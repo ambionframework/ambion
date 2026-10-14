@@ -10,11 +10,16 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseSnapshotUri, snapshotUri } from '@ambionframework/ambion';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { roomName as name } from '../../ambion/test/support/room.ts';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
-import { openWorkspace, SNAPSHOT_LIMITS, type Workspace } from '../src/index.ts';
+import {
+	openWorkspace,
+	parseSnapshotUri,
+	SNAPSHOT_LIMITS,
+	snapshotUri,
+	type Workspace,
+} from '../src/index.ts';
 import { assertObjectSize } from '../src/object-rules.ts';
 import { s3ObjectBackend } from '../src/s3-entry.ts';
 import { callAs, toolOf } from './support/backends.ts';

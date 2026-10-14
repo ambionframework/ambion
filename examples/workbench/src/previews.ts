@@ -4,8 +4,13 @@
  * digest of a snapshot, and the commit on the git server.
  */
 
-import { type CommitUri, parseCommitUri, parseSnapshotUri } from '@ambionframework/ambion';
-import type { GitCommit, Workspace } from '@ambionframework/workspace';
+import {
+	type CommitUri,
+	type GitCommit,
+	parseCommitUri,
+	parseSnapshotUri,
+	type Workspace,
+} from '@ambionframework/workspace';
 import { validRefName } from '@ambionframework/workspace/git';
 import { isDatabase, readTables, tablesText } from './database.ts';
 import { type FileContent, imageMimeType, isImagePath, MAX_BYTES } from './files.ts';

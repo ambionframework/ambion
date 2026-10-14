@@ -151,16 +151,16 @@ in order, omits an empty list, and never reads behind a ref. The `say` tool
 trims each ref and drops blank ones. A direct `visit.send` keeps refs exactly
 and refuses a bad one.
 
-**The kernel owns the `ambion` scheme, and defines four forms.** The kernel
-only builds and reads them. The room refuses an `ambion:` ref in any other
-form.
+**The kernel owns the `ambion://room/` forms.** The kernel builds and reads
+them. The room refuses an `ambion://room/` ref in any other form. The room
+checks no other ref beyond the rules above: the package that makes a ref reads
+and checks it. A workspace makes the snapshot ref and the commit ref
+([Snapshots](snapshots.md#snapshot-a-file), [Cite a commit](git.md#cite-a-commit)).
 
-| Form                                                                                            | Names                      | Build with                                       | Read with          |
-| ----------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------ | ------------------ |
-| `ambion://room/<name>`                                                                          | A room                     | `roomUri(name)`                                  | `parseRoomUri`     |
-| `ambion://room/<name>/message/<seq>`                                                            | One message of a room      | `messageUri(name, seq)`                          | `parseRoomUri`     |
-| `ambion://workspace/<workspace>/snapshot/<digest>/<path>`                                       | The bytes of one file      | `snapshotUri(workspace, digest, path)`           | `parseSnapshotUri` |
-| `ambion://workspace/<workspace>/repo/<namespace>/<name>[/branch/<b> or /tag/<t>]/commit/<hash>` | One commit of a repository | `commitUri(workspace, repository, commit, via?)` | `parseCommitUri`   |
+| Form                                 | Names                 | Build with              | Read with      |
+| ------------------------------------ | --------------------- | ----------------------- | -------------- |
+| `ambion://room/<name>`               | A room                | `roomUri(name)`         | `parseRoomUri` |
+| `ambion://room/<name>/message/<seq>` | One message of a room | `messageUri(name, seq)` | `parseRoomUri` |
 
 **A seat can cite every message it reads.** Each line of the record starts
 with the seq of its message, such as `#12`. The prompt states the room URI
@@ -169,21 +169,6 @@ no URI of its own: the URI of its opening message names it. The seq in a
 message URI is the same `seq` a workspace mirror writes for that message, so
 a reader finds the cited line in `/rooms/<name>/messages.jsonl` (see
 [the mirror](workspace.md#mirror-a-rooms-messages)).
-
-**A snapshot ref names bytes.** `<digest>` is the SHA-256 of the bytes, as 64
-lowercase hex digits. `<path>` is the absolute workspace path that held them,
-with each part percent-encoded. `parseSnapshotUri` accepts only the one form
-that `snapshotUri` writes, so one file and one digest have one ref. No
-decoded part of a path, a branch, or a tag holds a control character, so a
-ref never carries a newline or a terminal escape. A workspace makes a
-snapshot and keeps its bytes
-([Snapshots](snapshots.md)).
-
-**A commit ref names one commit.** `<hash>` is the full hash, 40 or 64
-lowercase hex digits. `branch` or `tag` records the name that pointed at
-the commit when the ref was made, so the ref keeps its meaning after the
-branch moves. A workspace with a git backend makes the ref
-([Cite a commit](git.md#cite-a-commit)).
 
 **A workspace path is not a ref.** Cite a workspace file with a snapshot ref.
 A `file:` URI or another URI that the application chooses names a file as

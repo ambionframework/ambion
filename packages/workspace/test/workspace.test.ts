@@ -14,7 +14,6 @@ import {
 	definePerson,
 	defineTool,
 	isSaid,
-	snapshotUri,
 	startRoom,
 	type ToolContext,
 } from '@ambionframework/ambion';
@@ -32,7 +31,7 @@ import {
 	scriptedStream,
 } from '../../ambion/test/support/scripted.ts';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
-import { openWorkspace, type WorkspaceEnv } from '../src/index.ts';
+import { openWorkspace, snapshotUri, type WorkspaceEnv } from '../src/index.ts';
 import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 import { processToolGuidance } from '../src/process-tools.ts';
 import { snapshotGuidance } from '../src/snapshots.ts';
