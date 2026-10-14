@@ -2,8 +2,7 @@
  * The vocabulary of the `compose` tool: the option that a seat opts in with,
  * the runtime that runs the code, and the result and the ledger that a
  * compose call reports. The tool joins the tools of a seat into one call
- * (`docs/compose.md`). The checks of the option and of the tool field live
- * here too.
+ * (`docs/compose.md`). The check of the option lives here too.
  */
 import type { ToolContext } from '@ambionframework/ambion';
 

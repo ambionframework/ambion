@@ -315,6 +315,10 @@ protocol types with their TSDoc.
   activation tool alone.
 - **`invokeChecked`** makes the same call for a harness that prepared and
   checked the arguments already, as Pi does.
+- **`checkedArguments`, `messageOf`, and `mismatchOf`** serve a tool that
+  calls other tools. `checkedArguments` prepares and checks the arguments of a
+  call. `messageOf` gives the message of a thrown value. `mismatchOf` says
+  what a schema refuses.
 
 **`RoomProtocol.view(activation, message?)` takes no range.** The room
 serves the record windowed to its cap and to the token limit of the seat,

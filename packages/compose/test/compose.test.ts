@@ -1,3 +1,9 @@
+/**
+ * The `compose` tool, run through the `invoke` that `describeExecutor` appends:
+ * the catalog, the approval, the ledger, the limits, the nested context, the
+ * declared output check, and the result and the error that the model reads.
+ * The code runs in the runtime of `test/support`.
+ */
 import {
 	type AmbionTool,
 	contentText,
@@ -17,12 +23,6 @@ import {
 } from '@ambionframework/ambion/hosting';
 import { callTool, quiet, say, scripted, settled } from '@ambionframework/ambion/testing';
 import { memoryJournals } from '@ambionframework/journal';
-/**
- * The `compose` tool, run through the `invoke` that `describeExecutor` appends:
- * the catalog, the approval, the ledger, the limits, the nested context, the
- * declared output check, and the result and the error that the model reads.
- * The code runs in the runtime of `test/support`.
- */
 import { type TSchema, Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { faulty } from '../../ambion/test/support/ports.ts';

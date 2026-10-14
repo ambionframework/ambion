@@ -6,7 +6,8 @@ package `@ambionframework/compose` exports `composeExtension`,
 `composeMacro`, `COMPOSE_GUIDANCE`, and the types of the option. Its
 `/runtime` entry holds `quickjsRuntime`, and its `/conformance` entry
 exports `composeRuntimeConformance`, which `quickjsRuntime` passes. The
-kernel holds no `compose` code.
+kernel holds the generic hook that `compose` uses, and no
+`compose` tool.
 
 **Macros are the main use of `compose`.** A skill stores a procedure as a
 [macro](skills.md#macros), and the model runs it by name with arguments. The
@@ -153,7 +154,7 @@ and the ledger, and the signatures of the tools that the failure names
 ([Catalog](#the-catalog)). Every executor kind turns a thrown error into an error result
 with that message. The model then knows which calls completed. It knows which
 effects can stand. The error is a `ComposeFailure`, an internal class of the
-core that the main entry does not export. Its `details` hold the
+compose package that no entry exports. Its `details` hold the
 `ComposeResult`, and no executor passes them on. The ledger never holds the
 input or the output of a call.
 
@@ -190,7 +191,7 @@ Claude and Codex, the model and the trace read the rendered content.
 ## The catalog
 
 **The description of `compose` lists the bindings with a typed result by
-name and result type.** It holds no signature. The core builds one entry for
+name and result type.** It holds no signature. `composeExtension` builds one entry for
 each tool that a seat can bind and that declares an output, in the order of
 the tools. One sentence says that the other tools return text:
 
@@ -228,10 +229,10 @@ error names the refused tools and lists the bindable names. The result of a
 refusal is an ordinary tool error, so the model corrects the list and calls
 again.
 
-**`describe` is fixed when the agent is defined.** The kernel builds it with
-`compose` from the same catalog, so the tool list of a seat is the same in
-every activation. The kernel reserves the name `describe` as it reserves
-`compose`. A definition that brings a tool of that name fails with
+**`describe` is fixed when the agent is defined.** `composeExtension` builds
+it with `compose` from the same catalog, so the tool list of a seat is the
+same in every activation. The extension reserves the name `describe` as it
+reserves `compose`. A definition that brings a tool of that name fails with
 `invalid_tool`. `describe` is not bindable: a compose call cannot call it.
 
 **A failed compose call appends the signatures that it needs.** A wrong

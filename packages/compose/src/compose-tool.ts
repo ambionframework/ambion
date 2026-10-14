@@ -8,7 +8,7 @@
  * `composeExtension` adds both tools to a seat.
  *
  * The tool needs the step sink of the activation. It is an activation tool
- * (`seat-extension.ts`), so the core hands it the sink and the room tools.
+ * (`activationTool` of `@ambionframework/ambion/hosting`), so the core hands it the sink and the room tools.
  */
 
 import {
@@ -468,9 +468,7 @@ function composeTools(
 	const parameters = macros.length === 0 ? FREE_ARGUMENTS : MACRO_ARGUMENTS;
 	for (const entry of entries) ROOM_ENTRIES.add(entry);
 	const catalog = new Map(
-		[...tools.filter((tool) => bindable(tool) && tool.name !== COMPOSE_TOOL_NAME), ...entries].map(
-			(tool) => [tool.name, tool],
-		),
+		[...tools.filter((tool) => bindable(tool)), ...entries].map((tool) => [tool.name, tool]),
 	);
 	assertMacros(macros, new Set(catalog.keys()));
 	const limits = limitsOf(options);

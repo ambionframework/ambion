@@ -1,6 +1,7 @@
 /**
  * The steps of a tool call. `checkedArguments` prepares the arguments and
- * checks them against the schema of the tool. `callChecked` calls `invoke`
+ * checks them against the schema of the tool. `mismatchOf` says what a
+ * schema refuses. `callChecked` calls `invoke`
  * and records the two steps of a nested call of `compose`
  * (`docs/compose.md`). The functions hold no state and read no room.
  */

@@ -6,8 +6,14 @@ import { memoryJournals } from '@ambionframework/journal';
  */
 
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
-import { createRuntime, defineTool, type Step, startRoom } from '@ambionframework/ambion';
-import { COMPOSE_GUIDANCE, type ComposeOptions } from '@ambionframework/compose';
+import {
+	createRuntime,
+	defineAgent,
+	defineTool,
+	type Step,
+	startRoom,
+} from '@ambionframework/ambion';
+import { COMPOSE_GUIDANCE, type ComposeOptions, composeExtension } from '@ambionframework/compose';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { enter, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
@@ -105,6 +111,18 @@ describe('compose on a Pi seat', () => {
 		});
 		expect(executor.tools.map((tool) => tool.name)).toEqual(['extra', 'compose', 'describe']);
 		expect(executor.guidance).toBe(`Use extra.\n\n${COMPOSE_GUIDANCE}`);
+		expect(executor).not.toHaveProperty('compose');
+	});
+
+	it('refuses a second compose extension when the agent is defined', () => {
+		const executor = pi({
+			instructions: 'Work.',
+			model: 'scripted/worker',
+			extensions: [composeExtension({ runtime: functionRuntime })],
+		});
+		expect(() => defineAgent({ name: 'twin', identity: 'Twin.', executor })).toThrow(
+			"brings duplicate tools named 'compose'",
+		);
 	});
 
 	it('binds tools with a declared output, hands the large result on, and shows the model the returned value alone', async () => {

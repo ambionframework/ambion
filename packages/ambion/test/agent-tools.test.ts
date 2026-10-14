@@ -8,6 +8,7 @@ import { memoryJournals } from '@ambionframework/journal';
  */
 import { Type } from 'typebox';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { COMPOSE_GUIDANCE } from '../../compose/src/index.ts';
 import {
 	fromPiTool,
 	type NativePiTool,
@@ -197,7 +198,7 @@ describe('the definition of agent tools', () => {
 			'compose',
 			'describe',
 		]);
-		expect(agent.executor.guidance).toMatch(/^Use inspect for this domain\.\n\n/);
+		expect(agent.executor.guidance).toBe(`Use inspect for this domain.\n\n${COMPOSE_GUIDANCE}`);
 	});
 
 	it('preserves schema inference while composing heterogeneous tools', () => {
