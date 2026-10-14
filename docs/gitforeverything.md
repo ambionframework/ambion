@@ -171,7 +171,7 @@ sequenceDiagram
     H-->>R: current
   else a new commit
     H->>C: files(live)
-    H->>H: build the definition, then probe it
+    H->>H: build the definition with defineAgent
     H-->>R: the new definition, or current with the refusal in its instructions
   end
   R->>R: run the activation on the returned definition
@@ -181,17 +181,19 @@ sequenceDiagram
 
 The kernel reads the definition in four places. Only one of them changes.
 
-| Place                                    | Reads                                    | After this design     |
-| ---------------------------------------- | ---------------------------------------- | --------------------- |
-| `runner.ts`, when it takes an activation | The whole definition                     | Calls `definitionFor` |
-| `route.ts`, when the port is created     | `executor.kind`                          | Fixed for the run     |
-| `connector.ts`, when the port is created | `trace`, the trace policy                | Fixed for the run     |
-| `room.ts`, `tokenWindow`                 | `activationTokenLimit`, `estimateTokens` | Fixed for the run     |
+| Place                                    | Reads                                                      | After this design     |
+| ---------------------------------------- | ---------------------------------------------------------- | --------------------- |
+| `runner.ts`, when it takes an activation | The whole definition                                       | Calls `definitionFor` |
+| `route.ts`, when the port is created     | `executor.kind`                                            | Fixed for the run     |
+| `connector.ts`, when the port is created | `trace`, the trace policy                                  | Fixed for the run     |
+| `room-run/room.ts`, `tokenWindow`        | `executor.activationTokenLimit`, `executor.estimateTokens` | Fixed for the run     |
 
 **The room accepts a returned definition only when these fields equal the
 current ones:** `name`, `identity`, `executor.kind`, `trace`,
-`activationTokenLimit`, `estimateTokens`, and the tool names. Otherwise it
-keeps `current` and emits a `port_error`. Only the instructions, the
+`executor.activationTokenLimit`, `executor.estimateTokens`, and the tool
+names. Otherwise it
+keeps `current` and emits a `port_error` with the new operation
+`'definition'`. Only the instructions, the
 skills, and the macros change. The journal records the name and the
 identity in the cast, so an edit of `identity.md` takes effect at the next
 start.
@@ -205,16 +207,15 @@ its definition. Two activations of one exchange can run on two commits.
 ### The executors
 
 **Each executor holds the definition in a field for the life of its
-port.** Pi (`execution.ts`), Claude (`executor.ts`), and Codex
-(`executor.ts`) each copy `options.definition` when they connect. The
+port.** Pi, Claude, and Codex (`executor.ts` of each) each copy `options.definition` when they connect. The
 option `definition: AgentDefinition` becomes `definition: () => AgentDefinition`
 in all three, and each reads it at the start of every activation.
 
-| Executor | A changed agent part in a resumed session                                                                                                                                       |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pi       | Works once the executor reads the function: the harness renders the prompt before each request ([Pi](pi.md))                                                                    |
-| Claude   | Works once the executor reads the function: the agent part goes at the head of the first message of a resumed session ([Claude](claude.md))                                     |
-| Codex    | Needs code: `thread/start` fixes `baseInstructions`. The executor compares the agent part as it compares the tools, and starts a new thread when it differs ([Codex](codex.md)) |
+| Executor | A changed agent part in a resumed session                                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pi       | Works once the executor reads the function: the harness renders the prompt before each request ([Pi](pi.md))                                |
+| Claude   | Works once the executor reads the function: the agent part goes at the head of the first message of a resumed session ([Claude](claude.md)) |
+| Codex    | Works once the executor reads the function: `thread/resume` carries the new `baseInstructions` ([Codex](codex.md))                          |
 
 ### The skills
 
@@ -226,19 +227,17 @@ and the same executor, tools, and bundles otherwise. The tool names stay
 equal, so the equality rule accepts it. The new bundle copies `~/.skills`
 at the next respond activation.
 
-### The probe
+### Refused commits
 
-**The host checks a macro before it returns a definition.** `loadSkills`
-checks the format of each macro. The check of the tools that a macro
-names runs later, in `composeTools` (`compose-tool.ts`), on the first pass
-of an activation. A macro that names a removed tool would fail there, after
-the room accepted the definition. The host therefore builds the compose
-tool of the seat with `composeTools` on the new set, as a probe, and
-treats a refusal as a refused commit.
+**`defineAgent` checks the macros.** It builds the compose tool with
+`composeTools` (`define.ts`), and `assertMacros` throws `invalid_tool` for
+a macro that names a tool the seat lacks. The host builds the new
+definition with the same `defineAgent` call as the first start, so a throw
+of `loadSkills` or `defineAgent` is a refused commit.
 
 **A refused commit leaves `current`.** The host returns `current` with the
 refusal added to its instructions: the commit, and the error of
-`loadSkills`, `defineAgent`, or the probe. The text change is allowed by
+`loadSkills` or `defineAgent`. The text change is allowed by
 the equality rule. The agent reads the error at its next activation and
 can push a fix. The host adds a log entry.
 
@@ -250,7 +249,8 @@ agent can edit the repository.
 
 **The record and the promise do not change.** The option adds no journal
 body, and the cast keeps the name and the identity. A new optional field
-of the room options is additive. `planning/backlog.md` lists hot-loaded
+of the room options is additive. The new `port_error` operation changes
+the `ActivationEvent` export, so step 5 updates the export snapshot. `planning/backlog.md` lists hot-loaded
 definitions as deferred, so that line goes when this design lands.
 
 ## Startup
@@ -312,7 +312,7 @@ still loads, then pushes `live`.
 3. The tip of `release`.
 
 **The last good commit can fail on new host code.** A macro can name a
-tool that the release removed, and the probe refuses it. The tip of
+tool that the release removed, and `defineAgent` refuses it. The tip of
 `release` always loads, because the developer tested it with that host
 code.
 
@@ -404,32 +404,32 @@ the seat. A room open to untrusted agents loads `release` alone
 
 Tests follow `CLAUDE.md`: they run the real thing.
 
-| Piece                                   | Test                                                                                                                  |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| The private repository                  | A `GitConformance` case on both backends: another agent gets no credential, no listing, no fork, and no upload-pack   |
-| The branch rules                        | A conformance case: only the host pushes `release`, and `live` refuses deletion and non-fast-forward                  |
-| `files`, `isAncestor`, `move`, `commit` | A conformance case each, including the lost race of `move` and `commit`                                               |
-| `definitionFor`                         | A scripted room on `memoryCanvas`: change `live` between two activations of one exchange, and check the second prompt |
-| The equality rule                       | A returned definition with another identity or tool name is refused with `port_error`                                 |
-| The executors                           | A scripted test for each: the function changes the agent part at the next activation. Codex also starts a new thread  |
-| The probe                               | A macro that names a removed tool is a refused commit, and the instructions carry the error                           |
-| The breakout resume                     | A row resumes with the option of `openCanvas`                                                                         |
-| Startup                                 | Each case of the diagram on a real git backend, with a merge room on a scripted model                                 |
-| The harvest                             | A fixture repository: the patch applies, and a new file is listed                                                     |
+| Piece                                   | Test                                                                                                                          |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| The private repository                  | A `GitConformance` case on both backends: another agent gets no credential, no listing, no fork, and no upload-pack           |
+| The branch rules                        | A conformance case: only the host pushes `release`, and `live` refuses deletion and non-fast-forward                          |
+| `files`, `isAncestor`, `move`, `commit` | A conformance case each, including the lost race of `move` and `commit`                                                       |
+| `definitionFor`                         | A scripted room on `memoryCanvas`: change `live` between two activations of one exchange, and check the second prompt         |
+| The equality rule                       | A returned definition with another identity or tool name is refused with `port_error`                                         |
+| The executors                           | A scripted test for each: the function changes the agent part at the next activation                                          |
+| Refused commits                         | A macro that names a removed tool makes `defineAgent` throw. The host returns `current`, and the instructions carry the error |
+| The breakout resume                     | A row resumes with the option of `openCanvas`                                                                                 |
+| Startup                                 | Each case of the diagram on a real git backend, with a merge room on a scripted model                                         |
+| The harvest                             | A fixture repository: the patch applies, and a new file is listed                                                             |
 
 ## The order of work
 
 Each step ships alone with its tests. The release column is a proposal.
 
-| Step | Delivers                                                                                             | Release                          |
-| ---- | ---------------------------------------------------------------------------------------------------- | -------------------------------- |
-| 1    | The private repository: `readableBy`, `credentialFor`, listing, `fork`, `serve`, with conformance    | Any, additive                    |
-| 2    | `files`, `isAncestor`, `move`, `commit`, and the `release` and `live` hooks                          | Any, additive                    |
-| 3    | The host commit of `releaseFolder` on `release`, with `.release.json`                                | Any, host code                   |
-| 4    | The executor option `definition: () => AgentDefinition`, and the Codex new thread                    | 0.10.0, before the export review |
-| 5    | `definitionFor` in `startRoom`, `resumeRoom`, and `openCanvas`, with the equality rule and the probe | 0.10.0, after the roster changes |
-| 6    | The fast-forward, the merge canvas, the rungs, the pin, and the load log                             | After 1.0.0, host code           |
-| 7    | The trace stamp, the harvest script, and the export                                                  | After 1.0.0, host code           |
+| Step | Delivers                                                                                                              | Release                          |
+| ---- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| 1    | The private repository: `readableBy`, `credentialFor`, listing, `fork`, `serve`, with conformance                     | Any, additive                    |
+| 2    | `files`, `isAncestor`, `move`, `commit`, and the `release` and `live` hooks                                           | Any, additive                    |
+| 3    | The host commit of `releaseFolder` on `release`, with `.release.json`                                                 | Any, host code                   |
+| 4    | The executor option `definition: () => AgentDefinition` in the three executors                                        | 0.10.0, before the export review |
+| 5    | `definitionFor` in `startRoom`, `resumeRoom`, and `openCanvas`, with the equality rule and the `port_error` operation | 0.10.0, after the roster changes |
+| 6    | The fast-forward, the merge canvas, the rungs, the pin, and the load log                                              | After 1.0.0, host code           |
+| 7    | The trace stamp, the harvest script, and the export                                                                   | After 1.0.0, host code           |
 
 **Steps 1 to 3 change no kernel behavior.** Step 5 is the one kernel
 change. Step 4 changes an export of three packages, so it comes before
