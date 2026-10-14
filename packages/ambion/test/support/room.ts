@@ -126,6 +126,11 @@ export function deferred(): { promise: Promise<void>; resolve: () => void } {
 	return { promise, resolve };
 }
 
+/** Limits that give up on an activation after three attempts, 30 s and then 60 s apart. */
+export const THREE_ATTEMPTS = {
+	activation: { attempts: 3, backoff: (attempt: number) => attempt * 30_000 },
+};
+
 export const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /**

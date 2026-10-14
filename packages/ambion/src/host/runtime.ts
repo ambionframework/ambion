@@ -247,6 +247,15 @@ function validateSchedule({ minDelaySeconds, maxDelaySeconds }: ScheduleLimits):
 		);
 }
 
+/**
+ * The default wait before a retry: 30 s after the first attempt that came
+ * to nothing, doubled after each next one, and never more than one hour.
+ * Eight attempts span about 63 minutes of outage.
+ */
+function retryBackoff(attempt: number): number {
+	return Math.min(30_000 * 2 ** (attempt - 1), 3_600_000);
+}
+
 export function createRuntime(options: CreateRuntimeOptions): Runtime {
 	const running = new Map<string, RunningRoom>();
 	const storage = options.storage;
@@ -257,8 +266,8 @@ export function createRuntime(options: CreateRuntimeOptions): Runtime {
 		port: { resend: 5_000, ...given.port },
 		lease: { ttl: 60_000, deadline: 600_000, ...given.lease },
 		activation: {
-			attempts: 3,
-			backoff: (attempt: number) => attempt * 30_000,
+			attempts: 8,
+			backoff: retryBackoff,
 			...given.activation,
 		},
 		call: callLimits(given.call),

@@ -217,6 +217,28 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		expect(messages.at(-1)).toMatchObject({ from: 'worker', text: 'The build passed.' });
 	});
 
+	it('continues a chain of scheduled says through an outage of ten minutes', async () => {
+		const { clock, runtime } = await setup();
+		const outage = { from: clock.now() + 60_000, until: clock.now() + 60_000 + 600_000 };
+		const room = await start(runtime(), (context) => {
+			if (clock.now() >= outage.from && clock.now() < outage.until)
+				throw new Error('503 the provider is overloaded');
+			const last = toolResultTexts(context).at(-1);
+			return last?.startsWith('scheduled') ? quiet() : schedule('Check the build.', 60);
+		});
+		const events: string[] = [];
+		room.subscribe((event) => {
+			events.push(event.type);
+		});
+		await (await room.visit(priya)).send({ text: 'Is the build green?' });
+		await clock.advance(1_300_000);
+		await waitForRoom(room);
+		const { messages, scheduled } = await room.read({ messages: {} });
+		expect(events).not.toContain('abandoned');
+		expect(messages.filter((message) => message.kind === 'system').length).toBeGreaterThan(1);
+		expect(scheduled).toMatchObject([{ seat: 'worker', text: 'Check the build.' }]);
+	});
+
 	it.each([
 		['the seat, with the dismiss tool', 'seat'],
 		['the host, with room.dismiss', 'host'],

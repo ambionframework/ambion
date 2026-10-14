@@ -45,6 +45,7 @@ import {
 	roomName,
 	scriptedAgent,
 	storedOf,
+	THREE_ATTEMPTS,
 	tick,
 	waitForRoom,
 } from './support/room.ts';
@@ -219,9 +220,12 @@ describe('a lease', () => {
 	});
 
 	it('gives up on a wake at the cap, writes the attempt it does not make, and closes', async () => {
-		const { session, clock, runtime } = await open(() => {
-			throw new Error('the model failed');
-		});
+		const { session, clock, runtime } = await open(
+			() => {
+				throw new Error('the model failed');
+			},
+			{ limits: THREE_ATTEMPTS },
+		);
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'answer me' });
@@ -262,7 +266,7 @@ describe('a lease', () => {
 					throw new Error('the model failed');
 				},
 			}),
-			{ summary: true },
+			{ summary: true, limits: THREE_ATTEMPTS },
 		);
 		const events = collect(session);
 		const drafted = assistantEnded(session);
