@@ -32,6 +32,7 @@ import {
 	messagesOf,
 	roomName as name,
 	participantsOf,
+	THREE_ATTEMPTS,
 	tick,
 	waitForRoom,
 } from './support/room.ts';
@@ -111,7 +112,7 @@ const dan = definePerson({ name: 'dan', identity: 'Quantity surveyor.' });
 
 /** One clock the tests move by hand, and one runtime over it. */
 const clock = fakeClock();
-const runtime = createRuntime({ storage: memoryJournals(), clock });
+const runtime = createRuntime({ storage: memoryJournals(), clock, limits: THREE_ATTEMPTS });
 
 async function open(options: {
 	script: PiScript;

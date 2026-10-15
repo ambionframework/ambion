@@ -153,6 +153,13 @@ transient cause is a rate limit, a server error, or a lost connection.
   permanent.
 - **A transient failure retries to the cap.** The activation retry in the
   lease paragraph above is room-driven. Each retry spends an attempt.
+- **The default retry covers an outage of about 63 minutes.** A runtime
+  makes 8 attempts. The wait after the first attempt that came to nothing
+  is 30 seconds. The wait doubles after each next attempt and never
+  exceeds one hour. A chain of scheduled says continues when the provider
+  answers inside that window. After the window, the activation is
+  `abandoned` and a person's question closes `exhausted`.
+  `limits.activation` replaces the attempts and the backoff.
 - **A seat that no execution serves fails every activation as
   permanent.** The error code is `no_execution`. The room does not send
   the wake again.

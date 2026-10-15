@@ -109,8 +109,10 @@ describe('createRuntime', () => {
 		const limits = hostingOf(createRuntime({ storage: memoryJournals() })).limits;
 		expect(limits.port).toEqual({ resend: 5_000 });
 		expect(limits.lease).toEqual({ ttl: 60_000, deadline: 600_000 });
-		expect(limits.activation.attempts).toBe(3);
-		expect([1, 2, 3].map(limits.activation.backoff)).toEqual([30_000, 60_000, 90_000]);
+		expect(limits.activation.attempts).toBe(8);
+		expect([1, 2, 3, 7, 8, 20].map(limits.activation.backoff)).toEqual([
+			30_000, 60_000, 120_000, 1_920_000, 3_600_000, 3_600_000,
+		]);
 		expect(limits.call).toEqual({ attempts: 2, timeout: 10_000 });
 		expect(limits.context).toEqual({ messages: Number.POSITIVE_INFINITY });
 		expect(limits.message).toEqual({ bytes: Number.POSITIVE_INFINITY });
