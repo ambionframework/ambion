@@ -10,11 +10,12 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { type AmbionTool, snapshotUri, type ToolContext } from '@ambionframework/ambion';
+import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import {
 	loadSkills,
 	openWorkspace,
 	type ShellOutputView,
+	snapshotUri,
 	type Workspace,
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';

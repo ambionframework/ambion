@@ -351,16 +351,18 @@ ambion://workspace/<workspace>/repo/<namespace>/<name>/branch/<branch>/commit/<h
 ambion://workspace/<workspace>/repo/<namespace>/<name>/tag/<tag>/commit/<hash>
 ```
 
-The kernel owns the form ([Definitions and tools](agent.md)). A branch or a
-tag name is one percent-encoded part, so `feature/pour` is
-`feature%2Fpour`. The hash has 40 hex digits, or 64 in a SHA-256
-repository.
+The workspace builds the ref with `commitUri(workspace, repository, commit,
+via?)`, and `parseCommitUri` reads it. `parseCommitUri` accepts only the one
+form that `commitUri` writes. A branch or a tag name is one percent-encoded
+part, so `feature/pour` is `feature%2Fpour`. The hash has 40 hex digits, or 64
+in a SHA-256 repository. No decoded part holds a control character.
 
 **An agent writes the ref, and a host checks it.** The git note states the
 form, and an agent takes the full hash from `git rev-parse` in its clone
-after it pushes. No tool makes the ref: the form is fixed text, and the
-room refuses a ref that is not canonical when the agent says it. Whether
-the commit exists on the server is a question for the reader of the ref.
+after it pushes. No tool makes the ref: the form is fixed text. The
+room checks that the ref is an absolute URI, and `workspace.readCommit`
+refuses a ref that is not canonical. Whether the commit exists on the server
+is a question for the reader of the ref.
 
 **`workspace.commitRef(repository, at)` gives a host the ref of the commit
 on the server.** `at` is `{ branch }`, `{ tag }`, or `{ commit }`, and a

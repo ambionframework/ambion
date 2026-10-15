@@ -1,5 +1,6 @@
 import type { Message } from '@ambionframework/ambion';
-import { parseCommitUri, parseRoomUri, parseSnapshotUri } from '@ambionframework/ambion';
+import { parseRoomUri } from '@ambionframework/ambion';
+import { parseCommitUri, parseSnapshotUri } from '@ambionframework/workspace';
 import { ellipsize } from './text.ts';
 import type { Block } from './timeline.ts';
 import type { FileContent, FileEntry, Workbench } from './workbench.ts';

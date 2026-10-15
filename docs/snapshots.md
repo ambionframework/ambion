@@ -16,8 +16,14 @@ ref names the bytes that the file held at the snapshot:
 ambion://workspace/<workspace name>/snapshot/<sha256 of the bytes>/<absolute path>
 ```
 
-The kernel owns the form ([Definitions and tools](agent.md)). The workspace
-makes the snapshot, and its object backend keeps the bytes
+`<digest>` is the SHA-256 of the bytes, as 64 lowercase hex digits. `<path>`
+is the absolute workspace path that held them, with each part percent-encoded.
+No decoded part holds a control character, so a ref never carries a newline or
+a terminal escape. The workspace builds the ref with `snapshotUri(workspace,
+digest, path)`. `parseSnapshotUri` accepts only the one form that `snapshotUri`
+writes, so one file and one digest have one ref. The room checks that a ref is
+an absolute URI, and the workspace checks this form where it reads the ref.
+The workspace makes the snapshot, and its object backend keeps the bytes
 ([The object backend](#the-object-backend)).
 
 **`workspace.snapshot(paths)` gives one ref for each path, in order.** The

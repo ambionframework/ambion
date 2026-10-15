@@ -9,10 +9,11 @@
  * that started it.
  */
 
-import { parseSnapshotUri, type ToolContext } from '@ambionframework/ambion';
+import type { ToolContext } from '@ambionframework/ambion';
 import {
 	openWorkspace,
 	type Process,
+	parseSnapshotUri,
 	type Workspace,
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';

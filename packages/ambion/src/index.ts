@@ -29,17 +29,8 @@ export { DEFAULT_RESPOND_POLICY, DEFAULT_SUMMARY_POLICY } from './execution/rend
 export { loggedToolResult } from './execution/trace.ts';
 export type { CreateRuntimeOptions, Execution, Runtime } from './host/runtime.ts';
 export { createRuntime, systemClock } from './host/runtime.ts';
-export type { CommitUri, CommitVia, RoomUri, SnapshotUri } from './refs.ts';
-export {
-	commitUri,
-	messageUri,
-	parseCommitUri,
-	parseRoomUri,
-	parseSnapshotUri,
-	REF_LIMITS,
-	roomUri,
-	snapshotUri,
-} from './refs.ts';
+export type { RoomUri } from './refs.ts';
+export { messageUri, parseRoomUri, REF_LIMITS, roomUri } from './refs.ts';
 export { awaitingFor } from './room/read.ts';
 export type {
 	ExchangeHandle,

@@ -1,5 +1,5 @@
-import { snapshotUri } from '@ambionframework/ambion';
 import type { WidgetActResult } from '@ambionframework/canvas';
+import { snapshotUri } from '@ambionframework/workspace';
 import { people } from '../src/definitions.ts';
 import { Session } from '../src/session.ts';
 import type {
