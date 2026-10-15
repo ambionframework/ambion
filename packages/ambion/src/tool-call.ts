@@ -1,12 +1,13 @@
 /**
  * The steps of a tool call. `checkedArguments` prepares the arguments and
- * checks them against the schema of the tool. `callChecked` calls `invoke`
+ * checks them against the schema of the tool. `mismatchOf` says what a
+ * schema refuses. `callChecked` calls `invoke`
  * and records the two steps of a nested call of `compose`
  * (`docs/compose.md`). The functions hold no state and read no room.
  */
-import { Check } from 'typebox/value';
+import type { TSchema } from 'typebox';
+import { Check, Errors } from 'typebox/value';
 import type { AmbionTool, ToolContext, ToolResult } from './bundle.ts';
-import { mismatchOf } from './compose.ts';
 import type { Step } from './types.ts';
 
 /** A nested call: the id of the call that made it, and where its steps go. */
@@ -14,6 +15,20 @@ export interface ToolCallNest {
 	/** The call id of the call that made this call. The two steps carry it as `parent`. */
 	readonly parent: string;
 	readonly record: (step: Step) => void;
+}
+
+/**
+ * What the arguments of a call break in a schema, as the model reads it:
+ * each property path and its rule, such as `processes must not have fewer
+ * than 1 items`. A rule on the whole value has no path.
+ */
+export function mismatchOf(schema: TSchema, value: unknown): string {
+	return Errors(schema, value)
+		.map((error) => {
+			const path = error.instancePath.slice(1).replaceAll('/', '.');
+			return path === '' ? error.message : `${path} ${error.message}`;
+		})
+		.join('; ');
 }
 
 /** The message of a thrown value. */

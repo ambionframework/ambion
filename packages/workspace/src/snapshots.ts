@@ -21,9 +21,7 @@ import { posix } from 'node:path';
 import {
 	type AmbionTool,
 	defineTool,
-	parseSnapshotUri,
 	REF_LIMITS,
-	snapshotUri,
 	type ToolBundle,
 	type ToolContext,
 } from '@ambionframework/ambion';
@@ -33,6 +31,7 @@ import type { ObjectEnv } from './object-backend.ts';
 import { unwrap } from './object-files.ts';
 import { assertObjectSize, MAX_OBJECT_BYTES, sha256Hex } from './object-rules.ts';
 import { assertRefLength, assertRefWorkspace } from './ref-rules.ts';
+import { parseSnapshotUri, snapshotUri } from './refs.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 
 /**

@@ -10,6 +10,7 @@ import {
 	type ExecutorBaseOptions,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
+import { type ComposeOptions, composeExtension } from '@ambionframework/compose';
 import { quickjsRuntime } from '@ambionframework/compose/runtime';
 
 /**
@@ -26,6 +27,8 @@ export interface ClaudePolicy {
 export interface ClaudeOptions extends ExecutorBaseOptions, ClaudePolicy {
 	/** A Claude model identifier, such as `claude-sonnet-4-5`. */
 	model: string;
+	/** The `compose` and `describe` tools of the seat. Absent, QuickJS runs the code. */
+	compose?: ComposeOptions;
 }
 
 /** An agent's Claude executor: the Claude Agent SDK loop, model, instructions, tools and policy. */
@@ -38,10 +41,14 @@ const POLICY = ['maxBudgetUsd', 'effort'] as const;
 
 /** The Claude executor: the Claude Agent SDK's loop, model, instructions, tools and policy. */
 export function claude(options: ClaudeOptions): ClaudeExecutor {
+	const { compose, extensions, ...rest } = options;
 	return Object.freeze({
 		...describeExecutor({
-			...options,
-			compose: options.compose ?? { runtime: quickjsRuntime() },
+			...rest,
+			extensions: [
+				...(extensions ?? []),
+				composeExtension(compose ?? { runtime: quickjsRuntime() }),
+			],
 			kind: 'claude',
 		}),
 		...pickPresent(options, POLICY),

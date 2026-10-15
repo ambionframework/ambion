@@ -15,7 +15,7 @@ packages/
   claude/       Claude Agent SDK executor: claude() and claudeExecution()
   cloudflare/   Durable Object adapter
   codex/        Codex executor: codex() and codexExecution()
-  compose/      the runtime of compose: quickjsRuntime()
+  compose/      the compose tool as a seat extension, and quickjsRuntime()
   journal/      append-only journal storage
   just-bash/    workspace bash backends over just-bash, and a git backend in the process
   pi/           Pi executor: pi() and piExecution()
@@ -40,11 +40,11 @@ claude ──▶ ambion, compose
 codex ──▶ ambion, compose
 compose ──▶ ambion
 cloudflare ──▶ ambion, journal, pi
-workspace ──▶ ambion
+workspace ──▶ ambion, compose
 just-bash ──▶ workspace
 workstation ──▶ ambion, workspace
 assistant ──▶ ambion
-canvas ──▶ ambion, journal, workspace
+canvas ──▶ ambion, journal
 simulator ──▶ ambion, pi
 ```
 

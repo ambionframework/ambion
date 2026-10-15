@@ -21,19 +21,6 @@ export type {
 	ToolUpdate,
 } from './bundle.ts';
 export { contentText } from './bundle.ts';
-export type {
-	ComposeLimits,
-	ComposeMacro,
-	ComposeOptions,
-	ComposeRequest,
-	ComposeResult,
-	ComposeRuntime,
-	ComposeRuntimeInput,
-	JsonValue,
-	LedgerEntry,
-} from './compose.ts';
-export { COMPOSE_GUIDANCE } from './compose.ts';
-export { composeMacro } from './compose-macros.ts';
 export type { DefineAgentOptions, DefineHumanOptions } from './define.ts';
 export { defineAgent, definePerson, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';
@@ -42,17 +29,8 @@ export { DEFAULT_RESPOND_POLICY, DEFAULT_SUMMARY_POLICY } from './execution/rend
 export { loggedToolResult } from './execution/trace.ts';
 export type { CreateRuntimeOptions, Execution, Runtime } from './host/runtime.ts';
 export { createRuntime, systemClock } from './host/runtime.ts';
-export type { CommitUri, CommitVia, RoomUri, SnapshotUri } from './refs.ts';
-export {
-	commitUri,
-	messageUri,
-	parseCommitUri,
-	parseRoomUri,
-	parseSnapshotUri,
-	REF_LIMITS,
-	roomUri,
-	snapshotUri,
-} from './refs.ts';
+export type { RoomUri } from './refs.ts';
+export { messageUri, parseRoomUri, REF_LIMITS, roomUri } from './refs.ts';
 export { awaitingFor } from './room/read.ts';
 export type {
 	ExchangeHandle,

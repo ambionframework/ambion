@@ -16,9 +16,9 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { COMPOSE_GUIDANCE, type ComposeOptions } from '@ambionframework/ambion';
+import { COMPOSE_GUIDANCE, type ComposeOptions } from '@ambionframework/compose';
 import { afterAll, describe, expect, it } from 'vitest';
-import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
+import { functionRuntime } from '../../compose/test/support/compose-runtime.ts';
 import {
 	EXCLUSIVE_FEATURES,
 	exclusiveConfig,

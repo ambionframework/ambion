@@ -19,18 +19,15 @@ import type {
 	ToolContext,
 	ToolResult,
 } from './bundle.ts';
-import {
-	assertComposeOptions,
-	assertToolCompose,
-	COMPOSE_TOOL_NAME,
-	type ComposeOptions,
-	DESCRIBE_TOOL_NAME,
-	mismatchOf,
-} from './compose.ts';
-import { macrosOf } from './compose-macros.ts';
-import { composeGuidance, composeTools, type RoomSpec } from './compose-tool.ts';
 import { AmbionError } from './errors.ts';
 import { isName } from './names.ts';
+import {
+	checkedOutput,
+	extensionsOf,
+	type RoomSpec,
+	type SeatExtension,
+} from './seat-extension.ts';
+import { mismatchOf } from './tool-call.ts';
 import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
 
 export interface DefineAgentOptions {
@@ -90,12 +87,12 @@ export interface ExecutorBaseOptions {
 	 */
 	readonly estimateTokens?: (text: string) => number;
 	/**
-	 * The `compose` tool for this seat. It joins the tools of the seat into
-	 * one call, and the `describe` tool that returns the signatures of the
-	 * tools it binds. The executor packages give a default when the field is
-	 * absent. `describeExecutor` by itself adds no tool for an absent field.
+	 * Extensions of the seat, in order. Each reads the tools of the seat, not the
+	 * tools that another extension adds, and adds tools and guidance after the
+	 * tools and the guidance of the bundles. An executor package adds the
+	 * `compose` extension after these. `describeExecutor` by itself adds none.
 	 */
-	readonly compose?: ComposeOptions;
+	readonly extensions?: readonly SeatExtension[];
 }
 
 /** What `describeExecutor` reads: the fields every executor kind shares. */
@@ -137,20 +134,18 @@ export function pickPresent<T extends object, K extends keyof T>(
  * executor kind adds its own fields to the value this returns.
  */
 export function describeExecutor(options: ExecutorOptions): Executor {
-	assertComposeOptions(options.compose);
-	const compose = options.compose;
 	const input = flattenTools(options.tools, options.bundles);
-	// A seat without `compose` ignores the macros, so one skill set fits every seat.
-	const macros = compose === undefined ? [] : macrosOf(options.bundles);
-	const own = input.map((tool) => captureTool(tool));
-	const guidance = joined([guidanceOf(options.bundles), composeGuidance(compose, own, macros)]);
-	const reminders = remindersOf(options.bundles);
-	// The `compose` tool closes over the option and the tools above. The executor keeps no field of it.
-	const tools = Object.freeze(
-		compose === undefined
-			? own
-			: [...own, ...composeTools(compose, own, macros, ROOM_TOOLS).map(captureTool)],
+	const own = Object.freeze(input.map((tool) => captureTool(tool)));
+	const added = extensionsOf(options.extensions).map((extension) =>
+		checkedOutput(extension({ tools: own, bundles: options.bundles ?? [], room: ROOM_SPECS })),
 	);
+	const guidance = joined([
+		guidanceOf(options.bundles),
+		...added.map((one) => one.guidance?.trim() || undefined),
+	]);
+	const reminders = remindersOf(options.bundles);
+	// An extension closes over its option and the tools above. The executor keeps no field of it.
+	const tools = Object.freeze([...own, ...added.flatMap((one) => one.tools.map(captureTool))]);
 	return Object.freeze({
 		kind: options.kind,
 		instructions: options.instructions,
@@ -410,7 +405,8 @@ export const RECALL = {
  * catalog, the tools that commit, and the scripted executor read this list.
  */
 const ROOM_TOOLS: readonly RoomSpec[] = [
-	SAY,
+	// Two says that start together carry the same read position, so the room refuses the second.
+	{ ...SAY, executionMode: 'sequential' },
 	SCHEDULE,
 	RECALL,
 	// The room offers `seat` and `unseat` to some rooms alone, so the catalog lists them apart.
@@ -418,6 +414,11 @@ const ROOM_TOOLS: readonly RoomSpec[] = [
 	{ ...UNSEAT, optional: true },
 	DISMISS,
 ];
+
+/** The room tools as an extension reads them: frozen, so no extension changes a tool of the room. */
+const ROOM_SPECS: readonly RoomSpec[] = Object.freeze(
+	ROOM_TOOLS.map((spec) => Object.freeze(capture(spec))),
+);
 
 /** The names that the room supplies for an activation. An agent's own tool takes none of them. */
 export const ROOM_TOOL_NAMES: readonly string[] = ROOM_TOOLS.map((spec) => spec.name);
@@ -442,15 +443,8 @@ function flattenTools(
 
 function appendTools(tools: readonly AmbionTool[], into: AmbionTool[], source: string): void {
 	if (!Array.isArray(tools)) throw new Error(`Agent ${source} must be an array.`);
-	for (const tool of tools) {
-		assertTool(tool);
-		if (tool.name === COMPOSE_TOOL_NAME || tool.name === DESCRIBE_TOOL_NAME)
-			throw new AmbionError(
-				'invalid_tool',
-				`A tool of the agent ${source} is named '${tool.name}': the compose option reserves the name. Give the tool another name.`,
-			);
-		into.push(tool);
-	}
+	for (const tool of tools) assertTool(tool);
+	into.push(...tools);
 }
 
 function captureTool(tool: AmbionTool): AmbionTool {
@@ -464,6 +458,14 @@ function captureTool(tool: AmbionTool): AmbionTool {
 		...captureCompose(tool.compose),
 		invoke: tool.invoke,
 	});
+}
+
+/** Refuse a tool `compose` that is not absent, `false`, or an object with a TypeBox `output`. */
+function assertToolCompose(compose: unknown): void {
+	if (compose === undefined || compose === false) return;
+	const output = isRecord(compose) ? compose.output : undefined;
+	if (!isRecord(output) || Array.isArray(output) || !IsSchema(output))
+		throw new Error('Tool compose must be false or an object with an output schema.');
 }
 
 /** The `compose` field of a tool, copied. The `output` schema is captured as `parameters` is. */

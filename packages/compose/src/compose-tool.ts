@@ -5,24 +5,32 @@
  * (`docs/compose.md`). Its description lists the bindable tools and the type
  * of each result. The `describe` tool is the counterpart: it renders the
  * signatures and the types of the tools that a call names, and runs nothing.
- * `describeExecutor` appends both tools.
+ * `composeExtension` adds both tools to a seat.
  *
- * The tool needs the step sink of the activation, and no tool may hold a
- * sink. The core hands it over through `invokeTool`: a private table maps
- * the `invoke` of each compose tool to an entry that takes the sink and the
- * room tools of the activation. The `invoke` field itself runs with no sink
- * and no room tool, and records no step.
+ * The tool needs the step sink of the activation. It is an activation tool
+ * (`activationTool` of `@ambionframework/ambion/hosting`), so the core hands it the sink and the room tools.
  */
+
+import {
+	AmbionError,
+	type AmbionTool,
+	contentText,
+	type ToolContext,
+	type ToolResult,
+} from '@ambionframework/ambion';
+import {
+	type ActivationAccess,
+	activationTool,
+	messageOf,
+	mismatchOf,
+	type RoomCall,
+	type RoomSpec,
+	type SeatExtension,
+} from '@ambionframework/ambion/hosting';
 import { type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
 import {
-	type AmbionTool,
-	contentText,
-	type ToolContent,
-	type ToolContext,
-	type ToolResult,
-} from './bundle.ts';
-import {
+	assertComposeOptions,
 	COMPOSE_GUIDANCE,
 	COMPOSE_PROCESS_GUIDANCE,
 	COMPOSE_TOOL_NAME,
@@ -33,17 +41,15 @@ import {
 	type ComposeRequest,
 	type ComposeResult,
 	DEFAULT_COMPOSE_LIMITS,
+	DESCRIBE_TOOL_NAME,
 	type JsonValue,
 	type LedgerEntry,
-	mismatchOf,
 	plainJson,
 } from './compose.ts';
 import { bindable } from './compose-catalog.ts';
 import { bindingsText, describeTool, namedTools, signatureText } from './compose-describe.ts';
-import { assertMacros, macroGuidance } from './compose-macros.ts';
+import { assertMacros, macroGuidance, macrosOf } from './compose-macros.ts';
 import { type ComposeOutcome, ComposeRun } from './compose-run.ts';
-import { checkedArguments, messageOf } from './tool-call.ts';
-import type { Step } from './types.ts';
 
 const DESCRIPTION =
 	'Run JavaScript that calls your tools as tools.<name>, in one call. Use it when a result feeds a later call, or when you need a part of a large result. You read only the value that the code returns.';
@@ -106,7 +112,7 @@ type Arguments = Static<typeof MACRO_ARGUMENTS>;
  * each macro of the seat. The option `guidance` replaces the text and the
  * process lines.
  */
-export function composeGuidance(
+function composeGuidance(
 	options: ComposeOptions | undefined,
 	tools: readonly AmbionTool[] = [],
 	macros: readonly ComposeMacro[] = [],
@@ -256,7 +262,7 @@ async function approve(
 	options: ComposeOptions,
 	request: ComposeRequest,
 	ctx: ToolContext,
-	record: ((step: Step) => void) | undefined,
+	access: ActivationAccess,
 ): Promise<void> {
 	if (options.approve === undefined) return;
 	let answer: 'allow' | 'deny';
@@ -267,46 +273,19 @@ async function approve(
 		answer = 'deny';
 		failed = `The approval failed: ${messageOf(error)}`;
 	}
-	record?.({ type: 'approval', call: ctx.callId, answer });
+	access.approved(answer);
 	if (answer === 'allow') return;
 	throw refusal(failed ?? 'The approval refused this compose call. No code ran.');
 }
 
-/**
- * The part of a room tool that a compose call reads: the commit and the
- * content it returns. It restates `BoundTool`, because `execution/contract.ts`
- * sits above this file in the layers.
- */
-export interface RoomCall {
-	readonly name: string;
-	/** The compose call `compose` shows the results of the nested calls `calls` in its own result. */
-	reported?(compose: string, calls: readonly string[]): void;
-	run(
-		args: unknown,
-		call: string,
-	): Promise<{
-		readonly content: readonly ToolContent[];
-		readonly isError?: true;
-		readonly carriesRecord?: true;
-	}>;
-}
-
 /** The entries of the room tools, so a program can tell them from the tools of the definition. */
 const ROOM_ENTRIES = new WeakSet<AmbionTool>();
-
-/** The room tool that the catalog lists, with the fields that the catalog reads. */
-export type RoomSpec = Pick<AmbionTool, 'name' | 'description' | 'parameters'> & {
-	/** The room offers this tool to some activations alone. The catalog says so. */
-	readonly optional?: true;
-};
 
 /** A room tool in the catalog. Its `invoke` has no activation, so it refuses. */
 function roomEntry({ optional: _optional, ...spec }: RoomSpec): AmbionTool {
 	return Object.freeze({
 		...spec,
 		label: spec.name,
-		// Two says that start together carry the same read position, so the room refuses the second.
-		...(spec.name === 'say' ? { executionMode: 'sequential' as const } : {}),
 		invoke: () => {
 			throw new Error(`The room tool '${spec.name}' needs an activation.`);
 		},
@@ -384,22 +363,6 @@ interface Program {
 	/** The macro that gave the code, with its checked arguments. Absent for free code. */
 	readonly macro?: { readonly macro: ComposeMacro; readonly args: JsonValue };
 }
-
-/** The entry that runs a compose call with the step sink and the room tools of the activation. */
-type ComposeEntry = (
-	params: unknown,
-	ctx: ToolContext,
-	record: ((step: Step) => void) | undefined,
-	room?: readonly RoomCall[],
-) => Promise<ToolResult<ComposeResult>>;
-
-/**
- * The entry of each compose tool, by its `invoke`. The capture of a
- * definition copies a tool and keeps `invoke`. A wrapper that replaces the
- * `invoke` of a tool of the executor after `describeExecutor` loses the
- * entry, and the compose call then records no step.
- */
-const ENTRIES = new WeakMap<AmbionTool['invoke'], ComposeEntry>();
 
 /** The tools that `uses` names, by name. A name that the catalog does not hold refuses the call. */
 function bound(
@@ -493,7 +456,7 @@ function requestOf(program: Program): ComposeRequest {
  * definition. They bind each tool that does not set `compose: false`. The
  * catalog is built once, here.
  */
-export function composeTools(
+function composeTools(
 	options: ComposeOptions,
 	tools: readonly AmbionTool[],
 	macros: readonly ComposeMacro[] = [],
@@ -505,19 +468,22 @@ export function composeTools(
 	const parameters = macros.length === 0 ? FREE_ARGUMENTS : MACRO_ARGUMENTS;
 	for (const entry of entries) ROOM_ENTRIES.add(entry);
 	const catalog = new Map(
-		[...tools.filter((tool) => bindable(tool) && tool.name !== COMPOSE_TOOL_NAME), ...entries].map(
-			(tool) => [tool.name, tool],
-		),
+		[...tools.filter((tool) => bindable(tool)), ...entries].map((tool) => [tool.name, tool]),
 	);
 	assertMacros(macros, new Set(catalog.keys()));
 	const limits = limitsOf(options);
-	const entry: ComposeEntry = async (params, ctx, record, calls) => {
+	const entry = async (
+		params: unknown,
+		ctx: ToolContext,
+		access: ActivationAccess,
+	): Promise<ToolResult<ComposeResult>> => {
+		const calls = access.room;
 		// The public `invoke` reaches this entry with unchecked arguments, so the check stays.
 		if (!Check(parameters, params))
 			throw new Error(`Invalid arguments for tool 'compose': ${mismatchOf(parameters, params)}.`);
 		const notes: RoomNotes = { lines: [], calls: [] };
 		const program = liveRoom(resolveProgram(params, catalog, held), calls, notes);
-		await approve(options, requestOf(program), ctx, record);
+		await approve(options, requestOf(program), ctx, access);
 		const run = new ComposeRun({
 			tools: program.tools,
 			unlisted: [...catalog.keys()].filter((name) => !program.tools.has(name)),
@@ -526,7 +492,7 @@ export function composeTools(
 			...(program.macro === undefined ? {} : { args: program.macro.args }),
 			limits,
 			ctx,
-			...(record === undefined ? {} : { record }),
+			nested: access.nested,
 			commits: (nested) => ROOM_ENTRIES.has(nested),
 		});
 		const outcome = await run.run();
@@ -534,48 +500,44 @@ export function composeTools(
 		calls?.find((one) => one.reported !== undefined)?.reported?.(ctx.callId, notes.calls);
 		return rendered(outcome, notes.lines, limits, catalog);
 	};
-	const tool: AmbionTool = Object.freeze({
-		name: COMPOSE_TOOL_NAME,
-		description: [DESCRIPTION, limitsText(limits), bindingsText(catalog, optional)].join('\n\n'),
-		parameters,
-		label: COMPOSE_TOOL_NAME,
-		invoke: (params: unknown, ctx: ToolContext) => entry(params, ctx, undefined, undefined),
-	});
-	ENTRIES.set(tool.invoke, entry);
+	const tool = activationTool(
+		{
+			name: COMPOSE_TOOL_NAME,
+			description: [DESCRIPTION, limitsText(limits), bindingsText(catalog, optional)].join('\n\n'),
+			parameters,
+			label: COMPOSE_TOOL_NAME,
+		},
+		entry,
+	);
 	return [tool, describeTool(catalog)];
 }
 
 /**
- * Invoke arguments that `checkedArguments` already returned, with the step
- * sink of the activation. A compose tool takes the sink, and records the
- * steps of its nested calls and its approval. Any other tool runs through
- * `invoke`. With no sink, every tool runs through `invoke`, and a compose
- * call records no step. A harness that prepares and checks the arguments
- * itself, as Pi does, calls this one, so no call prepares twice.
+ * The extension that adds the `compose` tool and the `describe` tool to a seat.
+ * It binds each tool of the seat that does not set `compose: false`, and the
+ * room tools. The option is checked here, when the extension is made.
  */
-export function invokeChecked(
-	tool: AmbionTool,
-	params: unknown,
-	ctx: ToolContext,
-	record?: (step: Step) => void,
-	room?: readonly RoomCall[],
-): Promise<string | ToolResult> | string | ToolResult {
-	const entry = record === undefined ? undefined : ENTRIES.get(tool.invoke);
-	return entry === undefined ? tool.invoke(params, ctx) : entry(params, ctx, record, room);
+export function composeExtension(options: ComposeOptions): SeatExtension {
+	assertComposeOptions(options);
+	return ({ tools, bundles, room }) => {
+		assertNamesFree(tools);
+		const macros = macrosOf(bundles);
+		const guidance = composeGuidance(options, tools, macros);
+		return {
+			tools: composeTools(options, tools, macros, room),
+			...(guidance === undefined ? {} : { guidance }),
+		};
+	};
 }
 
-/**
- * Run one direct call of a tool of the definition: prepare and check the
- * arguments, then invoke. `record` is the step sink of the activation. A
- * direct call records its own steps in the harness, so this records none
- * beside the steps of a compose call.
- */
-export async function invokeTool(
-	tool: AmbionTool,
-	args: unknown,
-	ctx: ToolContext,
-	record?: (step: Step) => void,
-	room?: readonly RoomCall[],
-): Promise<string | ToolResult> {
-	return invokeChecked(tool, checkedArguments(tool, args), ctx, record, room);
+/** Refuse a tool of the seat that takes the name of the `compose` tool or the `describe` tool. */
+function assertNamesFree(tools: readonly AmbionTool[]): void {
+	const taken = tools.find(
+		(tool) => tool.name === COMPOSE_TOOL_NAME || tool.name === DESCRIBE_TOOL_NAME,
+	);
+	if (taken !== undefined)
+		throw new AmbionError(
+			'invalid_tool',
+			`A tool of the agent is named '${taken.name}': the names '${COMPOSE_TOOL_NAME}' and '${DESCRIBE_TOOL_NAME}' are reserved. Give the tool another name.`,
+		);
 }

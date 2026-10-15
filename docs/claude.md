@@ -395,7 +395,7 @@ a subagent (`parent_tool_use_id` set) adds no step.
 | `tool_result` | A `tool_result` block of a user message. `is_error` adds `error` with the text of the result.                           |
 | `session`     | The `system` init message of a session. `tools` holds the room tools by plain name. `auth` is the `apiKeySource` name.  |
 | `steer`       | Never. The core records it. The executor calls `read` on the echo of a steered line.                                    |
-| `approval`    | Never. The `compose` tool records it through the step sink of the activation.                                           |
+| `approval`    | Never. The `compose` tool records it through the access of the activation.                                              |
 | `usage`       | One for each top-level model request, from the `usage` of its `message_start`, `message_delta`, and assistant messages. |
 
 ## Usage and cost

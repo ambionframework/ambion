@@ -6,7 +6,7 @@
  * together. A fresh runtime serves each evaluation, and the evaluation
  * disposes every handle before it frees the runtime.
  */
-import type { ComposeRuntime, ComposeRuntimeInput, JsonValue } from '@ambionframework/ambion';
+
 import {
 	newQuickJSWASMModule,
 	newVariant,
@@ -19,6 +19,7 @@ import {
 	RELEASE_SYNC,
 	Scope,
 } from 'quickjs-emscripten';
+import type { ComposeRuntime, ComposeRuntimeInput, JsonValue } from './compose.ts';
 import { GUEST } from './guest.ts';
 
 // The JSON that crosses between the host and the code: the text of a binding

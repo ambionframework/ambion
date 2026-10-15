@@ -10,6 +10,7 @@ import {
 	type ExecutorBaseOptions,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
+import { type ComposeOptions, composeExtension } from '@ambionframework/compose';
 import { quickjsRuntime } from '@ambionframework/compose/runtime';
 
 /** How much the model reasons before it answers. Codex 0.160.1 takes these values. */
@@ -22,6 +23,8 @@ type ReasoningSummary = 'auto' | 'concise' | 'detailed' | 'none';
 export interface CodexOptions extends ExecutorBaseOptions {
 	/** A Codex model identifier. */
 	model: string;
+	/** The `compose` and `describe` tools of the seat. Absent, QuickJS runs the code. */
+	compose?: ComposeOptions;
 	/** How much the model reasons before it answers. Absent, Codex uses the default of the model. */
 	readonly modelReasoningEffort?: ModelReasoningEffort;
 	/**
@@ -42,10 +45,14 @@ export interface CodexExecutor extends Executor {
 
 /** The Codex executor: the Codex loop, model, instructions, and tools. */
 export function codex(options: CodexOptions): CodexExecutor {
+	const { compose, extensions, ...rest } = options;
 	return Object.freeze({
 		...describeExecutor({
-			...options,
-			compose: options.compose ?? { runtime: quickjsRuntime() },
+			...rest,
+			extensions: [
+				...(extensions ?? []),
+				composeExtension(compose ?? { runtime: quickjsRuntime() }),
+			],
 			kind: 'codex',
 		}),
 		...pickPresent(options, ['modelReasoningEffort']),

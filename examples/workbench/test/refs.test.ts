@@ -1,4 +1,4 @@
-import { commitUri, snapshotUri } from '@ambionframework/ambion';
+import { commitUri, snapshotUri } from '@ambionframework/workspace';
 import { describe, expect, it } from 'vitest';
 import { shared } from '../src/definitions.ts';
 import { chipLine, type Known, labUri, resolveRef, tableOfUri } from '../src/refs.ts';

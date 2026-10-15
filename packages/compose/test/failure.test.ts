@@ -3,10 +3,11 @@
  * tool and the real runtime: the error for a name that the call does not
  * bind, and the results of the calls that completed.
  */
-import { type ComposeRuntime, defineTool, type ToolContext } from '@ambionframework/ambion';
+import { defineTool, type ToolContext } from '@ambionframework/ambion';
 import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { type ComposeRuntime, composeExtension } from '../src/index.ts';
 import { quickjsRuntime } from '../src/runtime.ts';
 
 const bash = defineTool({
@@ -36,7 +37,7 @@ async function failure(runtime: ComposeRuntime, uses: string[], code: string): P
 		kind: 'test',
 		instructions: 'Test.',
 		tools: [bash, wait],
-		compose: { runtime },
+		extensions: [composeExtension({ runtime })],
 	});
 	const compose = executor.tools.find((tool) => tool.name === 'compose');
 	if (compose === undefined) throw new Error('The executor has no compose tool.');

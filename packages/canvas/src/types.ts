@@ -7,8 +7,20 @@ import type {
 	StartRoomOptions,
 	ToolBundle,
 } from '@ambionframework/ambion';
-import type { Workspace } from '@ambionframework/workspace';
 import type { CanvasClose, CanvasRoom, CanvasStore, CanvasWidget, WidgetKind } from './store.ts';
+
+/** A copy of the messages of one room that the canvas keeps while the room runs. */
+export interface RoomMirror {
+	/** The path of the copy. A breakout call returns it to the opener. */
+	readonly path: string;
+	/** Ends the copy after the last message. */
+	stop(): Promise<void>;
+}
+
+/** What the canvas needs of a workspace: a mirror of each room. A `Workspace` meets it. */
+export interface MirrorHost {
+	mirror(room: Room, options?: { readonly onError?: (error: Error) => void }): Promise<RoomMirror>;
+}
 
 /** The bounds of the breakout rooms. */
 export interface BreakoutOptions {
@@ -53,7 +65,7 @@ export interface OpenCanvasOptions {
 	readonly runtime: Runtime;
 	readonly store: CanvasStore;
 	/** With a workspace, the canvas attaches the mirror of each room. */
-	readonly workspace?: Workspace;
+	readonly workspace?: MirrorHost;
 	readonly breakout?: BreakoutOptions;
 	/** The catalog of widget kinds that the host draws. Without it, `widgetTools` is a refusal. */
 	readonly widgets?: WidgetOptions;

@@ -18,11 +18,11 @@
  */
 
 import type { ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
-import { invokeTool } from '../compose-tool.ts';
 import { DISMISS, RECALL, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
 import type { ActivationView, CommitResult, Intent, RoomProtocol, Unchanged } from '../protocol.ts';
 import { renderLine } from '../record.ts';
 import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
+import { invokeTool } from '../seat-extension.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
 import type { BoundTool, BoundToolResult, StepSink } from './contract.ts';
 import { offersSeat, refusal, summaryToolDescription } from './render.ts';
@@ -42,8 +42,8 @@ export interface RoomToolBinding {
 	acknowledgeThrough(seq: Seq): void;
 	/** The result of call `call` carries the record through `seq` to the model. */
 	resultExpected(call: string, seq: Seq): void;
-	/** The result of the `compose` call `compose` shows the results of the nested calls `calls`. */
-	reported(compose: string, calls: readonly string[]): void;
+	/** The result of the tool call `parent` shows the results of the nested calls `calls`. */
+	reported(parent: string, calls: readonly string[]): void;
 	/** The entry `seq` is the activation's own act, so the record after `after` through it counts as read. */
 	ownEntry(after: Seq, seq: Seq): void;
 	/** End the activation. */
@@ -116,7 +116,7 @@ export function roomTools(view: ActivationView, binding: RoomToolBinding): Bound
 	// Any of them can run in a `compose` call, which then shows the results of the nested calls.
 	return tools.map((tool) => ({
 		...tool,
-		reported: (compose, calls) => binding.reported(compose, calls),
+		reported: (parent, calls) => binding.reported(parent, calls),
 	}));
 }
 
@@ -155,8 +155,8 @@ export function agentTools(
 
 /**
  * The context an agent's tool receives for one call: the agent, the call, and
- * full provenance. It holds no step sink. `invokeTool` hands the sink and the
- * room tools of the activation to the `compose` tool, and to no other tool.
+ * full provenance. It holds no step sink. `invokeTool` hands the access of the
+ * activation to an activation tool, and to no other tool.
  */
 export function toolContext(
 	agent: AgentDefinition,

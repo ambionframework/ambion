@@ -74,6 +74,7 @@
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
+		"@ambionframework/compose": "workspace:*",
 		"aws4fetch": "^1.0.20",
 		"diff": "9.0.0",
 		"typebox": "^1.3.36",

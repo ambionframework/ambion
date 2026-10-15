@@ -202,9 +202,6 @@ own.** A later review does not propose them again.
   does neither.
 - **The journal package and its generics.** Its proofs read no meaning of
   the room, and SQLite and Durable Objects satisfy its port.
-- **The `compose` tool in the core.** It uses what the core owns: the
-  signal, the deadline, the `parent` step, `callId`, and `ToolContext`. A
-  separate package would import all of them.
 
 ## Deferred by decision
 

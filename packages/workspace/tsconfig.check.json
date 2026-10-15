@@ -20,6 +20,9 @@
 			"@ambionframework/workspace/conformance": ["./src/conformance.ts"],
 			"@ambionframework/workspace/git": ["./src/git-entry.ts"],
 			"@ambionframework/ambion": ["../ambion/src/index.ts"],
+			"@ambionframework/compose": ["../compose/src/index.ts"],
+			"@ambionframework/compose/runtime": ["../compose/src/runtime.ts"],
+			"@ambionframework/compose/conformance": ["../compose/src/conformance.ts"],
 			"@ambionframework/ambion/hosting": ["../ambion/src/hosting.ts"],
 			"@ambionframework/ambion/testing": ["../ambion/src/testing.ts"],
 			"@ambionframework/pi": ["../pi/src/index.ts"]

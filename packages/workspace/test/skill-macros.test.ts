@@ -9,8 +9,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
 	AmbionError,
-	COMPOSE_GUIDANCE,
-	type ComposeRequest,
 	createRuntime,
 	defineAgent,
 	type Step,
@@ -18,11 +16,12 @@ import {
 } from '@ambionframework/ambion';
 import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
 import { callTool, quiet, say, scripted, settled } from '@ambionframework/ambion/testing';
+import { COMPOSE_GUIDANCE, type ComposeRequest, composeExtension } from '@ambionframework/compose';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
 import { andrei, roomName } from '../../ambion/test/support/room.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
+import { functionRuntime } from '../../compose/test/support/compose-runtime.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { loadSkills, openWorkspace, type Workspace } from '../src/index.ts';
 import { hashesOf } from '../src/sources.ts';
@@ -263,13 +262,15 @@ describe('a seat that runs a macro by name', () => {
 				kind: 'scripted',
 				instructions: 'Run macros.',
 				bundles: [workspace.tools({ skills })],
-				compose: {
-					runtime: functionRuntime,
-					approve: (request) => {
-						asked.push(request);
-						return 'allow';
-					},
-				},
+				extensions: [
+					composeExtension({
+						runtime: functionRuntime,
+						approve: (request) => {
+							asked.push(request);
+							return 'allow';
+						},
+					}),
+				],
 			}),
 		});
 		const room = stopAtEnd(
@@ -319,13 +320,15 @@ describe('a seat that runs a macro by name', () => {
 			kind: 'scripted',
 			instructions: 'Run macros.',
 			bundles: [workspace.tools({ skills })],
-			compose: {
-				runtime: functionRuntime,
-				approve: (request) => {
-					asked.push(request);
-					return 'allow';
-				},
-			},
+			extensions: [
+				composeExtension({
+					runtime: functionRuntime,
+					approve: (request) => {
+						asked.push(request);
+						return 'allow';
+					},
+				}),
+			],
 		});
 		const tool = executor.tools.find((one) => one.name === 'compose');
 		if (tool === undefined) throw new Error('The executor has no compose tool.');
@@ -358,7 +361,7 @@ describe('a seat that runs a macro by name', () => {
 				kind: 'scripted',
 				instructions: 'Run macros.',
 				bundles: [workspace.tools({ skills })],
-				compose: { runtime: functionRuntime },
+				extensions: [composeExtension({ runtime: functionRuntime })],
 			}),
 		});
 		const read: string[] = [];
@@ -406,7 +409,10 @@ describe('a seat that takes the skill set with and without compose', () => {
 		const bundle = workspace.tools({ skills });
 		const options = { kind: 'scripted', instructions: 'Run.', bundles: [bundle] };
 		const plain = describeExecutor(options);
-		const composing = describeExecutor({ ...options, compose: { runtime: functionRuntime } });
+		const composing = describeExecutor({
+			...options,
+			extensions: [composeExtension({ runtime: functionRuntime })],
+		});
 		expect(plain.tools.map((tool) => tool.name)).toEqual(
 			composing.tools
 				.map((tool) => tool.name)
@@ -430,12 +436,18 @@ describe('a seat that takes the skill set with and without compose', () => {
 			bundles: [workspace.tools({ skills })],
 		};
 		expect(() => describeExecutor(options)).not.toThrow();
-		expect(() => describeExecutor({ ...options, compose: { runtime: functionRuntime } })).toThrow(
-			AmbionError,
-		);
-		expect(() => describeExecutor({ ...options, compose: { runtime: functionRuntime } })).toThrow(
-			"The macro 'lab-drift/snapshot-drift' uses 'sql'",
-		);
+		expect(() =>
+			describeExecutor({
+				...options,
+				extensions: [composeExtension({ runtime: functionRuntime })],
+			}),
+		).toThrow(AmbionError);
+		expect(() =>
+			describeExecutor({
+				...options,
+				extensions: [composeExtension({ runtime: functionRuntime })],
+			}),
+		).toThrow("The macro 'lab-drift/snapshot-drift' uses 'sql'");
 	});
 
 	it('refuses two bundles that carry one macro name', async () => {
@@ -446,7 +458,7 @@ describe('a seat that takes the skill set with and without compose', () => {
 				kind: 'scripted',
 				instructions: 'Run.',
 				bundles: [workspace.tools({ skills }), { tools: [], macros: skills.macros }],
-				compose: { runtime: functionRuntime },
+				extensions: [composeExtension({ runtime: functionRuntime })],
 			}),
 		).toThrow("Two macros are named 'lab-drift/snapshot-drift'");
 	});

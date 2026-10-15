@@ -1,8 +1,9 @@
 # @ambionframework/compose
 
-The runtime of the `compose` tool of an
-[Ambion](https://ambionframework.com) seat. A runtime runs the code of one
-compose call. The code calls the tools of the seat as `tools.<name>(args)`.
+The `compose` tool of an [Ambion](https://ambionframework.com) seat, and
+the runtime that runs its code. `composeExtension(options)` makes the seat
+extension that adds the `compose` tool and the `describe` tool. A runtime runs
+the code of one compose call. The code calls the tools of the seat as `tools.<name>(args)`.
 `pi()`, `claude()`, and `codex()` give every seat `quickjsRuntime()` by default.
 A host passes `compose: { runtime }` to choose another runtime.
 
@@ -58,13 +59,13 @@ states what the kernel does not defend.
 
 ## Test a runtime
 
-`@ambionframework/ambion/conformance` exports `composeRuntimeConformance(make)`.
+`@ambionframework/compose/conformance` exports `composeRuntimeConformance(make)`.
 It returns a list of cases, and each case has a `name` and a `run` function.
 Pass `make` a function that returns a fresh runtime with a small memory
 limit.
 
 ```ts
-import { composeRuntimeConformance } from '@ambionframework/ambion/conformance';
+import { composeRuntimeConformance } from '@ambionframework/compose/conformance';
 import { quickjsRuntime } from '@ambionframework/compose/runtime';
 import { it } from 'vitest';
 

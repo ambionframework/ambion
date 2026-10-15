@@ -8,12 +8,11 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { snapshotUri } from '@ambionframework/ambion';
 import { AwsClient } from 'aws4fetch';
 import { beforeAll, describe, expect, it, onTestFinished } from 'vitest';
 import { memoryBackend } from '../../../just-bash/src/index.ts';
 import { objectConformance } from '../../src/conformance.ts';
-import { openWorkspace } from '../../src/index.ts';
+import { openWorkspace, snapshotUri } from '../../src/index.ts';
 import { type S3ObjectBackendOptions, s3ObjectBackend } from '../../src/s3-entry.ts';
 import { callAs, toolOf } from '../support/backends.ts';
 

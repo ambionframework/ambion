@@ -316,7 +316,7 @@ returned value alone, and then cites the refs in a `say`:
 ```
 
 **The code runs under the tools of `uses` alone.** `uses` belongs to the
-file. `describeExecutor` checks it once, when the definition is made, and
+file. `composeExtension` checks it once, when the definition is made, and
 the model cannot widen it. A macro binds only tools that the seat holds, so
 its authority is the authority of a direct call.
 
@@ -329,8 +329,8 @@ call with its schema, its checks, its provenance, and its steps. The ledger,
 the limits, and the audit log apply.
 
 **One skill set fits every seat.** A definition that `describeExecutor`
-builds with no `compose` option ignores the macros and lists none. The
-executor packages always set the option.
+builds with no `compose` extension ignores the macros and lists none. The
+executor packages always add the extension.
 
 ### The file format
 
@@ -389,12 +389,12 @@ text of the macro. The copy in `~/.skills` holds the file too.
 
 **`workspace.tools({ skills })` puts the macros on the bundle.** The field
 is `ToolBundle.macros`. It holds `ComposeMacro` values, and
-`composeMacro(fields)` checks the fields and gives a frozen copy. A bundle
+`composeMacro(fields)` of `@ambionframework/compose` checks the fields and gives a frozen copy. A bundle
 only carries the data.
 
 ### How compose runs a macro
 
-**`describeExecutor` checks the macros of a seat that has the `compose` tool.** It
+**`composeExtension` checks the macros of a seat that has the `compose` tool.** It
 collects the macros of every bundle. It refuses a macro that names a tool
 which the catalog lacks. The catalog holds the tools of the seat and the room
 tools. A tool with `compose: false` is not in the catalog. It refuses two

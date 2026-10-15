@@ -34,9 +34,9 @@ export class Freshness {
 		this.results.set(call, seq);
 	}
 
-	/** The result of the `compose` call `compose` shows the results of the nested calls `calls`. */
-	reported(compose: string, calls: readonly string[]): void {
-		this.shown.set(compose, [...(this.shown.get(compose) ?? []), ...calls]);
+	/** The result of the tool call `parent` shows the results of the nested calls `calls`. */
+	reported(parent: string, calls: readonly string[]): void {
+		this.shown.set(parent, [...(this.shown.get(parent) ?? []), ...calls]);
 	}
 
 	/**

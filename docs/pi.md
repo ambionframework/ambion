@@ -295,8 +295,8 @@ and the update callback through. It takes no output declaration, so
 
 **The harness prepares and checks the arguments, and the executor calls
 `invokeChecked`.** `toolsFor` passes the step sink of the activation to
-`invokeChecked`, with the room tools of the pass. It hands both to the
-`compose` tool and to no other tool.
+`invokeChecked`, with the room tools of the pass. It hands both to an
+activation tool, such as `compose`, and to no other tool.
 [Compose](compose.md#how-compose-runs-a-nested-call) states what the
 primitive conversion of the harness means for a nested call.
 
@@ -403,7 +403,7 @@ behind each step. The driver writes `pass`, `input`, `room`, and `end`.
 | `tool_call`   | `tool_execution_start`, with the call id, the tool name, and the arguments.                                                                       |
 | `tool_result` | `tool_execution_end`, with the result. A failed call adds `error` with the text of the result.                                                    |
 | `steer`       | Never. The core records it. The executor calls `read` when a provider request holds the line.                                                     |
-| `approval`    | Never. The `compose` tool records it through the step sink of the activation.                                                                     |
+| `approval`    | Never. The `compose` tool records it through the access of the activation.                                                                        |
 | `session`     | No harness event. The executor records one at the start of each activation: `pi`, the model string of the options, the session id, and the tools. |
 | `usage`       | The `usage_changed` event, one for each answer. The compaction spend joins the last one.                                                          |
 

@@ -7,17 +7,15 @@ import { memoryJournals } from '@ambionframework/journal';
 
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import {
-	COMPOSE_GUIDANCE,
-	type ComposeOptions,
 	createRuntime,
+	defineAgent,
 	defineTool,
 	type Step,
 	startRoom,
 } from '@ambionframework/ambion';
+import { COMPOSE_GUIDANCE, type ComposeOptions, composeExtension } from '@ambionframework/compose';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
-import { broken, echo, table, total } from '../../ambion/test/support/compose-tools.ts';
 import { enter, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
 import {
 	callTool,
@@ -27,6 +25,8 @@ import {
 	toolResultTexts,
 } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
+import { functionRuntime } from '../../compose/test/support/compose-runtime.ts';
+import { broken, echo, table, total } from '../../compose/test/support/compose-tools.ts';
 import { pi, piExecution } from '../src/index.ts';
 
 interface Call {
@@ -83,6 +83,46 @@ describe('compose on a Pi seat', () => {
 		});
 		expect(executor.tools.map((tool) => tool.name)).toEqual(names);
 		expect(executor.guidance).toBe(guidance);
+	});
+
+	it('refuses a malformed compose option', () => {
+		expect(() =>
+			pi({ instructions: 'Work.', model: 'scripted/worker', compose: {} as never }),
+		).toThrow(/Agent compose/);
+	});
+
+	it('runs the extensions of the options before compose, which does not bind their tools', () => {
+		const executor = pi({
+			instructions: 'Work.',
+			model: 'scripted/worker',
+			extensions: [
+				() => ({
+					tools: [
+						defineTool({
+							name: 'extra',
+							description: 'Extra.',
+							parameters: Type.Object({}),
+							execute: () => 'extra',
+						}),
+					],
+					guidance: 'Use extra.',
+				}),
+			],
+		});
+		expect(executor.tools.map((tool) => tool.name)).toEqual(['extra', 'compose', 'describe']);
+		expect(executor.guidance).toBe(`Use extra.\n\n${COMPOSE_GUIDANCE}`);
+		expect(executor).not.toHaveProperty('compose');
+	});
+
+	it('refuses a second compose extension when the agent is defined', () => {
+		const executor = pi({
+			instructions: 'Work.',
+			model: 'scripted/worker',
+			extensions: [composeExtension({ runtime: functionRuntime })],
+		});
+		expect(() => defineAgent({ name: 'twin', identity: 'Twin.', executor })).toThrow(
+			"brings duplicate tools named 'compose'",
+		);
 	});
 
 	it('binds tools with a declared output, hands the large result on, and shows the model the returned value alone', async () => {

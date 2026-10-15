@@ -4,6 +4,49 @@
 
 ### Breaking changes
 
+**`ExecutorBaseOptions` has `extensions` and no `compose`.** A `SeatExtension`
+reads the tools, the bundles, and the room tools of a seat, and returns tools
+and guidance that `describeExecutor` appends after those of the bundles. The
+`pi()`, `claude()`, and `codex()` options keep `compose`, and each adds the
+extension that `composeExtension` builds from it after the `extensions` of the
+options. `@ambionframework/ambion/hosting` exports `SeatExtension`,
+`SeatExtensionInput`, `SeatExtensionOutput`, `RoomSpec`, `RoomCall`,
+`ActivationAccess`, `ActivationEntry`, and `activationTool`.
+`activationTool` builds the one kind of tool whose entry
+receives the room tools, a `nested` call that records its two steps with the
+running call as `parent`, and an `approved` record. The step sink is not
+passed to any tool. `invokeTool` and `invokeChecked` pass the access.
+`ToolBundle.macros` is `readonly unknown[]`. The error for a reserved tool
+name reads "the names 'compose' and 'describe' are reserved".
+
+**The `compose` tool lives in `@ambionframework/compose`.** The package exports
+`composeExtension`, `composeMacro`, `COMPOSE_GUIDANCE`, and the types
+`ComposeLimits`, `ComposeMacro`, `ComposeOptions`, `ComposeRequest`,
+`ComposeResult`, `ComposeRuntime`, `ComposeRuntimeInput`, `JsonValue`, and
+`LedgerEntry`. Its `/conformance` entry exports `composeRuntimeConformance`.
+`@ambionframework/ambion` and its `/conformance` entry export none of them.
+`@ambionframework/ambion/hosting` exports `checkedArguments`, `messageOf`, and
+`mismatchOf`. `describeExecutor` reserves no tool name: `composeExtension`
+refuses a tool named `compose` or `describe`. `@ambionframework/workspace`
+depends on `@ambionframework/compose`. The text that a model reads does not
+change.
+
+**`@ambionframework/canvas` does not depend on
+`@ambionframework/workspace`.** The `workspace` option of `openCanvas`
+takes a `MirrorHost`, a value with the one method `mirror(room, options)`,
+and a `Workspace` meets it. The package exports the types `MirrorHost` and
+`RoomMirror`. Install the workspace only to use it.
+
+**The workspace package owns the snapshot ref and the commit ref.**
+`snapshotUri`, `parseSnapshotUri`, `commitUri`, `parseCommitUri`, and the types
+`SnapshotUri`, `CommitUri`, and `CommitVia` come from
+`@ambionframework/workspace`, and `@ambionframework/ambion` no longer exports
+them. The kernel keeps `roomUri`, `messageUri`, `parseRoomUri`, `RoomUri`, and
+`REF_LIMITS`. The room refuses an `ambion://room/` ref in a form it does not
+define. It accepts every other absolute URI, so a malformed
+`ambion://workspace/` ref enters the record, and `restore` and `readCommit`
+refuse it where they read it.
+
 **`sqliteBackend` has no append-only guard and no provenance stamp.** The
 options `appendOnly` and `provenance` are gone, and so are the type
 `SqlProvenance` and the field `SqlRunOptions.provenance`. The `sql` tool

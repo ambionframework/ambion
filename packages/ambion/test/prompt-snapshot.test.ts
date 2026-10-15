@@ -7,6 +7,7 @@
  * respond activation, before its ask line.
  */
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import { functionRuntime } from '../../compose/test/support/compose-runtime.ts';
 import { pi } from '../../pi/src/index.ts';
 import type { ReminderSeat } from '../src/bundle.ts';
 import { REMINDER_TIMEOUT_MS, resolveReminders } from '../src/execution/reminders.ts';
@@ -18,7 +19,6 @@ import {
 import type { ActivationView } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
 import type { Message } from '../src/types.ts';
-import { functionRuntime } from './support/compose-runtime.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const messages: Message[] = [

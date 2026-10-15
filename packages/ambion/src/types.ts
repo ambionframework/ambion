@@ -451,10 +451,10 @@ export type Step =
 	| { type: 'thinking'; text: string; final: boolean }
 	/** A block of the model's text. `final` closes the block. */
 	| { type: 'text'; text: string; final: boolean }
-	/** `parent` names the `compose` call that made a nested call. A direct call has none. */
+	/** `parent` names the call that made a nested call. A direct call has none. */
 	| { type: 'tool_call'; call: string; name: string; input: unknown; parent?: string }
 	| { type: 'tool_result'; call: string; output: unknown; error?: string; parent?: string }
-	/** The answer to the approval of one compose call. `call` names the compose call. */
+	/** The answer to the approval of one call of an activation tool. `call` names that call. */
 	| { type: 'approval'; call: string; answer: 'allow' | 'deny' }
 	/** What the room answered to a commit the seat made. */
 	| {

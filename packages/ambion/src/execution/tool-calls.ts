@@ -28,8 +28,8 @@ export class ToolCalls {
 	private readonly named = new Map<string, string>();
 	/**
 	 * The direct calls in flight that no hosted tool took yet, in the order the
-	 * steps named them. A step with a `parent` is a nested call that `compose`
-	 * runs, so no hosted tool takes it. A result ends a call, so the result
+	 * steps named them. A step with a `parent` is a nested call that an
+	 * activation tool runs, so no hosted tool takes it. A result ends a call, so the result
 	 * step drops its entry.
 	 */
 	private readonly unclaimed: { readonly call: string; readonly name: string }[] = [];
