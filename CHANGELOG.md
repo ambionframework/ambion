@@ -111,6 +111,19 @@ or an audit log that an earlier build wrote still holds them.
 
 ### Fixes
 
+**A host hears a failure of the room.** A write that the storage refused in
+`reconcile`, and a throw in `decide`, emitted nothing. A `decide` that threw
+armed no alarm, so the room stopped. An opener or a trace that threw while an
+activation opened gave an unhandled rejection on each wake, and the default
+Node setting ends the host. The room now emits an `error` notification for each
+failure and arms its alarm again. It emits the notification once for a streak
+of the same failure, and again when the failure changes or returns after a
+pass that succeeded. An activation whose opener or trace throws ends as a
+permanent failure: `error`, then `abandoned`. The `error` notification takes an
+optional `seat` and `activation`, because a failure of the room has neither.
+`docs/deployment.md` lists the events that a host subscribes to.
+
+
 **The `schedule` tool states what a returned say opens.** The description said
 that the message opens an exchange for the person of the exchange in which the
 seat scheduled it. When no exchange is open, a returned say opens a new

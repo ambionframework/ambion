@@ -67,6 +67,8 @@ export interface RoomRunState {
 	cancelAlarm: () => void;
 	/** The reconcile in flight: the entries it writes, and whoever it wakes. A caller that asks waits for it. */
 	reconciling: Promise<void>;
+	/** The message of the failure the room last reported. Absent after a pass that succeeded. */
+	failure: string | undefined;
 	/** Publications run in journal order after the confirmed entry has been folded. */
 	publications: Promise<void>;
 	/** A cancellation append in flight, with its key retained across uncertainty. */
@@ -82,7 +84,8 @@ export interface RoomRunState {
 	assertRunning(): void;
 	/** Free the name in the runtime, for this run alone. */
 	release(): void;
-	emit(event: RoomNotification): void;
+	/** Tell every listener. True when at least one listened. */
+	emit(event: RoomNotification): boolean;
 	reconcile(): Promise<void>;
 	sendWake(id: string, seat: string): void;
 	/** Wake each caller that waits on an exchange. */

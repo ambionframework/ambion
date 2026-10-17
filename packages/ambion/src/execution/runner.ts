@@ -62,6 +62,8 @@ export class AgentRunner implements AgentPort {
 	private readonly room: RoomProtocol;
 	private readonly context: SeatContext;
 	private current: Current | undefined;
+	/** The activation whose opening failed, while the seat refuses it. It holds the seat like `current`. */
+	private refusing: string | undefined;
 	/** The wakes that arrived while an activation ran, in order. They run next, once each. */
 	private readonly queued: string[] = [];
 
@@ -76,11 +78,12 @@ export class AgentRunner implements AgentPort {
 	 * targeted at the activation that was live when the message landed.
 	 */
 	async wake(wake: Wake): Promise<void> {
-		if (this.current === undefined) {
+		const running = this.current?.id ?? this.refusing;
+		if (running === undefined) {
 			void this.run(wake.activation);
 			return;
 		}
-		if (this.current.id === wake.activation) return;
+		if (running === wake.activation) return;
 		this.enqueue(wake.activation);
 	}
 
@@ -97,7 +100,7 @@ export class AgentRunner implements AgentPort {
 	 * this, and it resolves once the seat has nothing left to run.
 	 */
 	async run(id: string): Promise<void> {
-		if (this.current !== undefined) {
+		if (this.current !== undefined || this.refusing !== undefined) {
 			this.enqueue(id);
 			return;
 		}
@@ -147,14 +150,27 @@ export class AgentRunner implements AgentPort {
 		const cutOff = new Promise<void>((resolve) => {
 			cut = resolve;
 		});
-		const trace = this.context.trace.open(id);
-		const state = new ActivationState(this.context.opener, {
-			id,
-			room: this.boundedRoom(cutOff, trace),
-			definition: this.context.definition,
-			emit: (event) => this.emit(event),
-			trace,
-		});
+		let trace: TraceSink | undefined;
+		let state: ActivationState;
+		try {
+			trace = this.context.trace.open(id);
+			state = new ActivationState(this.context.opener, {
+				id,
+				room: this.boundedRoom(cutOff, trace),
+				definition: this.context.definition,
+				emit: (event) => this.emit(event),
+				trace,
+			});
+		} catch (error) {
+			this.refusing = id;
+			try {
+				await this.refuseToOpen(id, error, trace);
+			} finally {
+				this.refusing = undefined;
+			}
+			await this.next();
+			return;
+		}
 		const current: Current = { id, state, trace, over: false, cut, cutOff, expired: false };
 		this.current = current;
 		try {
@@ -170,6 +186,33 @@ export class AgentRunner implements AgentPort {
 			state.close();
 			if (this.current === current) this.current = undefined;
 			await this.next();
+		}
+	}
+
+	/**
+	 * An opener or a trace that throws gives a fault in the configuration, and
+	 * a retry cannot fix it. The seat claims the lease and releases it as a
+	 * permanent failure, so the room records `abandoned` at once.
+	 */
+	private async refuseToOpen(
+		id: string,
+		error: unknown,
+		trace: TraceSink | undefined,
+	): Promise<void> {
+		this.emit({
+			type: 'error',
+			seat: this.context.seat,
+			activation: id,
+			error: error instanceof Error ? error : new Error(String(error)),
+			cause: 'permanent',
+		});
+		if ((await this.claim(id)) !== undefined) {
+			await this.release(id, 'failed', 0, 'permanent', undefined, undefined);
+		}
+		try {
+			await trace?.close();
+		} catch {
+			// The activation is over. A failed close changes no outcome.
 		}
 	}
 

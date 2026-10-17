@@ -719,6 +719,49 @@ describe('the steps the driver owns', () => {
 		expect(last !== undefined && 'failure' in last).toBe('failure' in end);
 	});
 
+	it.each([
+		[
+			'an opener',
+			{
+				stub: () => {
+					throw new Error('the opener failed');
+				},
+			},
+		],
+		[
+			'a trace',
+			{
+				wrap: () => ({
+					open: () => {
+						throw new Error('the opener failed');
+					},
+				}),
+			},
+		],
+	] as const)(
+		'releases the lease as a permanent failure when %s throws on opening',
+		async (_case, options) => {
+			const { room, actor, events } = play(
+				scriptedStream(() => quiet()),
+				options,
+			);
+			await actor.run(id);
+			expect(room.leases).toMatchObject([
+				{ operation: 'claim' },
+				{ operation: 'release', reason: 'failed', cause: 'permanent' },
+			]);
+			expect(events).toEqual([
+				{
+					type: 'error',
+					seat: 'product',
+					activation: id,
+					cause: 'permanent',
+					error: new Error('the opener failed'),
+				},
+			]);
+		},
+	);
+
 	it('ends a failure that names no message, and raises one error event for it', async () => {
 		const log = collectSteps();
 		const failing: ActivationOpener = () => ({

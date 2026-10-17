@@ -231,6 +231,23 @@ Use `cancel()` or unseat the affected agent when the application must end
 pending work. [Durability](durability.md#executor-calls-and-unclaimed-work)
 states the call contract and [Limits](limits.md) the values.
 
+**Subscribe to the events that report a failure.** A room that runs
+unattended tells its host through notifications only.
+
+| Event                              | What it tells the host                                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `error`                            | An activation failed, or the room failed. A failure of the room has no `seat` and no `activation`.     |
+| `port_error`                       | A delivery or a call of a seat failed, or its result is unknown.                                       |
+| `abandoned`                        | The room gave up on a due activation, for a permanent cause or after the last attempt.                 |
+| `exchange_closed` with `exhausted` | The exchange ended after an `abandoned` activation. Read `outcome` of the exchange with `room.read()`. |
+
+A failure of the room is a write that the storage refuses, or a throw in a
+rule. The room emits `error` once for a streak of the same failure, arms
+its alarm again, and looks again after the resend window. The room emits
+the failure again when it changes, or when it returns after a pass that
+succeeded. An opener that throws ends its activation as a permanent failure:
+the host sees `error` with `cause: 'permanent'`, then `abandoned`.
+
 **History and work can grow.** Full history remains in storage and replay.
 Activation deadlines and retry limits do not bound the total exchange duration.
 Continuing contributions can keep a discussion open.

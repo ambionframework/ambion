@@ -78,7 +78,7 @@ export async function invariants(
 /** Every activation event names the activation whose seat raised it. */
 function activationsMatchEvents(events: RoomNotification[]): void {
 	for (const event of events) {
-		if (!('activation' in event)) continue;
+		if (!('activation' in event) || event.activation === undefined) continue;
 		expect(event.activation.length).toBeGreaterThan(0);
 		expect(decodeActivationId(event.activation)?.seat).toBe(event.seat);
 	}
