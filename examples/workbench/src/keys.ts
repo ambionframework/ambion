@@ -222,7 +222,9 @@ export class Keys {
 	private processKey(key: KeyEvent): void {
 		key.preventDefault();
 		if (key.ctrl && key.name === 'y') this.copyOutput();
-		else if (!key.ctrl && !key.meta) this.processKeys[key.name]?.();
+		else if (key.ctrl || key.meta) return;
+		else if (key.name === 'X' || (key.shift && key.name === 'x')) void this.processes.cancelRoom();
+		else this.processKeys[key.name]?.();
 	}
 
 	private copyOutput(): void {

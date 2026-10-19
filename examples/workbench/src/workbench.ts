@@ -105,6 +105,8 @@ export interface Workbench {
 	 * at most, then gives the state. It runs outside the queue of the host's file reads.
 	 */
 	cancelProcess(handle: string): Promise<Process>;
+	/** Stop every running process that started in one room, whichever agent started it. Gives the processes it stopped. */
+	cancelRoomProcesses(room: string): Promise<Process[]>;
 	/** Call `changed` when a process starts and when one ends. The return value ends the watch. */
 	watchProcesses(changed: () => void): () => void;
 	/** The names of the tables of the lab database. */
@@ -238,6 +240,7 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 		// The table orders a stop on the bash resource of the agent, so the cancel
 		// needs no place in the host's queue, and a wait for the end holds no read.
 		cancelProcess: (handle) => rooms.workspace.processes.cancel(handle),
+		cancelRoomProcesses: async (room) => [...(await rooms.workspace.processes.cancel({ room }))],
 		watchProcesses: (changed) => rooms.workspace.processes.subscribe(() => changed()),
 		labTables: async () => listLabTables(labPath),
 		labTable: async (uri) => readLabTable(labPath, uri),

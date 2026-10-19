@@ -161,6 +161,16 @@ export class FakeHost implements Workbench {
 		if (!found) throw new Error(`No process ${handle}.`);
 		return found;
 	}
+	async cancelRoomProcesses(room: string) {
+		this.calls.push(`cancel-room:${room}`);
+		const stopped = this.processTable.filter(
+			(process) => process.room === room && process.state === 'running',
+		);
+		this.processTable = this.processTable.map((process) =>
+			stopped.includes(process) ? { ...process, state: this.cancelState } : process,
+		);
+		return stopped;
+	}
 	watchProcesses(changed: () => void) {
 		this.processWatchers.add(changed);
 		return () => {

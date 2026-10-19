@@ -2,7 +2,7 @@ import type { Process, ProcessOutput, Workbench } from './workbench.ts';
 
 type ProcessHost = Pick<
 	Workbench,
-	'processes' | 'processOutput' | 'cancelProcess' | 'watchProcesses'
+	'processes' | 'processOutput' | 'cancelProcess' | 'cancelRoomProcesses' | 'watchProcesses'
 >;
 
 const errorText = (error: unknown): string =>
@@ -24,6 +24,8 @@ export class ProcessBrowser {
 	problem: string | undefined;
 	/** The handle that the first cancel key chose. A second cancel key stops it. */
 	confirming: string | undefined;
+	/** The room that the first room-cancel key chose. A second key stops its processes. */
+	confirmingRoom: string | undefined;
 	/** The handles with a cancel that has not ended. */
 	readonly cancelling = new Set<string>();
 	/** A short message for the hint line, such as the result of a cancel. */
@@ -53,6 +55,7 @@ export class ProcessBrowser {
 		this.problem = undefined;
 		this.output = undefined;
 		this.confirming = undefined;
+		this.confirmingRoom = undefined;
 		this.message = undefined;
 		this.unwatch?.();
 		this.unwatch = this.host.watchProcesses(() => void this.refresh());
@@ -73,6 +76,7 @@ export class ProcessBrowser {
 		if (last < 0) return;
 		this.index = Math.max(0, Math.min(last, this.index + step));
 		this.confirming = undefined;
+		this.confirmingRoom = undefined;
 		this.message = undefined;
 		void this.load();
 	}
@@ -114,6 +118,7 @@ export class ProcessBrowser {
 		if (!process) return;
 		if (process.state !== 'running') return this.say(`${label(process)} is not running.`);
 		if (this.cancelling.has(process.handle)) return this.say(`Cancelling ${label(process)}.`);
+		this.confirmingRoom = undefined;
 		if (this.confirming !== process.handle) {
 			this.confirming = process.handle;
 			return this.say(`Press x again to cancel ${label(process)}.`);
@@ -131,6 +136,32 @@ export class ProcessBrowser {
 			this.message = errorText(error);
 		} finally {
 			this.cancelling.delete(process.handle);
+		}
+		await this.refresh();
+	}
+
+	/**
+	 * Stop every running process that started in the room of the chosen
+	 * process. The first press names the room, and the second press stops them.
+	 */
+	async cancelRoom(): Promise<void> {
+		const room = this.selected?.room;
+		if (room === undefined) return this.say('The chosen process has no room.');
+		this.confirming = undefined;
+		if (this.confirmingRoom !== room) {
+			this.confirmingRoom = room;
+			const running = this.processes.filter(
+				(process) => process.room === room && process.state === 'running',
+			).length;
+			return this.say(`Press X again to cancel ${running} running in room ${room}.`);
+		}
+		this.confirmingRoom = undefined;
+		this.say(`Cancelling the processes of room ${room}.`);
+		try {
+			const ended = await this.host.cancelRoomProcesses(room);
+			this.message = `Cancelled ${ended.length} in room ${room}.`;
+		} catch (error) {
+			this.message = errorText(error);
 		}
 		await this.refresh();
 	}

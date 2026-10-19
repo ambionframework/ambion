@@ -12,7 +12,8 @@ import { LIST_ROWS, sidePanel, windowStart } from './files-panel.ts';
 import { label, type ProcessBrowser, stateText } from './process-browser.ts';
 import type { Process, ProcessOutput } from './workbench.ts';
 
-const HINT = 'Up/Down choose   PgUp/PgDn scroll   x x cancel   Ctrl+Y copy   Esc close';
+const HINT =
+	'Up/Down choose   PgUp/PgDn scroll   x x cancel   X X cancel room   Ctrl+Y copy   Esc close';
 
 /** The widest a command gets in the list. The title shows it whole. */
 const COMMAND_WIDTH = 60;

@@ -100,27 +100,28 @@ lists the says that wait. `/dismiss 41` calls `room.dismiss`, and the
 agent does not come back to the say. The say in its discussion then reads
 `dismissed` in place of its return time.
 
-| Key                   | Effect                                                     |
-| --------------------- | ---------------------------------------------------------- |
-| Enter                 | Send                                                       |
-| Ctrl+J, Alt+Enter     | Add a line to the message                                  |
-| Tab                   | Complete a command, or browse the discussions              |
-| Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all |
-| s                     | While browsing: show the steps of the chosen exchange      |
-| r                     | While browsing: choose a ref of a shown message            |
-| a                     | While browsing: take the actions of the pinned widgets     |
-| Up, Down, Enter, Esc  | In the actions: choose, press or send, leave               |
-| Up, Down, Enter       | While choosing a ref: move, open it, or jump to it         |
-| Esc                   | Close the palette, clear the search, or close the panel    |
-| PageUp, PageDown      | Scroll the conversation                                    |
-| Type, Up, Down        | In the files panel: search, and choose a file to read      |
-| PageUp, PageDown      | In the files panel: scroll the file                        |
-| Ctrl+Y                | In the files panel: copy the file to the clipboard         |
-| Up, Down, j, k        | In the processes panel: choose a process                   |
-| PageUp, PageDown      | In the processes panel: scroll the output                  |
-| x, then x             | In the processes panel: cancel the chosen process          |
-| Ctrl+Y                | In the processes panel: copy the output to the clipboard   |
-| Esc, q                | In the processes panel: close the panel                    |
+| Key                   | Effect                                                           |
+| --------------------- | ---------------------------------------------------------------- |
+| Enter                 | Send                                                             |
+| Ctrl+J, Alt+Enter     | Add a line to the message                                        |
+| Tab                   | Complete a command, or browse the discussions                    |
+| Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all       |
+| s                     | While browsing: show the steps of the chosen exchange            |
+| r                     | While browsing: choose a ref of a shown message                  |
+| a                     | While browsing: take the actions of the pinned widgets           |
+| Up, Down, Enter, Esc  | In the actions: choose, press or send, leave                     |
+| Up, Down, Enter       | While choosing a ref: move, open it, or jump to it               |
+| Esc                   | Close the palette, clear the search, or close the panel          |
+| PageUp, PageDown      | Scroll the conversation                                          |
+| Type, Up, Down        | In the files panel: search, and choose a file to read            |
+| PageUp, PageDown      | In the files panel: scroll the file                              |
+| Ctrl+Y                | In the files panel: copy the file to the clipboard               |
+| Up, Down, j, k        | In the processes panel: choose a process                         |
+| PageUp, PageDown      | In the processes panel: scroll the output                        |
+| x, then x             | In the processes panel: cancel the chosen process                |
+| X, then X             | In the processes panel: cancel the running processes of its room |
+| Ctrl+Y                | In the processes panel: copy the output to the clipboard         |
+| Esc, q                | In the processes panel: close the panel                          |
 
 The files panel renders Markdown files with headings, lists, and code. It
 shows a SQLite database (`.db`, `.sqlite`, `.sqlite3`, up to 8 MiB) as tables,
@@ -185,6 +186,8 @@ the list again, and the slow poll updates the times.
   cancel waits for the process to end up to the grace of its
   call, 10 seconds at most, and 5 seconds more. The file reads of
   the terminal do not wait for it.
+- **The first `X` names the room, and the second `X` cancels every running
+  process that the room started.** The processes of other rooms keep running.
 
 `/attach <local path>` reads a file from your own machine and copies it into
 the workspace, under `/attachments`, and snapshots it. It cites the snapshot
