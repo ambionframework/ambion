@@ -361,7 +361,14 @@ export type RoomEvent =
 	 * holds the range it turned out to cover. It arrives before any summary:
 	 * the configured writer is one reader of this, not the only one.
 	 */
-	| { type: 'exchange_closed'; exchange: ExchangeRange };
+	| { type: 'exchange_closed'; exchange: ExchangeRange }
+	/**
+	 * The room failed, as a write the storage refused or a throw in a rule. It
+	 * has no seat and no activation. The room emits it once for a streak of the
+	 * same failure, and again when the failure changes or comes back after a
+	 * pass that succeeded. The room arms its alarm again after each failure.
+	 */
+	| { type: 'error'; error: Error; seat?: undefined; activation?: undefined; cause?: undefined };
 
 /** What one activation did, or what happened to it. Every member names the activation. */
 export type ActivationEvent =

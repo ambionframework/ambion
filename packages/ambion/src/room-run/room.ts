@@ -173,6 +173,7 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 	cancelAlarm: () => void = () => {};
 	/** The reconcile in flight: the entries it writes, and whoever it wakes. A caller that asks waits for it. */
 	reconciling: Promise<void> = Promise.resolve();
+	failure: string | undefined;
 	/** Publications run in journal order after the confirmed entry has been folded. */
 	publications: Promise<void> = Promise.resolve();
 	/** A stop is one shared operation; a failed one may be retried after its promise clears. */
@@ -411,7 +412,7 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 		return () => this.listeners.delete(listener);
 	}
 
-	emit(event: RoomNotification): void {
+	emit(event: RoomNotification): boolean {
 		for (const listener of this.listeners) {
 			try {
 				listener(notificationFor(event));
@@ -419,6 +420,7 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 				// A listener's failure is the listener's problem, never the room's.
 			}
 		}
+		return this.listeners.size > 0;
 	}
 
 	/** Read the detached room projection after pending journal work settles. */

@@ -169,7 +169,9 @@ export async function end(
 // -- reconcile ----------------------------------------------------------------
 
 export function reconcile(run: RoomRunState): Promise<void> {
-	run.reconciling = run.reconciling.then(() => reconcileOnce(run)).catch(() => {});
+	run.reconciling = run.reconciling
+		.then(() => reconcileOnce(run))
+		.catch((error: unknown) => reportFailure(run, error));
 	return run.reconciling;
 }
 
@@ -195,30 +197,48 @@ async function reconcileOnce(run: RoomRunState): Promise<void> {
  * where the room has nothing more to write, and the caller stops looking.
  */
 async function onePass(run: RoomRunState): Promise<boolean> {
-	const decision = decide(
-		run.state(),
-		{
-			type: 'reconcile',
-			options: {
-				resend: run.runtime.limits.port.resend,
-				attempts: run.runtime.limits.activation.attempts,
-				sent: run.sentAt,
-				stopped: run.gone(),
-			},
-		},
-		run.now(),
-	);
+	let decision: ReconcileDecision;
 	let changed: boolean;
 	try {
+		decision = decide(
+			run.state(),
+			{
+				type: 'reconcile',
+				options: {
+					resend: run.runtime.limits.port.resend,
+					attempts: run.runtime.limits.activation.attempts,
+					sent: run.sentAt,
+					stopped: run.gone(),
+				},
+			},
+			run.now(),
+		);
 		changed = await apply(run, decision);
-	} catch {
-		// A write that failed because the room is gone arms nothing.
-		if (!run.gone()) arm(run, run.now() + run.runtime.limits.port.resend);
+	} catch (error) {
+		// A failure because the room is gone reports nothing and arms nothing.
+		if (!run.gone()) {
+			reportFailure(run, error);
+			arm(run, run.now() + run.runtime.limits.port.resend);
+		}
 		return true;
 	}
+	run.failure = undefined;
 	if (changed) return false;
 	arm(run, decision.effects.alarmAt);
 	return true;
+}
+
+/**
+ * Tell the host about a failure of the room. The room looks again after the
+ * resend window, so a fault that lasts fails again on each look. The host
+ * hears it once for the streak, and again when the failure changes.
+ */
+function reportFailure(run: RoomRunState, error: unknown): void {
+	if (run.gone()) return;
+	const failure = error instanceof Error ? error : new Error(String(error));
+	if (run.failure === failure.message) return;
+	// A failure that no listener heard stays new for the next one to subscribe.
+	if (run.emit({ type: 'error', error: failure })) run.failure = failure.message;
 }
 
 /** Write what the decision wrote, send what it sent. True when anything changed. */
