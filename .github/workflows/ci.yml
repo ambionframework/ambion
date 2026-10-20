@@ -20,7 +20,7 @@ permissions:
 jobs:
   lemmascript:
     name: Verify contracts
-    uses: midspiral/LemmaScript/.github/workflows/verify.yml@cb1dda6b958aede92a8f79e54d1a82735c8d498f
+    uses: midspiral/LemmaScript/.github/workflows/verify.yml@ffc07fcf1e6826b57fad0dde6e8bc2bbfb960ab5
     with:
       backend: dafny
       # The tools that regenerate and verify come from this ref. It matches
