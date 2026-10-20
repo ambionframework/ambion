@@ -35,10 +35,10 @@ function workspaceOn(started: TestServer): Workspace {
 	return workspace;
 }
 
-const context = (agent: string): ToolContext => ({
+const context = (agent: string, room = 'lobby'): ToolContext => ({
 	agent: { name: agent, identity: agent },
 	callId: 'call-1',
-	room: 'lobby',
+	room,
 });
 
 /** The process has ended: no process has the pid, or a zombie that its parent has not reaped yet. */
@@ -48,9 +48,15 @@ function ended(pid: number): boolean {
 }
 
 /** Invoke `tool` as `agent`, and give the text and the process details of the result, or the text of its error. */
-const invoke = async (workspace: Workspace, tool: string, params: unknown, agent = 'ada') => {
+const invoke = async (
+	workspace: Workspace,
+	tool: string,
+	params: unknown,
+	agent = 'ada',
+	room = 'lobby',
+) => {
 	const result = await Promise.resolve(
-		toolOf(workspace, tool).invoke(params, context(agent)),
+		toolOf(workspace, tool).invoke(params, context(agent, room)),
 	).catch((error: unknown) => ({ content: [{ type: 'text' as const, text: String(error) }] }));
 	if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
 	const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
@@ -258,4 +264,42 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		expect(elapsed).toBeLessThan(25_000);
 		expect([...pids, earlier.pid].map(ended)).toEqual([true, true, true, true, true]);
 	}, 40_000);
+
+	it('leaves a running process at a clean stop, adopts it in the next run, and cancels it with its room', async () => {
+		const started = await server(['ada']);
+		const first = workspaceOn(started);
+		const running = await invoke(first, 'bash', { command: 'sleep 60', wait: 0 });
+		const handle = running.process?.handle ?? '';
+		const pidFile = join(started.homes.get('ada') ?? '', '.processes', handle, 'pid');
+		await until(() => spawnSync('test', ['-s', pidFile]).status === 0);
+		const pid = Number((await readFile(pidFile, 'utf8')).trim());
+		await first.dispose({ processes: 'leave' });
+		expect(ended(pid)).toBe(false);
+
+		const next = workspaceOn(started);
+		expect(await next.processes.list({ agent: 'ada' })).toMatchObject([
+			{ handle, state: 'running', room: 'lobby' },
+		]);
+		const cancelled = await next.processes.cancel({ room: 'lobby' });
+		expect(cancelled).toMatchObject([{ handle }]);
+		expect(cancelled.map((one) => one.state)).not.toContain('running');
+		await until(() => ended(pid));
+		expect(ended(pid)).toBe(true);
+	}, 30_000);
+
+	it('cancels the running processes of one room, whichever agent started them, and no other', async () => {
+		const started = await server(['ada', 'bob']);
+		const workspace = workspaceOn(started);
+		const command = { command: 'sleep 60', wait: 0 };
+		const lobby = await invoke(workspace, 'bash', command, 'ada', 'lobby');
+		const other = await invoke(workspace, 'bash', command, 'ada', 'garage');
+		const bob = await invoke(workspace, 'bash', command, 'bob', 'lobby');
+		const cancelled = await workspace.processes.cancel({ room: 'lobby' });
+		expect(cancelled.map((one) => one.handle).sort()).toEqual(
+			[lobby.process?.handle, bob.process?.handle].sort(),
+		);
+		expect(cancelled.map((one) => one.state)).not.toContain('running');
+		const running = await workspace.processes.list({ running: true });
+		expect(running.map((one) => one.handle)).toEqual([other.process?.handle]);
+	}, 30_000);
 });

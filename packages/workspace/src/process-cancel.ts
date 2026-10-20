@@ -67,6 +67,8 @@ export interface Live {
 	timer?: ReturnType<typeof setTimeout>;
 	/** Why the first cancel ended it. */
 	stopping?: CancelCause;
+	/** The table left the process running at a clean stop. The end of its run says nothing about the process. */
+	left?: boolean;
 }
 
 /** What the cancels need from the table. */

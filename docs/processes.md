@@ -409,7 +409,8 @@ client ([Workstation](workstation.md#the-ssh-client)).
 then sends `SIGKILL`.** The `grace` of the `bash` call sets the wait: 1 to
 300 seconds, 10 by default. A server, a database, or a device controller
 uses that time to clean up. A cancel, a timeout, a cancel by the host,
-and `dispose()` all take this path. A `grace` outside the range makes the
+and `dispose()` with the default
+option all take this path. A `grace` outside the range makes the
 call fail with `Invalid`.
 
 **The grace reaches the backend in the options of `exec`.** `runBash`
@@ -513,8 +514,8 @@ waits on its shell, so a wait reads its files every 500 ms. The host's
 `ended` event comes when a read of this run first sees the end.
 
 **Two runs of the host over one account adopt the same processes.** A
-second run adopts the live processes of the first, and its `dispose()`
-cancels them while the first run still waits on them. The journal fences
+second run adopts the live processes of the first, and its
+`dispose()` with the default option cancels them while the first run still waits on them. The journal fences
 a second host of a room, and the process table has no fence. Stop one
 run of the host before the next one starts over the same accounts.
 
@@ -568,6 +569,24 @@ end as the `cancel` tool does: the grace, up to 10 seconds, and 5 seconds.
 A process that has not ended by then still reads `running`, and its cancel
 goes on. The host reads the output of a process through
 `workspace.use`, as the owner agent, at `Process.output`.
+
+**`cancel({ room })` cancels every running process that a room started.**
+It covers the processes of the agents of this run ([`list`](#the-hosts-view)),
+each with its own grace, and gives their records. A process that started
+with no room, and a process of another room, keep running. The room of a
+process is `room` in its `spec`.
+
+**`dispose({ processes: 'leave' })` leaves the running processes running.**
+The default, `'cancel'`, cancels them. With `'leave'`, the table clears its
+timers and the host's side of each process, and writes no `stop` and no
+`exit`. The next run adopts the process when a read finds it
+([Recovery](#recovery)). Only a backend whose commands outlive the host can
+keep a process. On `memoryBackend` and `directoryBackend` the commands run
+in the host. With `'leave'` such a command runs on in the host until it ends,
+and no run adopts it.
+
+**A process with a cancel in progress at `'leave'` stays `stopping`.** The
+next run adopts it as running, and it ends at the next cancel.
 
 ## Processes that serve HTTP
 

@@ -71,10 +71,31 @@ export interface WorkspaceProcesses {
 	 * read `running`.
 	 */
 	cancel(handle: string): Promise<Process>;
+	/**
+	 * Cancel every running process that the room `room` started, each with its
+	 * own grace, and give their records once they end. The call reads the
+	 * agents that used the workspace in this run, so a host that restarted
+	 * reads an agent with `list({ agent })` first to adopt its processes.
+	 */
+	cancel(target: { readonly room: string }): Promise<readonly Process[]>;
+}
+
+/** What `dispose` does with the running processes. */
+export interface WorkspaceDisposeOptions {
+	/**
+	 * `cancel` cancels every running process and waits for its end. `leave`
+	 * cancels none: a process that runs outside the host keeps running, and
+	 * the next run of the host adopts it. A command that a backend runs in the
+	 * host process, such as on `memoryBackend` and `directoryBackend`, runs on
+	 * in the host until it ends, and no run adopts it. The default is `cancel`.
+	 */
+	readonly processes?: 'cancel' | 'leave';
 }
 
 /** The resource over the bash backend, with an Ambion tool bundle. */
 export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
+	/** Release the workspace. The first call decides what happens to the running processes. */
+	dispose(options?: WorkspaceDisposeOptions): Promise<void>;
 	/**
 	 * Return the backend tools and optional model guidance. With no options,
 	 * the bundle is one stable value. With `skills`, the bundle holds the
@@ -291,6 +312,7 @@ function withSkills(
 function withProcesses(
 	backend: ResourceBackend<WorkspaceEnv>,
 	processes: ProcessTable,
+	disposal: { leave: boolean },
 	processFetch?: ProcessFetch,
 ): ResourceBackend<WorkspaceEnv> {
 	return {
@@ -298,7 +320,7 @@ function withProcesses(
 		dispose: async () => {
 			// `close()` is memoised, so a second call awaits the first.
 			await processFetch?.close();
-			await processes.close();
+			await processes.close({ leave: disposal.leave });
 			await backend.dispose?.();
 		},
 	};
@@ -327,6 +349,17 @@ function defaultObjects(
 	root: string,
 ): ObjectBackend {
 	return fileObjectBackend({ bash: bash.use, mirrorAgent, root });
+}
+
+/** Cancel every running process that `room` started. Every cancel runs before a failure rejects. */
+async function cancelRoom(table: ProcessTable, room: string): Promise<readonly Process[]> {
+	const running = await table.hostList({ running: true });
+	const settled = await Promise.allSettled(
+		running.filter((one) => one.room === room).map((one) => table.hostCancel(one.handle)),
+	);
+	const failed = settled.find((one) => one.status === 'rejected');
+	if (failed) throw failed.reason;
+	return settled.flatMap((one) => (one.status === 'fulfilled' ? [one.value] : []));
 }
 
 /** Dispose each resource in turn, and report the first failure once every one has run. */
@@ -395,9 +428,10 @@ export function openWorkspace(options: {
 		bash: (agent, operation, signal) => resource.use(agent, operation, signal),
 	});
 	const processFetch = openProcessFetch(bash, table);
+	const disposal = { leave: false };
 	const resource = openResource<WorkspaceEnv>({
 		name: options.name,
-		backend: withProcesses(bash, table, processFetch),
+		backend: withProcesses(bash, table, disposal, processFetch),
 	});
 	const sql =
 		sqlBackend === undefined
@@ -438,7 +472,10 @@ export function openWorkspace(options: {
 	const processes: WorkspaceProcesses = Object.freeze({
 		list: (query?: ProcessQuery) => table.hostList(query),
 		subscribe: (listener: (event: ProcessEvent) => void) => table.subscribe(listener),
-		cancel: (handle: string) => table.hostCancel(handle),
+		cancel: ((target: string | { readonly room: string }) =>
+			typeof target === 'string'
+				? table.hostCancel(target)
+				: cancelRoom(table, target.room)) as WorkspaceProcesses['cancel'],
 	});
 	const tools = (toolsOptions?: WorkspaceToolsOptions): ToolBundle => {
 		return toolsOptions?.skills === undefined
@@ -456,7 +493,14 @@ export function openWorkspace(options: {
 	const resources = [sql?.resource, resource, objects, git?.resource].flatMap((entry) =>
 		entry === undefined ? [] : [entry],
 	);
-	const dispose = (): Promise<void> => {
+	let disposing: Promise<void> | undefined;
+	const dispose = (disposeOptions?: WorkspaceDisposeOptions): Promise<void> => {
+		if (disposing !== undefined) return disposing;
+		disposal.leave = disposeOptions?.processes === 'leave';
+		disposing = closeAll();
+		return disposing;
+	};
+	const closeAll = (): Promise<void> => {
 		// This call stops a pending forward at once, even while the bash
 		// resource is busy. The call in `withProcesses` then awaits the same close.
 		const fetchClose = processFetch?.close() ?? Promise.resolve();

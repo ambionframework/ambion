@@ -548,6 +548,34 @@ describe('Session /ps', () => {
 		expect(panel.processes).toHaveLength(3);
 	});
 
+	it('cancels the running processes of the chosen room on the second X, and no other room', async () => {
+		const { host } = await started();
+		host.processTable = [
+			process('bash-000000000001', { room: 'main' }),
+			process('bash-000000000002', { room: 'main', agent: 'build' }),
+			process('bash-000000000003', { room: 'side' }),
+			process('bash-000000000004', { state: 'exited', exitCode: 0 }),
+		];
+		const panel = new ProcessBrowser(host, () => {});
+		await panel.show();
+		await panel.cancelRoom();
+		expect(panel.message).toBe('Press X again to cancel 2 running in room main.');
+		expect(host.calls).not.toContain('cancel-room:main');
+		await panel.cancelRoom();
+		expect(host.calls).toContain('cancel-room:main');
+		expect(panel.message).toBe('Cancelled 2 in room main.');
+		expect(host.processTable.map((one) => one.state)).toEqual([
+			'cancelled',
+			'cancelled',
+			'running',
+			'exited',
+		]);
+
+		panel.move(3);
+		await panel.cancelRoom();
+		expect(panel.message).toBe('The chosen process has no room.');
+	});
+
 	it.each([
 		[{}, 'running 1m 5s'],
 		[{ state: 'exited', exitCode: 2, endedAt: at(3) }, 'exit 2 after 3s'],

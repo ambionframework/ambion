@@ -111,6 +111,18 @@ or an audit log that an earlier build wrote still holds them.
 
 ### Fixes
 
+**A host can leave background processes running at a clean stop.**
+`workspace.dispose({ processes: 'leave' })` clears the timers of the table and
+writes no `stop`, so the next run adopts each process that its backend kept
+alive. The default, `'cancel'`, is unchanged. On `directoryBackend` and
+`memoryBackend` the commands run in the host, and a command runs on in the
+host until it ends. The workbench keeps the default.
+
+**One cancel stops a room's processes.** `workspace.processes.cancel({ room })`
+cancels every running process that a room started, whichever agent started it,
+each with its grace. The workbench binds `X`, pressed twice, in the processes
+panel to it. `WorkspaceDisposeOptions` is a new type export.
+
 **A host hears a failure of the room.** A write that the storage refused in
 `reconcile`, and a throw in `decide`, emitted nothing. A `decide` that threw
 armed no alarm, so the room stopped. An opener or a trace that threw while an

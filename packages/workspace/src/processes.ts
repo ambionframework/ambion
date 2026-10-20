@@ -296,6 +296,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	 */
 	const settleOwned = async (process: Live, own: Own, run: Run): Promise<void> => {
 		clearTimeout(process.timer);
+		if (process.left === true) return;
 		await recordEnd(process, own, run).catch(() => undefined);
 		const status = await finalStatus(process, own);
 		process.own = undefined;
@@ -488,11 +489,23 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		);
 	};
 
-	const close = async (): Promise<void> => {
+	/** Close the environment of each process of this run, and cancel none. */
+	const leaveRunning = async (): Promise<void> => {
+		const owned = [...live.values()].flatMap((one) => (one.own === undefined ? [] : [one]));
+		for (const one of owned) one.left = true;
+		await Promise.allSettled(owned.map((one) => one.own?.env.cleanup()));
+	};
+
+	const close: ProcessTable['close'] = async (options = {}) => {
 		closed = true;
-		await Promise.allSettled(
-			[...live.values()].map((one) => cancels.cancel(one.agent, one.spec.handle, 'cancelled')),
-		);
+		if (options.leave === true) {
+			for (const process of live.values()) clearTimeout(process.timer);
+			await leaveRunning();
+		} else {
+			await Promise.allSettled(
+				[...live.values()].map((one) => cancels.cancel(one.agent, one.spec.handle, 'cancelled')),
+			);
+		}
 		for (const process of live.values()) clearTimeout(process.timer);
 		released = true;
 	};

@@ -530,6 +530,24 @@ describe('the port of a process', () => {
 });
 
 describe('the host view', () => {
+	it('cancels the running processes of one room, whichever agent started them', async () => {
+		const workspace = site();
+		const start = async (agent: string, room: string) =>
+			(await call(workspace, 'bash', { command: 'sleep 30', wait: 0 }, agent, room)).details.process
+				.handle;
+		const [a, b, other] = [
+			await start('alpha', 'review'),
+			await start('beta', 'review'),
+			await start('alpha', 'lobby'),
+		];
+		const stopped = await workspace.processes.cancel({ room: 'review' });
+		expect(stopped.map((one) => one.handle).sort()).toEqual([a, b].sort());
+		expect(stopped.every((one) => one.state === 'cancelled')).toBe(true);
+		const running = await workspace.processes.list({ running: true });
+		expect(running.map((one) => one.handle)).toEqual([other]);
+		await workspace.processes.cancel(other);
+	});
+
 	it('lists every process, gives a start and an end event, and cancels the process of any agent', async () => {
 		const workspace = site();
 		const events: string[] = [];

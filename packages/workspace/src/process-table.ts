@@ -119,6 +119,11 @@ export interface ProcessTable {
 	subscribe(listener: (event: ProcessEvent) => void): () => void;
 	/** Cancel the process `handle` of any agent of this run: the host's cancel. */
 	hostCancel(handle: string): Promise<Process>;
-	/** Refuse new processes, cancel every running process, and wait up to the grace and the slack for each one to end. */
-	close(): Promise<void>;
+	/**
+	 * Refuse new processes. Cancel every running process and wait up to the
+	 * grace and the slack for each one to end. With `leave`, cancel none: the
+	 * table closes the environment of each process of this run, and a new run
+	 * adopts the processes that still run.
+	 */
+	close(options?: { readonly leave?: boolean }): Promise<void>;
 }

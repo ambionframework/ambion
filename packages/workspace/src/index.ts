@@ -107,5 +107,10 @@ export type {
 export { sqlImport } from './sql-import.ts';
 export { sqlResult } from './sql-result.ts';
 export { ToolFailure } from './tools.ts';
-export type { Workspace, WorkspaceProcesses, WorkspaceToolsOptions } from './workspace.ts';
+export type {
+	Workspace,
+	WorkspaceDisposeOptions,
+	WorkspaceProcesses,
+	WorkspaceToolsOptions,
+} from './workspace.ts';
 export { openWorkspace } from './workspace.ts';
