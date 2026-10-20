@@ -109,6 +109,17 @@ executor package has no use for it. `AgentRunner` still takes the context.
 the unified diff, and no longer hold `diff` and `firstChangedLine`. A trace
 or an audit log that an earlier build wrote still holds them.
 
+### New
+
+**The executor suite pins the steps of the trace.** The `usage` plan of
+`executorConformance` makes two model requests, `requests` takes the usage of
+each, and the case checks one `usage` step for each request and the sum on the
+release. A new
+capability, `session`, adds a case for one `session` step that names the model
+before the first step of the model. A new case checks the `input` steps under
+the `full` policy for every executor. [Traces](docs/traces.md) states the
+steps, their order, the policy, the limits, and the span tree.
+
 ### Fixes
 
 **A host can leave background processes running at a clean stop.**

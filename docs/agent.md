@@ -53,7 +53,7 @@ and `bundles` supply the agent's domain tools. The `compose` tool joins
 those tools in one call, and the `describe` tool returns their signatures.
 `pi()`, `claude()`, and `codex()` add both to every seat ([Compose](compose.md)).
 `trace` sets what the trace keeps of the agent's work; see
-[the step vocabulary](executors.md#the-step-vocabulary).
+[Traces](traces.md#the-policy).
 
 **`activationTokenLimit` bounds the record that one activation reads.**
 Without a limit, an activation reads the whole record that the room serves.

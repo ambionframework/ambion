@@ -392,7 +392,7 @@ the summary of the exchange before it, and each continues its own session.
 
 ## The step mapping
 
-[The step vocabulary](executors.md#the-step-vocabulary) holds the thirteen
+[Traces](traces.md#the-steps) holds the thirteen
 step kinds and the trace policy. The table below gives the harness event
 behind each step. The driver writes `pass`, `input`, `room`, and `end`.
 
