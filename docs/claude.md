@@ -383,7 +383,7 @@ failure does.
 
 ## The step mapping
 
-[The step vocabulary](executors.md#the-step-vocabulary) holds the thirteen
+[Traces](traces.md#the-steps) holds the thirteen
 step kinds. The table below gives the SDK source of each step. A message from
 a subagent (`parent_tool_use_id` set) adds no step.
 

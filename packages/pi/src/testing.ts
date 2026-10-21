@@ -209,8 +209,8 @@ export function scriptOf(plan: ExecutorPlan): PiScript {
 			return (context) => awaitSteer(context, plan.text);
 		case 'usage':
 			return (context) => {
-				if (sayResults(context).length > 0) return quiet();
-				const { input, output, cacheRead, cacheWrite } = plan.usage;
+				const done = sayResults(context).length > 0;
+				const { input, output, cacheRead, cacheWrite } = plan.requests[done ? 1 : 0];
 				const usage = {
 					input,
 					output,
@@ -219,7 +219,7 @@ export function scriptOf(plan: ExecutorPlan): PiScript {
 					totalTokens: input + output + cacheRead + cacheWrite,
 					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 				};
-				return { ...messageOf(say(plan.text)), usage };
+				return { ...messageOf(done ? quiet() : say(plan.text)), usage };
 			};
 		case 'fail':
 			return () => {
@@ -248,6 +248,6 @@ export function piExecutorFixture(): ExecutorFixture {
 				now: Date.now,
 				sessions: memorySessions(),
 			}),
-		can: { steer: true, usage: true, permanentFailure: true, memory: true },
+		can: { steer: true, usage: true, permanentFailure: true, memory: true, session: true },
 	};
 }

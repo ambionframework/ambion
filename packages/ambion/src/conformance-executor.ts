@@ -30,6 +30,7 @@ import {
 	type FailureCause,
 	type Message,
 	type TracedStep,
+	type TracePolicy,
 	type TraceStep,
 	type Usage,
 	type VendorSession,
@@ -49,14 +50,17 @@ export type ExecutorPlan =
 	| { kind: 'awaitSteer'; text: string }
 	/** End the activation as a failure of `cause`. */
 	| { kind: 'fail'; cause: FailureCause }
-	/** Record `usage` once, then say `text`. */
-	| { kind: 'usage'; text: string; usage: Usage };
+	/**
+	 * Make two model requests, and record the `usage` of each. The first
+	 * request says `text`. The second request ends the activation with no say.
+	 */
+	| { kind: 'usage'; text: string; requests: readonly [Usage, Usage] };
 
 /** What one executor kind can do. The suite drops a case that a capability gates. */
 export interface ExecutorCapabilities {
 	/** The executor takes a steer into a live pass. When false, a steer waits for the record. */
 	readonly steer: boolean;
-	/** The executor records `usage` steps. */
+	/** The executor records one `usage` step for each model request, and the plan sets the counts. */
 	readonly usage: boolean;
 	/** The executor can end an activation as a permanent failure. */
 	readonly permanentFailure: boolean;
@@ -66,6 +70,11 @@ export interface ExecutorCapabilities {
 	 * none. Absent means false.
 	 */
 	readonly memory?: boolean;
+	/**
+	 * The executor records one `session` step that names the model, before
+	 * the first step of the model. Absent means false.
+	 */
+	readonly session?: boolean;
 }
 
 /** What an executor under test gives the suite. */
@@ -113,6 +122,8 @@ interface ExecutorCase {
 	readonly name: string;
 	readonly plan: ExecutorPlan;
 	readonly room: RoomScript;
+	/** The trace policy of the seat. Absent keeps the default. */
+	readonly trace?: TracePolicy;
 	readonly body: (run: Run) => Promise<void>;
 }
 
@@ -312,23 +323,94 @@ const permanentFailure: ExecutorCase = {
 	body: (run) => failure(run, 'permanent'),
 };
 
-const SPENT: Usage = { input: 120, output: 30, cacheRead: 10, cacheWrite: 5 };
+const SPENT: readonly [Usage, Usage] = [
+	{ input: 120, output: 30, cacheRead: 10, cacheWrite: 5 },
+	{ input: 40, output: 8, cacheRead: 60, cacheWrite: 0 },
+];
+
+const countsOf = (usage: Usage) =>
+	JSON.stringify([usage.input, usage.output, usage.cacheRead, usage.cacheWrite]);
 
 const usageCase: ExecutorCase = {
-	name: 'reports usage on the release',
-	plan: { kind: 'usage', text: TEXT, usage: SPENT },
+	name: 'records one usage step for each model request, and reports their sum on the release',
+	plan: { kind: 'usage', text: TEXT, requests: SPENT },
 	room: {},
 	body: async (run) => {
 		await run.wake();
 		await run.waitFor(() => released(run.room), 'the release');
 		const steps = stepsOf(await run.trace(), 'usage');
-		check(steps.length > 0, 'the trace holds no usage step');
+		check(
+			JSON.stringify(steps.map(countsOf)) === JSON.stringify(SPENT.map(countsOf)),
+			`the usage steps are ${JSON.stringify(steps.map(countsOf))}, not one for each request`,
+		);
 		const total = steps.reduce<Usage | undefined>((sum, step) => addUsage(sum, step), undefined);
 		check(
 			JSON.stringify(releaseWith(run).usage) === JSON.stringify(total),
 			'the release usage differs from the sum of the usage steps',
 		);
-		check(total?.input === SPENT.input && total.output === SPENT.output, 'the sum is not the plan');
+	},
+};
+
+/** The steps that come from what the model did. */
+const MODEL_STEPS = new Set<TraceStep['type']>(['thinking', 'text', 'tool_call', 'usage']);
+
+const sessionCase: ExecutorCase = {
+	name: 'records one session step that names the model, before the first step of the model',
+	plan: { kind: 'sayOnce', text: TEXT },
+	room: {},
+	body: async (run) => {
+		await run.wake();
+		await run.waitFor(() => released(run.room), 'the release');
+		const steps = await run.trace();
+		const sessions = stepsOf(steps, 'session');
+		check(sessions.length === 1, `${sessions.length} session steps, expected 1`);
+		const [session] = sessions;
+		check(
+			typeof session?.model === 'string' && session.model !== '',
+			'the session step names no model',
+		);
+		const first = steps.findIndex((step) => MODEL_STEPS.has(step.type));
+		check(
+			first === -1 || steps.indexOf(session as TraceStep) < first,
+			'the session step comes after a step of the model',
+		);
+	},
+};
+
+const FULL_INPUT: TracePolicy = { thinking: 'omit', toolOutput: 'omit', input: 'full' };
+
+/**
+ * The driver records the text the model receives. The system part comes once,
+ * in the first pass, and each pass that reads the record gives one record
+ * part. Under the default policy the trace holds no `input` step.
+ */
+const inputCase: ExecutorCase = {
+	name: 'records the system part once and the record of each pass under the full input policy',
+	plan: { kind: 'sayEachPass', text: TEXT },
+	room: { advances: true },
+	trace: FULL_INPUT,
+	body: async (run) => {
+		await run.wake();
+		await run.waitFor(() => released(run.room), 'the release');
+		const steps = await run.trace();
+		const inputs = stepsOf(steps, 'input');
+		const system = inputs.filter((step) => step.part === 'system');
+		check(system.length === 1, `${system.length} system parts, expected 1`);
+		check(system[0]?.pass === 1, 'the system part is not in the first pass');
+		for (const step of inputs) {
+			const model = steps.findIndex(
+				(other) => other.pass === step.pass && MODEL_STEPS.has(other.type),
+			);
+			check(
+				model === -1 || steps.indexOf(step) < model,
+				`an input step of pass ${step.pass} comes after a step of the model`,
+			);
+		}
+		for (const pass of stepsOf(steps, 'pass')) {
+			const parts = inputs.filter((step) => step.pass === pass.pass && step.part === 'record');
+			check(parts.length === 1, `pass ${pass.pass} has ${parts.length} record parts, expected 1`);
+			check((parts[0]?.text ?? '') !== '', `the record part of pass ${pass.pass} holds no text`);
+		}
 	},
 };
 
@@ -416,6 +498,7 @@ const orderCase: ExecutorCase = {
 			'the steps are out of order',
 		);
 		check(stepsOf(steps, 'end').length === 1, 'the trace holds more or less than one end step');
+		check(stepsOf(steps, 'input').length === 0, 'the default policy logs an input step');
 		const passes = new Set(steps.map((step) => step.pass));
 		check(stepsOf(steps, 'pass').length === passes.size, 'a pass has no pass step, or has two');
 		const committed = stepsOf(steps, 'room').filter((step) => step.result === 'committed');
@@ -434,6 +517,8 @@ export function executorConformance(fixture: ExecutorFixture): readonly Conforma
 		...(can.permanentFailure ? [permanentFailure] : []),
 		...(can.usage ? [usageCase] : []),
 		...(can.memory === true ? [memoryCase, freshCase] : []),
+		...(can.session === true ? [sessionCase] : []),
+		inputCase,
 		orderCase,
 	];
 	let count = 0;
@@ -448,6 +533,7 @@ export function executorConformance(fixture: ExecutorFixture): readonly Conforma
 			name: names.seat,
 			identity: 'Says a plan.',
 			executor: describeExecutor({ kind: 'conformance', instructions: '' }),
+			...(one.trace === undefined ? {} : { trace: one.trace }),
 		});
 		try {
 			const opener = await fixture.open(one.plan, definition);

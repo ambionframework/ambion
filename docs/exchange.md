@@ -321,7 +321,7 @@ holds the vendor session that the activation recorded at its release. It
 is absent when the executor recorded none.
 
 **The steps of an activation go to the host's logger.** See
-[Executors](executors.md#the-trace-log).
+[Traces](traces.md#the-trace).
 
 ## 8. What reads one
 

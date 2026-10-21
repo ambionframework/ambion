@@ -27,8 +27,9 @@ function scriptOf(plan: ExecutorPlan): Script {
 					: quiet();
 		case 'usage':
 			return ({ results }) => {
-				if (results.length === 0) return spend(plan.usage);
-				return results.length === 1 ? say(plan.text) : quiet();
+				if (results.length === 0) return spend(plan.requests[0]);
+				if (results.length === 1) return say(plan.text);
+				return results.length === 2 ? spend(plan.requests[1]) : quiet();
 			};
 		case 'fail':
 			return () => {

@@ -182,7 +182,7 @@ export function codexExecutorFixture(): ExecutorFixture {
 			if (dump === undefined) return createCodexOpener(options);
 			return dump.wrap(createCodexOpener(dump.options(options)));
 		},
-		can: { steer: true, usage: false, permanentFailure: true, memory: true },
+		can: { steer: true, usage: false, permanentFailure: true, memory: true, session: true },
 		patience: QUIET_MS,
 		...(dump === undefined ? {} : { close: async (report) => dump.write(report) }),
 	};

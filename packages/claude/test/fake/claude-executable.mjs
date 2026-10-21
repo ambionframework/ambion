@@ -32,6 +32,7 @@
  * - `{ wait }`: wait this many milliseconds. An interrupt ends the wait.
  * - `{ awaitUser }`: wait until this many user messages have arrived.
  * - `{ usage }`: add to the running totals the next result carries.
+ * - `{ request }`: the next assistant message reports these tokens, and the totals grow by them.
  * - `{ fail: { status, text, exit?, stderr? } }`: end the pass with an error result. `stderr`
  *   goes to standard error before the result, and `exit` exits with that code right after it.
  * - `{ stderr }`: write the text to standard error.
@@ -132,8 +133,12 @@ async function ensureMcp() {
 }
 
 const usage = { input_tokens: 0, output_tokens: 0 };
+/** The tokens that the next assistant message reports. Absent reports none. */
+let requested;
 
 function assistant(id, content, stop = 'end_turn') {
+	const used = requested ?? usage;
+	requested = undefined;
 	out(
 		envelope({
 			type: 'assistant',
@@ -144,7 +149,7 @@ function assistant(id, content, stop = 'end_turn') {
 				model: 'fake',
 				content,
 				stop_reason: stop,
-				usage,
+				usage: used,
 			},
 		}),
 	);
@@ -213,6 +218,15 @@ const actions = {
 	awaitUser: (n) => until(() => users.length >= n),
 	usage: (added) => {
 		for (const key of Object.keys(totals)) totals[key] += added[key] ?? 0;
+	},
+	request: (added) => {
+		actions.usage(added);
+		requested = {
+			input_tokens: added.input ?? 0,
+			output_tokens: added.output ?? 0,
+			cache_read_input_tokens: added.cacheRead ?? 0,
+			cache_creation_input_tokens: added.cacheWrite ?? 0,
+		};
 	},
 	stderr: (text) => process.stderr.write(`${text}\n`),
 	crash: ({ stderr, code }) => {

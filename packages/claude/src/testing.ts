@@ -36,7 +36,16 @@ export function scenarioOf(plan: ExecutorPlan): FakeScenario {
 		case 'awaitSteer':
 			return { passes: [[{ awaitUser: 2 }, { say: plan.text }]] };
 		case 'usage':
-			return { passes: [[{ usage: { ...plan.usage } }, { say: plan.text }]] };
+			return {
+				passes: [
+					[
+						{ request: { ...plan.requests[0] } },
+						{ say: plan.text },
+						{ request: { ...plan.requests[1] } },
+						{ text: '' },
+					],
+				],
+			};
 		case 'fail':
 			return {
 				passes: [
@@ -79,6 +88,6 @@ export function claudeExecutorFixture(options: ClaudeFixtureOptions): ExecutorFi
 				pathToClaudeCodeExecutable: options.executable,
 				env: { ...options.env, AMBION_FAKE: JSON.stringify(scenarioOf(plan)) },
 			}),
-		can: { steer: true, usage: true, permanentFailure: true, memory: true },
+		can: { steer: true, usage: true, permanentFailure: true, memory: true, session: true },
 	};
 }

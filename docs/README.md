@@ -23,7 +23,8 @@ Read these pages in order. Each one builds on the page before it.
 
 | Page                                  | Use it for                                                                              |
 | ------------------------------------- | --------------------------------------------------------------------------------------- |
-| [Executors](executors.md)             | The executor contract, steps, the trace, and how to write an adapter                    |
+| [Executors](executors.md)             | The executor contract and how to write an adapter                                       |
+| [Traces](traces.md)                   | The steps, their order, the trace policy and limits, and the span tree                  |
 | [Pi](pi.md)                           | The Pi package: options, exchange continuity, testing                                   |
 | [Claude](claude.md)                   | The Claude Agent SDK package: policy, trust, sessions, testing                          |
 | [Codex](codex.md)                     | The Codex package: install, options, trust, and testing                                 |

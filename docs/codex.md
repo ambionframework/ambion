@@ -284,7 +284,7 @@ process ends.
 
 ## Step mapping
 
-[The step vocabulary](executors.md#the-step-vocabulary) holds the step kinds.
+[Traces](traces.md#the-steps) holds the step kinds.
 The table below gives the Codex source of each step.
 
 **Each item that Codex reports becomes steps in the trace.** Codex streams the
@@ -372,7 +372,7 @@ catalog of some models turns the summary off, so the executor asks for it:
 asks for no summary, and the request then has no `reasoning.summary` field.
 The default trace policy cuts each thinking block to 280 characters. Set
 `defineAgent({ trace: { thinking: 'full', toolOutput: 'full' } })` to keep all
-of each block ([The trace log](executors.md#the-trace-log)).
+of each block ([The policy](traces.md#the-policy)).
 
 **One `notice` joins the trace to the full record of Codex.** The notice
 has the text "Codex thread" and the level `info`. Its `data` holds the
