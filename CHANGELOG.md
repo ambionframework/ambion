@@ -122,6 +122,13 @@ steps, their order, the policy, the limits, and the span tree.
 
 ### Fixes
 
+**The view of an activation is bounded by default.** `limits.context.messages`
+defaults to 200 messages beyond the open exchange, where it was unbounded. In
+an ambient room no exchange closes with a summary, so each activation of a
+chain of scheduled says rendered a longer record, until the provider refused
+the prompt and the room abandoned the chain. Pass `Infinity` to remove the cap.
+A seat reads a message below the window with `recall`.
+
 **A host can leave background processes running at a clean stop.**
 `workspace.dispose({ processes: 'leave' })` clears the timers of the table and
 writes no `stop`, so the next run adopts each process that its backend kept

@@ -114,7 +114,7 @@ describe('createRuntime', () => {
 			30_000, 60_000, 120_000, 1_920_000, 3_600_000, 3_600_000,
 		]);
 		expect(limits.call).toEqual({ attempts: 2, timeout: 10_000 });
-		expect(limits.context).toEqual({ messages: Number.POSITIVE_INFINITY });
+		expect(limits.context).toEqual({ messages: 200 });
 		expect(limits.message).toEqual({ bytes: Number.POSITIVE_INFINITY });
 		expect(limits.trace).toEqual({
 			toolOutputBytes: 65_536,
@@ -130,14 +130,14 @@ describe('createRuntime', () => {
 					lease: { ttl: 1 },
 					activation: { attempts: 1 },
 					port: { resend: 1 },
-					context: { messages: 200 },
+					context: { messages: 50 },
 				},
 			}),
 		).limits;
 		expect(overridden.lease).toEqual({ ttl: 1, deadline: 600_000 });
 		expect(overridden.activation.attempts).toBe(1);
 		expect(overridden.port.resend).toBe(1);
-		expect(overridden.context.messages).toBe(200);
+		expect(overridden.context.messages).toBe(50);
 		expect(overridden.message.bytes).toBe(Number.POSITIVE_INFINITY);
 		expect(() =>
 			createRuntime({

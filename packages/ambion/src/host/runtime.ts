@@ -86,7 +86,8 @@ export interface Limits {
 	readonly call: { readonly attempts: number; readonly timeout: number };
 	/**
 	 * The most messages one activation's view holds beyond the open exchange.
-	 * The room applies it to every seat. `Infinity` is unbounded.
+	 * The room applies it to every seat. The default is 200. `Infinity` is
+	 * unbounded.
 	 */
 	readonly context: { readonly messages: number };
 	/**
@@ -271,7 +272,7 @@ export function createRuntime(options: CreateRuntimeOptions): Runtime {
 			...given.activation,
 		},
 		call: callLimits(given.call),
-		context: { messages: Number.POSITIVE_INFINITY, ...given.context },
+		context: { messages: 200, ...given.context },
 		message: { bytes: Number.POSITIVE_INFINITY, ...given.message },
 		schedule: { minDelaySeconds: 60, maxDelaySeconds: 604_800, waiting: 4, ...given.schedule },
 		trace: { ...DEFAULT_TRACE_LIMITS, ...given.trace },

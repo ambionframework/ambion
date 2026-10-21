@@ -14,25 +14,25 @@ partial value and the runtime fills each missing field with the default in
 the table. `Limits` in
 [`host/runtime.ts`](../packages/ambion/src/host/runtime.ts) is the type.
 
-| Field                             | Bounds                                                      | Default                |
-| --------------------------------- | ----------------------------------------------------------- | ---------------------- |
-| `limits.port.resend`              | How long a wake stays unanswered before the room resends it | 5,000 ms               |
-| `limits.lease.ttl`                | How long a lease lasts from each claim or renewal           | 60,000 ms              |
-| `limits.lease.deadline`           | How long an activation runs from its first claim            | 600,000 ms             |
-| `limits.activation.attempts`      | Attempts the room makes at one due activation               | 8                      |
-| `limits.activation.backoff`       | The wait before each retry, from the attempt number         | 30 s, doubled, max 1 h |
-| `limits.call.timeout`             | Each executor call to the room                              | 10,000 ms              |
-| `limits.call.attempts`            | Retries of a claim or a release                             | 2                      |
-| `limits.context.messages`         | Messages one view holds beyond the open exchange            | unbounded (`Infinity`) |
-| `limits.message.bytes`            | UTF-8 bytes in one said message or summary text             | unbounded (`Infinity`) |
-| `limits.schedule.minDelaySeconds` | The least `delaySeconds` of a scheduled say                 | 60                     |
-| `limits.schedule.maxDelaySeconds` | The most `delaySeconds` of a scheduled say                  | 604,800 (7 days)       |
-| `limits.schedule.waiting`         | Scheduled says of one seat that wait to return              | 4                      |
-| `limits.trace.toolOutputBytes`    | Bytes of tool output that a logged step keeps               | 65,536                 |
-| `limits.trace.inputBytes`         | Bytes of text that a logged `input` step keeps              | 1,048,576              |
-| `limits.trace.stepsPerPass`       | Steps that one pass logs                                    | 1,000                  |
-| `activationTokenLimit`            | Tokens of the record that one activation reads              | The whole record       |
-| `estimateTokens`                  | A function that counts those tokens                         | 4 characters per token |
+| Field                             | Bounds                                                      | Default                    |
+| --------------------------------- | ----------------------------------------------------------- | -------------------------- |
+| `limits.port.resend`              | How long a wake stays unanswered before the room resends it | 5,000 ms                   |
+| `limits.lease.ttl`                | How long a lease lasts from each claim or renewal           | 60,000 ms                  |
+| `limits.lease.deadline`           | How long an activation runs from its first claim            | 600,000 ms                 |
+| `limits.activation.attempts`      | Attempts the room makes at one due activation               | 8                          |
+| `limits.activation.backoff`       | The wait before each retry, from the attempt number         | 30 s, doubled, max 1 h     |
+| `limits.call.timeout`             | Each executor call to the room                              | 10,000 ms                  |
+| `limits.call.attempts`            | Retries of a claim or a release                             | 2                          |
+| `limits.context.messages`         | Messages one view holds beyond the open exchange            | 200                        |
+| `limits.message.bytes`            | UTF-8 bytes in one said message or summary text             | unbounded (`Infinity`)     |
+| `limits.schedule.minDelaySeconds` | The least `delaySeconds` of a scheduled say                 | 60                         |
+| `limits.schedule.maxDelaySeconds` | The most `delaySeconds` of a scheduled say                  | 604,800 (7 days)           |
+| `limits.schedule.waiting`         | Scheduled says of one seat that wait to return              | 4                          |
+| `limits.trace.toolOutputBytes`    | Bytes of tool output that a logged step keeps               | 65,536                     |
+| `limits.trace.inputBytes`         | Bytes of text that a logged `input` step keeps              | 1,048,576                  |
+| `limits.trace.stepsPerPass`       | Steps that one pass logs                                    | 1,000                      |
+| `activationTokenLimit`            | Tokens of the record that one activation reads              | The record the room serves |
+| `estimateTokens`                  | A function that counts those tokens                         | 4 characters per token     |
 
 **`activationTokenLimit` and `estimateTokens` are options of an agent.** A
 host sets them in the executor options of one definition.
