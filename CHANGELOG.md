@@ -122,6 +122,13 @@ steps, their order, the policy, the limits, and the span tree.
 
 ### Fixes
 
+**The default alarm fires soon after a host wakes from sleep.** The alarm of
+`createRuntime` waited on one timer, and a timer does not count the time that
+a host sleeps. A scheduled say that fell due during a sleep of five hours
+fired five hours late. The alarm now reads the wall clock every 30 seconds, so
+it fires within 30 seconds of the wake. A running lease that outlives a sleep
+expires, spends one attempt, and runs again after the backoff.
+
 **The view of an activation is bounded by default.** `limits.context.messages`
 defaults to 200 messages beyond the open exchange, where it was unbounded. In
 an ambient room no exchange closes with a summary, so each activation of a

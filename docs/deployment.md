@@ -193,6 +193,20 @@ expiry; hosts must keep their server or event loop alive and let alarms run.
 Manual-clock tests advance time explicitly. A room lease does not cancel an
 external effect or make a repeated tool call idempotent.
 
+**A pause of the host counts as time that passed.** The room judges every
+lease and every scheduled say on the wall clock. A host that stops for longer
+than the lease, such as a laptop that sleeps, finds the lease expired when it
+runs again. The activation ends as `expired` and spends one attempt. The room
+runs it again after the backoff, and `limits.activation.attempts` (8 by
+default) bounds the repeats.
+
+**The default alarm reads the wall clock every 30 seconds.** A timer counts
+monotonic time, and a sleep does not count. The alarm of `createRuntime`
+checks the wall clock at most 30 seconds after the previous check, so an
+alarm that fell due during a sleep, such as a scheduled say, fires within 30
+seconds of the wake. The alarm is `unref`, so a host that awaits nothing
+exits: keep the event loop alive while a room runs.
+
 ## Separate execution and the Cloudflare reference
 
 **Execution hosts need their own agent code and resources.** The JSON
