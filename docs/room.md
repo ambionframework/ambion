@@ -167,7 +167,13 @@ record an activation may read. The floor moves past a summarised range it
 would split. The open exchange stays whole, so a cap smaller than the open
 exchange serves the exchange in full. The view holds up to `messages`
 entries plus the open exchange. The cap counts messages and does not count
-bytes. The default is unbounded.
+bytes. The default is 200, and `Infinity` removes the cap.
+
+**The default cap bounds an ambient room.** A chain of scheduled says has no
+person, so no exchange closes with a summary and nothing folds the record.
+With no cap, each activation renders a longer record than the one before,
+until the provider refuses the prompt. With the cap, the view stops at 200
+messages. A seat reads a message below the window with `recall`.
 
 **`activationTokenLimit` windows further, inside the cap.** The room keeps
 the newest blocks of the record whose estimated tokens fit the limit, and

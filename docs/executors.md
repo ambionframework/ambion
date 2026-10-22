@@ -84,7 +84,7 @@ The adapter page lists them.
 | `extensions`           | No       | None                         | Extensions of the seat, which the executor runs before `compose`. Each adds tools and guidance.        |
 | `respondPolicy`        | No       | `DEFAULT_RESPOND_POLICY`     | The respond policy. It replaces the default.                                                           |
 | `summaryPolicy`        | No       | `DEFAULT_SUMMARY_POLICY`     | The summary policy. It replaces the default.                                                           |
-| `activationTokenLimit` | No       | The whole record             | The token limit of the record one activation reads. A positive integer.                                |
+| `activationTokenLimit` | No       | The record the room serves   | The token limit of the record one activation reads. A positive integer.                                |
 | `estimateTokens`       | No       | `Math.ceil(text.length / 4)` | A function that counts the tokens of a text. It needs the limit.                                       |
 
 **`estimateTokens` is a function that the room runs.** The room windows the
