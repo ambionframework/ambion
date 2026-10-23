@@ -109,6 +109,13 @@ delay needs an optional field on the `ended` body.
 
 **Condition:** a provider that refuses retries inside its stated delay.
 
+**S1. A sleep assertion for the workbench on macOS.** A laptop that sleeps
+stops every room of the workbench until it wakes. This is not implemented. The
+workbench would run `caffeinate -i -w <pid>` while a process runs. It blocks
+idle sleep and does not block a closed lid.
+
+**Condition:** a person who leaves a workbench running overnight on a laptop.
+
 **V1. A remote viewer of the canvas.** A person watches a bench from
 another machine or a phone. The canvas keeps its handles in one process,
 and the workbench draws a terminal alone. A viewer reads the rooms, the

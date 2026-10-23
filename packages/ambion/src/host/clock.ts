@@ -1,8 +1,10 @@
 /**
- * The longest delay `setTimeout` takes. A longer one fires at once, so the
- * alarm waits this long, and the pass that it starts arms the rest.
+ * The longest wait of one timer. A timer counts monotonic time, and a sleep
+ * of the host does not count. The alarm reads the wall clock again at this
+ * interval, so an alarm that fell due during a sleep fires within this
+ * interval of the wake.
  */
-const LONGEST_DELAY = 2 ** 31 - 1;
+const CHECK_MS = 30_000;
 
 /** The system clock and its unref'd alarm used when `createRuntime` gets no clock. */
 export function systemClock(): {
@@ -12,8 +14,16 @@ export function systemClock(): {
 	return {
 		now: () => Date.now(),
 		alarm(at, fire) {
-			const timer = setTimeout(fire, Math.min(LONGEST_DELAY, Math.max(0, at - Date.now())));
-			timer.unref?.();
+			let timer: ReturnType<typeof setTimeout>;
+			const wait = () => {
+				const remaining = at - Date.now();
+				timer = setTimeout(
+					() => (Date.now() >= at ? fire() : wait()),
+					Math.min(CHECK_MS, Math.max(0, remaining)),
+				);
+				timer.unref?.();
+			};
+			wait();
 			return () => clearTimeout(timer);
 		},
 	};
