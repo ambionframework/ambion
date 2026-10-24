@@ -188,6 +188,10 @@ the list again, and the slow poll updates the times.
   the terminal do not wait for it.
 - **The first `X` names the room, and the second `X` cancels every running
   process that the room started.** The processes of other rooms keep running.
+- **A clean quit cancels the running processes.** The workbench runs commands
+  in its own process, so none outlives it. A host on a backend that outlives
+  the host leaves them with `dispose({ processes: 'leave' })`
+  ([Processes](../../docs/processes.md#the-hosts-view)).
 
 `/attach <local path>` reads a file from your own machine and copies it into
 the workspace, under `/attachments`, and snapshots it. It cites the snapshot
