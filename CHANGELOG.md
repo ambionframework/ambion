@@ -5,9 +5,9 @@
 <img alt="Ambion 0.9.0: unattended rooms. A person leaves a room overnight and finds it running. Retries: 8 attempts with a wait that doubles up to one hour, about 63 minutes of outage. Prompt: a window of 200 messages beyond the open exchange, and recall below it. Failures: the error notification for a failure of the room, and an opener that throws ends as permanent. Processes: dispose with processes leave, and processes.cancel for a room. Hosts that sleep: the alarm reads the wall clock every 30 seconds. Traces: docs/traces.md and a conformance suite for the steps and their order. Kernel: compose in its own package, a canvas that does not depend on the workspace, and the seat extension. Breaking: compose moves to @ambionframework/compose, processRuntime is gone, the SQL append-only guard is gone, and a process has one noun." src="docs/assets/ambion-0.9.0.png" width="800">
 
 **0.9.0 lets a person leave a room overnight and find it running.** A room
-retries an activation through an outage of about 63 minutes, keeps the prompt
-of an ambient seat in a window, tells its host when it fails, and fires a due
-alarm soon after a host wakes from sleep. A host can leave background
+retries an activation through an outage of about 63 minutes. It keeps the
+prompt of an ambient seat in a window and tells its host when it fails. A due
+alarm fires soon after a host wakes from sleep. A host can leave background
 processes running at a clean stop, and one call cancels every process of a
 room. See [Deployment](docs/deployment.md) and [Processes](docs/processes.md).
 
@@ -15,10 +15,10 @@ room. See [Deployment](docs/deployment.md) and [Processes](docs/processes.md).
 states the thirteen steps, their order, the policy, the limits, and the span
 tree. The executor suite checks them for every executor.
 
-**The kernel sheds three concerns.** The `compose` tool lives in
-`@ambionframework/compose`, the canvas does not depend on the workspace
-package, and the snapshot ref and the commit ref live in the workspace
-package. A `SeatExtension` adds tools over a seat. See
+**Three concerns leave the kernel.** The `compose` tool lives in
+`@ambionframework/compose`. The canvas does not depend on the workspace
+package. The snapshot ref and the commit ref live in the workspace package. A
+`SeatExtension` adds tools over a seat. See
 [Breaking changes](#breaking-changes).
 
 ### Packages
@@ -28,7 +28,9 @@ examples `examples/workbench` and `examples/camera-chat` stay private. Every
 library package needs Node 22.19 or newer. The packages change as follows:
 
 - **Compose.** `@ambionframework/compose` gains the entry points `.` and
-  `/conformance`, besides `/runtime`. It builds no child entry.
+  `/conformance`, besides `/runtime`. It builds no child entry. `typebox`
+  moves to its dependencies, and `@ambionframework/journal` joins its
+  development dependencies.
 - **Workspace.** `@ambionframework/workspace` depends on
   `@ambionframework/compose`.
 - **Canvas.** `@ambionframework/canvas` moves
@@ -42,8 +44,8 @@ library package needs Node 22.19 or newer. The packages change as follows:
 **The executor suite pins the steps of the trace.** The `usage` plan of
 `executorConformance` makes two model requests, `requests` takes the usage of
 each, and the case checks one `usage` step for each request and the sum on the
-release. A new
-capability, `session`, adds a case for one `session` step that names the model
+release. A new capability,
+`session`, adds a case for one `session` step that names the model
 before the first step of the model. A new case checks the `input` steps under
 the `full` policy for every executor. [Traces](docs/traces.md) states the
 steps, their order, the policy, the limits, and the span tree.
@@ -87,7 +89,6 @@ pass that succeeded. An activation whose opener or trace throws ends as a
 permanent failure: `error`, then `abandoned`. The `error` notification takes an
 optional `seat` and `activation`, because a failure of the room has neither.
 `docs/deployment.md` lists the events that a host subscribes to.
-
 
 **The `schedule` tool states what a returned say opens.** The description said
 that the message opens an exchange for the person of the exchange in which the
