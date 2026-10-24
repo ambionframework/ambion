@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/compose",
-	"version": "0.8.0",
+	"version": "0.9.0",
 	"type": "module",
 	"description": "The compose tool for Ambion: one tool that joins the tools of a seat in one call, and quickjsRuntime() to run its code.",
 	"license": "Apache-2.0",
