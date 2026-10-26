@@ -1,6 +1,113 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 (2026-10-24)
+
+<img alt="Ambion 0.9.0: unattended rooms. A person leaves a room overnight and finds it running. Retries: 8 attempts with a wait that doubles up to one hour, about 63 minutes of outage. Prompt: a window of 200 messages beyond the open exchange, and recall below it. Failures: the error notification for a failure of the room, and an opener that throws ends as permanent. Processes: dispose with processes leave, and processes.cancel for a room. Hosts that sleep: the alarm reads the wall clock every 30 seconds. Traces: docs/traces.md and a conformance suite for the steps and their order. Kernel: compose in its own package, a canvas that does not depend on the workspace, and the seat extension. Breaking: compose moves to @ambionframework/compose, processRuntime is gone, the SQL append-only guard is gone, and a process has one noun." src="docs/assets/ambion-0.9.0.png" width="800">
+
+**0.9.0 lets a person leave a room overnight and find it running.** A room
+retries an activation through an outage of about 63 minutes. It keeps the
+prompt of an ambient seat in a window and tells its host when it fails. A due
+alarm fires soon after a host wakes from sleep. A host can leave background
+processes running at a clean stop, and one call cancels every process of a
+room. See [Deployment](docs/deployment.md) and [Processes](docs/processes.md).
+
+**The steps of a trace and their order are pinned.** [Traces](docs/traces.md)
+states the thirteen steps, their order, the policy, the limits, and the span
+tree. The executor suite checks them for every executor.
+
+**Three concerns leave the kernel.** The `compose` tool lives in
+`@ambionframework/compose`. The canvas does not depend on the workspace
+package. The snapshot ref and the commit ref live in the workspace package. A
+`SeatExtension` adds tools over a seat. See
+[Breaking changes](#breaking-changes).
+
+### Packages
+
+**The thirteen packages of 0.8.0 ship at 0.9.0.** No package joins. The
+examples `examples/workbench` and `examples/camera-chat` stay private. Every
+library package needs Node 22.19 or newer. The packages change as follows:
+
+- **Compose.** `@ambionframework/compose` gains the entry points `.` and
+  `/conformance`, besides `/runtime`. It builds no child entry. `typebox`
+  moves to its dependencies, and `@ambionframework/journal` joins its
+  development dependencies.
+- **Workspace.** `@ambionframework/workspace` depends on
+  `@ambionframework/compose`.
+- **Canvas.** `@ambionframework/canvas` moves
+  `@ambionframework/workspace` from its dependencies to its development
+  dependencies.
+- **Codex.** `@ambionframework/codex` drops `@ambionframework/pi` from its
+  development dependencies.
+
+### New
+
+**The executor suite pins the steps of the trace.** The `usage` plan of
+`executorConformance` makes two model requests, `requests` takes the usage of
+each, and the case checks one `usage` step for each request and the sum on the
+release. A new capability,
+`session`, adds a case for one `session` step that names the model
+before the first step of the model. A new case checks the `input` steps under
+the `full` policy for every executor. [Traces](docs/traces.md) states the
+steps, their order, the policy, the limits, and the span tree.
+
+### Fixes
+
+**The default alarm fires soon after a host wakes from sleep.** The alarm of
+`createRuntime` waited on one timer, and a timer does not count the time that
+a host sleeps. A scheduled say that fell due during a sleep of five hours
+fired five hours late. The alarm now reads the wall clock every 30 seconds, so
+it fires within 30 seconds of the wake. A running lease that outlives a sleep
+expires, spends one attempt, and runs again after the backoff.
+
+**The view of an activation is bounded by default.** `limits.context.messages`
+defaults to 200 messages beyond the open exchange, where it was unbounded. In
+an ambient room no exchange closes with a summary, so each activation of a
+chain of scheduled says rendered a longer record, until the provider refused
+the prompt and the room abandoned the chain. Pass `Infinity` to remove the cap.
+A seat reads a message below the window with `recall`.
+
+**A host can leave background processes running at a clean stop.**
+`workspace.dispose({ processes: 'leave' })` clears the timers of the table and
+writes no `stop`, so the next run adopts each process that its backend kept
+alive. The default, `'cancel'`, is unchanged. On `directoryBackend` and
+`memoryBackend` the commands run in the host, and a command runs on in the
+host until it ends. The workbench keeps the default.
+
+**One cancel stops a room's processes.** `workspace.processes.cancel({ room })`
+cancels every running process that a room started, whichever agent started it,
+each with its grace. The workbench binds `X`, pressed twice, in the processes
+panel to it. `WorkspaceDisposeOptions` is a new type export.
+
+**A host hears a failure of the room.** A write that the storage refused in
+`reconcile`, and a throw in `decide`, emitted nothing. A `decide` that threw
+armed no alarm, so the room stopped. An opener or a trace that threw while an
+activation opened gave an unhandled rejection on each wake, and the default
+Node setting ends the host. The room now emits an `error` notification for each
+failure and arms its alarm again. It emits the notification once for a streak
+of the same failure, and again when the failure changes or returns after a
+pass that succeeded. An activation whose opener or trace throws ends as a
+permanent failure: `error`, then `abandoned`. The `error` notification takes an
+optional `seat` and `activation`, because a failure of the room has neither.
+`docs/deployment.md` lists the events that a host subscribes to.
+
+**The `schedule` tool states what a returned say opens.** The description said
+that the message opens an exchange for the person of the exchange in which the
+seat scheduled it. When no exchange is open, a returned say opens a new
+exchange that has no person until a person speaks.
+
+**A question stays open when the asker schedules a check-in.** An agent that
+asked a person and then scheduled a say to itself closed its exchange as
+`complete`, and `awaitingFor` listed nothing. The exchange outcome now skips a
+scheduled say when it looks for the last said message, so the exchange stays
+`awaiting` the person.
+
+**A room retries an activation for about 63 minutes of outage.** The default
+`limits.activation` made 3 attempts, waiting 30 s and then 60 s. A provider
+outage of about 90 s abandoned the activation, ended a chain of scheduled
+says for good, and closed a question of a person as `exhausted`. The default is
+now 8 attempts. The wait after the first attempt that came to nothing is 30 s.
+It doubles after each next attempt and never exceeds one hour. The next
+attempt still derives from the record, so no journal body changes.
 
 ### Breaking changes
 
@@ -108,77 +215,6 @@ executor package has no use for it. `AgentRunner` still takes the context.
 **`edit` returns one diff.** The `details` of an `edit` result hold `patch`,
 the unified diff, and no longer hold `diff` and `firstChangedLine`. A trace
 or an audit log that an earlier build wrote still holds them.
-
-### New
-
-**The executor suite pins the steps of the trace.** The `usage` plan of
-`executorConformance` makes two model requests, `requests` takes the usage of
-each, and the case checks one `usage` step for each request and the sum on the
-release. A new
-capability, `session`, adds a case for one `session` step that names the model
-before the first step of the model. A new case checks the `input` steps under
-the `full` policy for every executor. [Traces](docs/traces.md) states the
-steps, their order, the policy, the limits, and the span tree.
-
-### Fixes
-
-**The default alarm fires soon after a host wakes from sleep.** The alarm of
-`createRuntime` waited on one timer, and a timer does not count the time that
-a host sleeps. A scheduled say that fell due during a sleep of five hours
-fired five hours late. The alarm now reads the wall clock every 30 seconds, so
-it fires within 30 seconds of the wake. A running lease that outlives a sleep
-expires, spends one attempt, and runs again after the backoff.
-
-**The view of an activation is bounded by default.** `limits.context.messages`
-defaults to 200 messages beyond the open exchange, where it was unbounded. In
-an ambient room no exchange closes with a summary, so each activation of a
-chain of scheduled says rendered a longer record, until the provider refused
-the prompt and the room abandoned the chain. Pass `Infinity` to remove the cap.
-A seat reads a message below the window with `recall`.
-
-**A host can leave background processes running at a clean stop.**
-`workspace.dispose({ processes: 'leave' })` clears the timers of the table and
-writes no `stop`, so the next run adopts each process that its backend kept
-alive. The default, `'cancel'`, is unchanged. On `directoryBackend` and
-`memoryBackend` the commands run in the host, and a command runs on in the
-host until it ends. The workbench keeps the default.
-
-**One cancel stops a room's processes.** `workspace.processes.cancel({ room })`
-cancels every running process that a room started, whichever agent started it,
-each with its grace. The workbench binds `X`, pressed twice, in the processes
-panel to it. `WorkspaceDisposeOptions` is a new type export.
-
-**A host hears a failure of the room.** A write that the storage refused in
-`reconcile`, and a throw in `decide`, emitted nothing. A `decide` that threw
-armed no alarm, so the room stopped. An opener or a trace that threw while an
-activation opened gave an unhandled rejection on each wake, and the default
-Node setting ends the host. The room now emits an `error` notification for each
-failure and arms its alarm again. It emits the notification once for a streak
-of the same failure, and again when the failure changes or returns after a
-pass that succeeded. An activation whose opener or trace throws ends as a
-permanent failure: `error`, then `abandoned`. The `error` notification takes an
-optional `seat` and `activation`, because a failure of the room has neither.
-`docs/deployment.md` lists the events that a host subscribes to.
-
-
-**The `schedule` tool states what a returned say opens.** The description said
-that the message opens an exchange for the person of the exchange in which the
-seat scheduled it. When no exchange is open, a returned say opens a new
-exchange that has no person until a person speaks.
-
-**A question stays open when the asker schedules a check-in.** An agent that
-asked a person and then scheduled a say to itself closed its exchange as
-`complete`, and `awaitingFor` listed nothing. The exchange outcome now skips a
-scheduled say when it looks for the last said message, so the exchange stays
-`awaiting` the person.
-
-**A room retries an activation for about 63 minutes of outage.** The default
-`limits.activation` made 3 attempts, waiting 30 s and then 60 s. A provider
-outage of about 90 s abandoned the activation, ended a chain of scheduled
-says for good, and closed a question of a person as `exhausted`. The default is
-now 8 attempts. The wait after the first attempt that came to nothing is 30 s.
-It doubles after each next attempt and never exceeds one hour. The next
-attempt still derives from the record, so no journal body changes.
 
 ## 0.8.0 (2026-10-07)
 
