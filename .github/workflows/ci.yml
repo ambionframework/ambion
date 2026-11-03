@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           # The development version. It covers every library package and
@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 26.4.0
@@ -94,7 +94,7 @@ jobs:
       # floor.
       - run: rm -rf examples/workbench examples/camera-chat
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22.19.0
@@ -109,7 +109,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 26.4.0
@@ -133,7 +133,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 26.4.0

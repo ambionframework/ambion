@@ -65,7 +65,7 @@ jobs:
         if: steps.key.outputs.present == 'true'
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         if: steps.key.outputs.present == 'true'
       - uses: actions/setup-node@v5
         if: steps.key.outputs.present == 'true'
@@ -109,7 +109,7 @@ jobs:
         if: steps.key.outputs.present == 'true'
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         if: steps.key.outputs.present == 'true'
       - uses: actions/setup-node@v5
         if: steps.key.outputs.present == 'true'
